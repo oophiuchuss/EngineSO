@@ -4,7 +4,8 @@ module;
 
 export module Engine;
 
-export class VulkanEngine {
+export class VulkanEngine
+{
 public:
     VulkanEngine();
     void run();
