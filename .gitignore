@@ -1,0 +1,89 @@
+# Build directories (CMake)
+build/
+
+# Visual Studio specific
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.user
+*.suo
+*.userosscache
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+!CMakeLists.txt
+Makefile
+compile_commands.json
+
+# Compiled object files
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.exp
+
+# Modules and precompiled headers
+*.ifc
+*.pch
+*.gch
+*.pchi
+*.modulemap
+*.pcm
+
+# Vulkan SDK specific
+Vulkan/glslangValidator.exe
+Vulkan/spirv-opt.exe
+*.spv
+*.cache
+
+# Debug/Release folders
+Debug/
+Release/
+x64/
+x86/
+bin/
+lib/
+
+# Profiling / performance
+*.prof
+*.raw
+*.trace
+
+# Logs
+*.log
+*.tmp
+
+# Editor and OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
+*.bak
+*.cache
+*.temp
+*.tmp
+
+# User-specific files
+*.orig
+*.rej
+*.user
+*.userprefs
+*.pidb
+*.dbproj
+*.vspscc
+*.vssscc
+*.suo
+*.scc
