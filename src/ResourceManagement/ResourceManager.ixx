@@ -21,8 +21,8 @@ struct ResourceData
 export class ResourceManager
 {
 public:
-	template<typename T>
-	ResourceHandle<T> Load(const std::string& ResourceID)
+	template<typename T, typename ...Args>
+	ResourceHandle<T> Load(const std::string& ResourceID, Args && ...args)
 	{
 		static_assert(std::is_base_of_v<ResourceBase, T>, "T must derive from ResourceBase");
 
@@ -35,7 +35,7 @@ public:
 		}
 
 		// Create new resource
-		auto Resource = std::make_shared<T>(ResourceID);
+		auto Resource = std::make_shared<T>(ResourceID, std::forward<Args>(args)...);
 		if (!Resource->Load()) {
 			return ResourceHandle<T>();
 		}

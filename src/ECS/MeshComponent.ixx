@@ -2,8 +2,12 @@ export module MeshComponent;
 
 import Component;
 
-class Mesh;
-class Material;
+import Mesh;
+
+export class Material
+{
+
+};
 
 export class MeshComponent : public ComponentBase
 {
