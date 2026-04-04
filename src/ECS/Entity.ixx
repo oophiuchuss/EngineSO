@@ -3,6 +3,7 @@ module;
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 export module Entity;
 
@@ -27,6 +28,15 @@ public:
 	{
 		static_assert(std::is_base_of_v<ComponentBase, T>, "T must be a subclass of ComponentBase");
 
+		size_t TypeID = ComponentBase::GetTypeID<T>();
+
+		// prohibit adding multiple components of the same type
+		auto it = ComponentMap.find(TypeID);
+		if (it != ComponentMap.end())
+		{
+			return dynamic_cast<T*>(it->second);
+		}
+
 		//Create a new component and add it to the entity's component list
 		auto NewComponent = std::make_unique<T>(std::forward<Args>(args)...);
 		T* ComponentPtr = NewComponent.get();
@@ -38,26 +48,37 @@ public:
 	template<typename T>
 	T* GetComponent() const
 	{
-		for (auto& CurComponent : Components)
-		{
-			if (T* result = dynamic_cast<T*>(CurComponent.get()))
-			{
-				return result;
-			}
-		}
+		size_t TypeID = ComponentBase::GetTypeID<T>();
 
+		auto it = ComponentMap.find(TypeID);
+		if (it != ComponentMap.end())
+		{
+			return dynamic_cast<T*>(it->second);
+		}
+		
 		return nullptr;
 	}
 
 	template<typename T>
 	bool RemoveComponent()
 	{
-		for (auto& it = Components.begin(); it != Components.end(); it++)
+		size_t TypeID = ComponentBase::GetTypeID<T>();
+
+		auto it = ComponentMap.find(TypeID);
+		if (it != ComponentMap.end())
 		{
-			if (dynamic_cast<T*>(it->get()))
+			ComponentBase* ComponentToRemove = it->second;
+			ComponentToRemove->Destroy();
+			ComponentMap.erase(it);
+
+			// Asuming that each component type is unique, we can break and return after finding the first match
+			for (auto CompIt = Components.begin(); CompIt != Components.end(); ++CompIt)
 			{
-				Components.erase(it);
-				return true;
+				if (CompIt->get() == ComponentToRemove)
+				{
+					Components.erase(CompIt);
+					return true;
+				}
 			}
 		}
 
@@ -69,5 +90,6 @@ protected:
 	std::string Name;
 	bool bIsActive = true;
 	std::vector<std::unique_ptr<ComponentBase>> Components;
+	std::unordered_map<size_t, ComponentBase*> ComponentMap;
 
 };

@@ -8,12 +8,13 @@ import EventListener;
 export class PhysicsComponent : public ComponentBase, public EventListener
 {
 public:
-	void Initialize() override;
-	
 	~PhysicsComponent() override;
-
 	void OnEvent(const EventBase& Event) override;
 
+protected:
+	void OnInitialize() override;
+
 private:
+	
 	EventSystem* GetEventSystem() const;
 };

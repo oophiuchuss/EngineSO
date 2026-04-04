@@ -2,7 +2,7 @@ module PhysicsComponent;
 
 import CollisionEvent;
 
-void PhysicsComponent::Initialize()
+void PhysicsComponent::OnInitialize()
 {
 	GetEventSystem()->AddListener(this);
 }
