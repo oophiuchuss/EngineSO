@@ -6,31 +6,9 @@ module;
 
 module Shader;
 
-bool Shader::LoadResource()
+bool Shader::LoadResource(const std::string& FilePath)
 {
 	// TODO: isn't shader code cannot repeat across shader stage types
-	
-	std::string Extension;
-	switch (ShaderCodeType)
-	{
-	case vk::ShaderStageFlagBits::eVertex:
-		{
-			Extension = ".vert";
-			break;
-		}
-	case vk::ShaderStageFlagBits::eFragment:
-		{
-			Extension = ".frag";
-			break;
-		}
-	case vk::ShaderStageFlagBits::eCompute:
-		{
-			Extension = ".comp";
-			break;
-		}
-	}
-
-	std::string FilePath = "assets/shaders/" + GetResourceID() + Extension;
 
 	std::vector<char> ShaderCode;
 	if (!ReadShaderCode(FilePath, ShaderCode))

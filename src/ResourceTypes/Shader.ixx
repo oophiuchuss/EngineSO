@@ -23,7 +23,7 @@ public:
 	vk::ShaderStageFlagBits GetShaderCodeType() const { return ShaderCodeType; }
 
 protected:
-	bool LoadResource() override;
+	bool LoadResource(const std::string& FilePath) override;
 	void UnloadResource() override;
 
 private:

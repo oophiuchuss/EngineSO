@@ -31,7 +31,7 @@ public:
 	uint32_t GetIndexCount() const { return IndexCount; }
 
 protected:
-	bool LoadResource() override;
+	bool LoadResource(const std::string& FilePath) override;
 	void UnloadResource() override;
 
 private:

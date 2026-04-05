@@ -4,11 +4,8 @@ module;
 
 module Mesh;
 
-bool Mesh::LoadResource()
+bool Mesh::LoadResource(const std::string& FilePath)
 {
-	// Construct the file path for the mesh based on the resource ID
-	std::string FilePath = "assets/meshes/" + GetResourceID() + ".gltf";
-	
 	// Load the mesh data from the file, including vertex attributes and indices
 	std::vector<Vertex> Vertices;
 	std::vector<uint32_t> Indices;

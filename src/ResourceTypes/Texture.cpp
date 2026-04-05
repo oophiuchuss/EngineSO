@@ -7,11 +7,8 @@ module;
 
 module Texture;
 
-bool Texture::LoadResource()
+bool Texture::LoadResource(const std::string& FilePath)
 {
-	// Construct the file path for the texture based on the resource ID
-	std::string FilePath = "assets/textures/" + GetResourceID() + ".ktx";
-
 	// Load raw image data from the file
 	int Width_Tmp = 0;
 	int Height_Tmp = 0;

@@ -24,7 +24,7 @@ public:
 	vk::Sampler GetVulkanSampler() const { return Sampler ? **Sampler : vk::Sampler{}; }
 
 protected:
-	bool LoadResource() override;
+	bool LoadResource(const std::string& FilePath) override;
 	void UnloadResource() override;
 
 private:

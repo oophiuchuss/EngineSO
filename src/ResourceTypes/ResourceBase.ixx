@@ -12,14 +12,14 @@ public:
 	const std::string& GetResourceID() const { return ResourceID; }
 	bool IsLoaded() const { return bIsLoaded; }
 
-	bool Load()
+	bool Load(const std::string& FilePath)
 	{
 		if(bIsLoaded)
 		{
 			return true; // Already loaded
 		}
 
-		bIsLoaded = LoadResource();
+		bIsLoaded = LoadResource(FilePath);
 		return bIsLoaded;
 	}
 
@@ -37,7 +37,7 @@ public:
 protected:
 	virtual ~ResourceBase() = default; // Ensure proper cleanup in derived classes
 
-	virtual bool LoadResource() = 0;
+	virtual bool LoadResource(const std::string& FilePath) = 0;
 	virtual void UnloadResource() = 0;
 
 private:
