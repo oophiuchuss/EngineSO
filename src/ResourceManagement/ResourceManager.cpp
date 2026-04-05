@@ -6,10 +6,12 @@ module;
 module ResourceManager;
 
 
-void ResourceManager::Release(const std::string& ResourceID)
+void ResourceManager::Release(const std::string& ResourceID, const std::type_index& ResourceType)
 {
-	for (auto& [Type, TypeResources] : Resources)
+	auto TypeIt = Resources.find(ResourceType);
+	if (TypeIt != Resources.end())
 	{
+		auto& TypeResources = TypeIt->second;
 		auto ResourceIt = TypeResources.find(ResourceID);
 		if (ResourceIt != TypeResources.end())
 		{
@@ -19,7 +21,6 @@ void ResourceManager::Release(const std::string& ResourceID)
 				ResourceIt->second.Resource->Unload();
 				TypeResources.erase(ResourceIt);
 			}
-			return;
 		}
 	}
 }

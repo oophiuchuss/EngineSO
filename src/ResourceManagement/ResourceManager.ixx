@@ -33,8 +33,7 @@ public:
 	template<typename T, typename ...Args>
 	ResourceHandle<T> Load(const std::string& ResourceID, Args && ...args);
 
-	// TODO: implement release resource by id and type
-	void Release(const std::string& ResourceID);
+	void Release(const std::string& ResourceID, const std::type_index& ResourceType);
 
 	void UnloadAll();
 

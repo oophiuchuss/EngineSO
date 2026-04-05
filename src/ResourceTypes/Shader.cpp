@@ -8,8 +8,6 @@ module Shader;
 
 bool Shader::LoadResource(const std::string& FilePath)
 {
-	// TODO: isn't shader code cannot repeat across shader stage types
-
 	std::vector<char> ShaderCode;
 	if (!ReadShaderCode(FilePath, ShaderCode))
 	{
