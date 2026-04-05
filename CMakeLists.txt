@@ -36,8 +36,15 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 
 # Define a preprocessor macro to enable dynamic loading of Vulkan functions
 target_compile_definitions(EngineSO PRIVATE 
-    VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
+    VK_USE_PLATFORM_WIN32_KHR
 )
+
+# Define for IntelliSense (Visual Studio specific)
+if(MSVC)
+    target_compile_definitions(EngineSO PRIVATE 
+        $<$<CONFIG:Debug>:VK_USE_PLATFORM_WIN32_KHR>
+    )
+endif()
 
 # Link the Vulkan library to the target
 target_link_libraries(EngineSO PRIVATE Vulkan::Vulkan)

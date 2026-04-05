@@ -17,6 +17,7 @@ int main() {
         VulkanEngine engine;
         engine.run();
 
+
         HotReloadResourceManager resourceManager;
 		
         auto TextureResource = resourceManager.Load<Texture>("example_texture");
