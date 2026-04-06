@@ -3,89 +3,17 @@ module;
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
+#include <memory>
 #include <vulkan/vulkan_raii.hpp>
 
 module Rendergraph;
 
+import RenderPassBase;
 
 void Rendergraph::Compile()
 {
-    std::vector<std::vector<size_t>> Dependencies(Passes.size());
-    std::vector<std::vector<size_t>> Dependents(Passes.size());
-
-    std::unordered_map<std::string, size_t> ResourceWriters;
-
-    // Analyze each pass to determine data flow relationships
-    for (size_t i = 0; i < Passes.size(); i++)
-    {
-        const Pass& CurPass = Passes[i];
-
-        for(const std::string& Input : CurPass.Inputs)
-        {
-            auto it = ResourceWriters.find(Input);
-            if (it != ResourceWriters.end())
-            {
-                Dependencies[i].push_back(it->second);
-                Dependents[it->second].push_back(i);
-            }
-        }
-        
-        for(const std::string& Output: CurPass.Outputs)
-        {
-            // TODO: shouldn't be checked for several passes that output to same resource?
-            ResourceWriters[Output] = i;
-        }
-    }
-
-    // Topological Sort for optimal execution order (depth-first algorithm)
-    std::vector<bool> Visited(Passes.size(), false); // Tracks complited nodes
-    std::vector<bool> InStack(Passes.size(), false); // Tracks current recursion path
-
-    std::function<void(size_t)> Visit = [&](size_t Node)
-        {
-            if (InStack[Node])
-            {
-                throw std::runtime_error("Cycle detected in rendergraph");
-            }
-
-            if (Visited[Node])
-            {
-                return; // Was already processed
-            }
-
-            InStack[Node] = true;
-
-            for (size_t Dependent : Dependents[Node])
-            {
-                Visit(Dependent);
-            }
-
-            InStack[Node] = false;
-            Visited[Node] = true;
-
-            ExecOrder.push_back(Node);
-        };
-
-    for (size_t i = 0; i < Passes.size(); i++)
-    {
-        if (!Visited[i])
-        {
-            Visit(i);
-        }
-    }
-
-    // Automatic Synchronization Object Creation
-    for (size_t i = 0; i < Passes.size(); i++)
-    {
-        for (auto Dep : Dependencies[i])
-        {
-            // Create a GPU semaphore which will delay dependent pass execution
-            Semaphores.emplace_back(Device.createSemaphore({}));
-            SemaphoreWaitPairs.emplace_back(Dep, i); // (producer, consumer) pair
-        }
-    }
-
     // Physical Resource Allocation and Creation (transforms to actual GPU resource)
     for (auto& [CurName, CurResource] : Resources)
     {
@@ -122,160 +50,271 @@ void Rendergraph::Compile()
             .setSubresourceRange({ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });  // Full Image access
 
         CurResource.View = Device.createImageView(ViewInfo);
-    }
 
+        CurrentLayouts[CurName] = CurResource.InitialLayout;    // Initialize Layouts of Resources
+    }
 }
 
 void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue)
 {
-    std::vector<vk::CommandBuffer> CmdBuffers;          // Command buffer storage
-    std::vector<vk::Semaphore> WaitSemaphores;          // Synchronization dependencies for current pass
-    std::vector < vk::PipelineStageFlags> WaitStages;   // Pipeline stages to wait on
-    std::vector<vk::Semaphore> SignalSemaphores;        // Semaphores to signal after current pass
+    if (bIsPassesDirty)
+    {
+        SortPasses();
+        bIsPassesDirty = false;
+    }
+
+
+    // Command buffer prep and Resource layout transitions
+    // Set up command recording and transition resources to appropriate layouts
+    CommandBuffer.begin({}); // TODO: should this command buffer begin with no additional info?
 
     // Pass execution with dependency-sage order
-    for (auto PassIdx : ExecOrder)
+    for (const auto& CurPass: SortedPasses)
     {
-        const auto& CurPass = Passes[PassIdx];
-
-        // Sync Setup 
-        // Determine what this pass mush wait for before exec and who should this pass signal to
-        WaitSemaphores.clear();
-        WaitStages.clear();
-        SignalSemaphores.clear();
-
-
-        for (size_t i = 0; i < SemaphoreWaitPairs.size(); i++)
-        {
-            if (SemaphoreWaitPairs[i].first == PassIdx)
-            {
-                // Other passes should be notified of this pass completion
-                SignalSemaphores.push_back(*Semaphores[i]);
-            }
-
-            if (SemaphoreWaitPairs[i].second == PassIdx)
-            {
-                // This pass depends on the complition of another pass
-                WaitSemaphores.push_back(*Semaphores[i]); // Add waiting semaphore for dependency complition
-                WaitStages.push_back(vk::PipelineStageFlagBits::eColorAttachmentOutput); // Wait at output stage
-            }
-        }
-
-
-        // Command buffer prep and Resource layout transitions
-        // Set up command recording and transition resources to appropriate layouts
-        CommandBuffer.begin({}); // TODO: should this command buffer begin with no additional info?
-
         // Transition input resources to shader-readable layouts
-        for (const std::string& CurInput : CurPass.Inputs)
+        for (const std::string& CurInput : CurPass->GetInputs())
         {
             Resource& CurResource = Resources[CurInput];
 
-            vk::ImageMemoryBarrier Barrier;
-            Barrier.setOldLayout(CurResource.InitialLayout)         // Current resource layuout
-                .setNewLayout(CurResource.FinalLayout)              // Final resource layuout
-                .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)    // No queue family transfer
-                .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                .setImage(*CurResource.Image)                       // Target Image
-                .setSubresourceRange({ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 })  // Full Image range
-                .setSrcAccessMask(vk::AccessFlagBits::eMemoryWrite) // Previous write access
-                .setDstAccessMask(vk::AccessFlagBits::eShaderRead); // Required read access
+            vk::ImageLayout TargetLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 
-            // Insert pipeline barrier for safe layout transition
-            CommandBuffer.pipelineBarrier(
-                vk::PipelineStageFlagBits::eAllCommands,    // Wait for all previous work
-                vk::PipelineStageFlagBits::eFragmentShader, // Enable fragment shader access
-                vk::DependencyFlagBits::eByRegion,          // Redion-local dependency
-                {}, {}, {Barrier}                           // Image barrier only
-            );
+            // Only transition if the layout actually needs to change
+            if (CurrentLayouts[CurInput] != TargetLayout)
+            {
+                // Transition image to target layout
+                TransitionImageLayout(CommandBuffer, *CurResource.Image, CurResource.Aspect, CurrentLayouts[CurInput], TargetLayout);
+            
+                // Update this resource current layout 
+                CurrentLayouts[CurInput] = TargetLayout;
+            }
         }
 
-        // Transition output resources to render targets layouts
-        for (const std::string& CurOutput : CurPass.Outputs)
+        // Transition output resources to correct layouts based on the usage
+        for (const std::string& CurOutput : CurPass->GetOutputs())
         {
             Resource& CurResource = Resources[CurOutput];
 
-            vk::ImageMemoryBarrier Barrier;
-            Barrier.setOldLayout(CurResource.InitialLayout)             // Current resource layuout
-                .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal) // Optimal for color output
-                .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)        // No queue family transfer
-                .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                .setImage(*CurResource.Image)                           // Target Image
-                .setSubresourceRange({ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 })  // Full Image range
-                .setSrcAccessMask(vk::AccessFlagBits::eMemoryRead)      // Previous read access
-                .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);     // Required write access
+            vk::ImageLayout TargetLayout;
 
-            CommandBuffer.pipelineBarrier(
-                vk::PipelineStageFlagBits::eAllCommands,            // Wait for all previous work
-                vk::PipelineStageFlagBits::eColorAttachmentOutput,  // Enable color attachment writes
-                vk::DependencyFlagBits::eByRegion,                  // Redion-local dependency
-                {}, {}, {Barrier}                                   // Image barrier only
-            );
+            if (CurResource.Usage & vk::ImageUsageFlagBits::eColorAttachment)
+            {
+                TargetLayout = vk::ImageLayout::eColorAttachmentOptimal; // Color Render target
+            }
+            else if(CurResource.Usage & vk::ImageUsageFlagBits::eDepthStencilAttachment)
+            {
+                TargetLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal; // Deapth Buffer
+            }
+            else
+            {
+                TargetLayout = vk::ImageLayout::eGeneral; // Fallback (rarely used)
+            }
+
+            // Only transition if the layout actually needs to change
+            if (CurrentLayouts[CurOutput] != TargetLayout)
+            {
+                // Transition image to target layout
+                TransitionImageLayout(CommandBuffer, *CurResource.Image, CurResource.Aspect, CurrentLayouts[CurOutput], TargetLayout);
+
+                // Update this resource current layout 
+                CurrentLayouts[CurOutput] = TargetLayout;
+            }
         }
 
         // Pass execution of actual rendering logic
-        // Call the user provided render function
-        CurPass.ExecuteFunc(CommandBuffer); // Execute pass specific func
+        // This calls the user-provided function that contains:
+        // - vkCmdBeginRendering (with dynamic rendering)
+        // - Draw calls
+        // - vkCmdEndRendering
+        CurPass->Execute(CommandBuffer, *this); 
 
         // Final layout transition
         // Transition output resources to final reuired layouts 
-        
-        for (const std::string& CurOutput : CurPass.Outputs)
+        // This ensures the next pass that reads them has them in the correct layout
+
+        for (const std::string& CurOutput : CurPass->GetOutputs())
         {
             Resource& CurResource = Resources[CurOutput];
 
-            vk::ImageMemoryBarrier Barrier;
-            Barrier.setOldLayout(vk::ImageLayout::eColorAttachmentOptimal)      // Current writable layuout
-                .setNewLayout(CurResource.FinalLayout)                          // Final resource layuout
-                .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)                // No queue family transfer
-                .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                .setImage(*CurResource.Image)                                   // Target Image
-                .setSubresourceRange({ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 })  // Full Image range
-                .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)    // Previous write opperation
-                .setDstAccessMask(vk::AccessFlagBits::eMemoryRead);             // Enable subsequent reads
+            vk::ImageLayout TargetLayout = CurResource.FinalLayout; // Layout required at frame end
 
-            CommandBuffer.pipelineBarrier(
-                vk::PipelineStageFlagBits::eColorAttachmentOutput,  // After color writes complete
-                vk::PipelineStageFlagBits::eAllCommands,            // Before any subsequent work
-                vk::DependencyFlagBits::eByRegion,                  // Redion-local dependency
-                {}, {}, { Barrier }                                 // Image barrier only
-            );
+            // Only transition if the layout actually needs to change
+            if (CurrentLayouts[CurOutput] != TargetLayout)
+            {
+                // Transition image to target layout
+                TransitionImageLayout(CommandBuffer, *CurResource.Image, CurResource.Aspect, CurrentLayouts[CurOutput], TargetLayout);
+
+                // Update this resource current layout 
+                CurrentLayouts[CurOutput] = TargetLayout;
+            }
         }
-
-        // TODO: figure out why last output goes to memory read as next pass that will use it as input will expect it to be memory write
-
-        // Command submission with sync
-        // Submit buffer and signal semaphores
-        CommandBuffer.end();
-
-        vk::SubmitInfo SubmitInfo;
-        SubmitInfo.setWaitSemaphoreCount(static_cast<uint32_t>(WaitSemaphores.size()))  // Number of dependencies to wait for
-            .setPWaitSemaphores(WaitSemaphores.data())                                  // Wait dependency semaphores
-            .setPWaitDstStageMask(WaitStages.data())                                    // Pipeline stages to wait for
-            .setCommandBufferCount(1)                                                   // Single command buffer
-            .setPCommandBuffers(&*CommandBuffer)                                        // Command buffer to exec
-            .setSignalSemaphoreCount(static_cast<uint32_t>(SignalSemaphores.size()))    // Number of dependencies to signal
-            .setPSignalSemaphores(SignalSemaphores.data());                             // Signal dependency semaphores
-
-        Queue.submit(SubmitInfo);   // Submit to GPU queue
     }
 
+    // Command submission with sync
+    // Submit buffer and signal semaphores
+    CommandBuffer.end();
+
+    // TODO: Maybe move submition to external place?
+
+    vk::SubmitInfo SubmitInfo;
+    SubmitInfo.setCommandBufferCount(1)       // Single command buffer
+        .setPCommandBuffers(&*CommandBuffer); // Command buffer to exec
+
+    Queue.submit(SubmitInfo);   // Submit to GPU queue
+
+    // Note: Rremoved per-pass submissions and semaphores because:
+    // 1. Submitting one command buffer is more efficient (less driver overhead)
+    // 2. Command buffers execute sequentially, so passes naturally run in order
+    // 3. Barriers inside the command buffer handle all synchronization
 }
 
-void Rendergraph::AddResource(const std::string& Name, vk::Format Format, vk::Extent2D Extent, vk::ImageLayout InitLayout, vk::ImageLayout FinalLayout)
+void Rendergraph::TransitionImageLayout(vk::raii::CommandBuffer& CommandBuffer, vk::Image Image, vk::ImageAspectFlags Aspect, vk::ImageLayout OldLayout, vk::ImageLayout NewLayout)
 {
-	Resources.try_emplace(Name, Name, Format, Extent, InitLayout, FinalLayout);
+    // Configure image barrier strcture to coordinate memory access
+
+    vk::ImageMemoryBarrier Barrier;
+    Barrier.setOldLayout(OldLayout)                         // Current resource layuout
+        .setNewLayout(NewLayout)                            // Final resource layuout
+        .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)    // No queue family transfer
+        .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+        .setImage(Image)                                    // Target Image
+        .setSubresourceRange({ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });  // Full Image range
+        
+    // Initialize pipeline stage tracking for syncronization
+    vk::PipelineStageFlags SrcStage;    // When previous operations must finish
+    vk::PipelineStageFlags DstStage;    // When subsequent operation can start
+    vk::AccessFlags SrcAccess;          // What kind of previous access we're waiting for
+    vk::AccessFlags DstAccess;          // What kind of new access we're enabling
+
+
+    // Undefined-to-transfer layout transition
+    // Common for preparing images to data uploads
+    if (OldLayout == vk::ImageLayout::eUndefined && NewLayout == vk::ImageLayout::eTransferDstOptimal)
+    {
+        // Memory permisions
+        SrcAccess = vk::AccessFlagBits::eNone;          // No previous access 
+        DstAccess = vk::AccessFlagBits::eTransferWrite; // Enable transfer write operations
+
+        // Pipeline stage syncronization
+        SrcStage = vk::PipelineStageFlagBits::eTopOfPipe;   // No previous work to wait
+        DstStage = vk::PipelineStageFlagBits::eTransfer;    // Transfer operations can procees
+    }
+    // Transfer-to-Shader layout transition
+    // Common for uploaded images to shader sampling
+    else if (OldLayout == vk::ImageLayout::eTransferDstOptimal && NewLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+    {
+        // Memory permisions
+        SrcAccess = vk::AccessFlagBits::eTransferWrite; // Previous tranfer writes should complete
+        DstAccess = vk::AccessFlagBits::eShaderRead;    // Enable shader read access
+
+        // Pipeline stage syncronization
+        SrcStage = vk::PipelineStageFlagBits::eTransfer;        // Tranfer operations must complete
+        DstStage = vk::PipelineStageFlagBits::eFragmentShader;  // Fragment shaders can access
+    }
+    // Undefined-to-DepthStencilAttachmentOptimal layout transition
+    // Common for resource newly created and be rendered to
+    else if (OldLayout == vk::ImageLayout::eUndefined && NewLayout == vk::ImageLayout::eColorAttachmentOptimal)
+    {
+        // Memory permisions
+        SrcAccess = vk::AccessFlagBits::eNone;                  // No previous access 
+        DstAccess = vk::AccessFlagBits::eColorAttachmentWrite;  // Will write to color attachment
+
+        // Pipeline stage syncronization
+        SrcStage = vk::PipelineStageFlagBits::eTopOfPipe;               // Don't wait for anything
+        DstStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // Wait until color attachment writes are allowed
+    }
+    // Transfer-to-Shader layout transition
+    // Common for resource newly created and be used for depth testing
+    else if (OldLayout == vk::ImageLayout::eUndefined && NewLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
+    {
+        // Memory permisions
+        SrcAccess = vk::AccessFlagBits::eNone;                          // No previous access 
+        DstAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Will write to deapth stencil attachment
+
+        // Pipeline stage syncronization
+        SrcStage = vk::PipelineStageFlagBits::eTopOfPipe;           // Don't wait for anything
+        DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;  // Wait until early fragment tests
+    }
+    // ColorAttachment-to-ShaderRead layout transition
+    // After rendering to G-buffer, now want to sample it as texture in lighting pass
+    else if (OldLayout == vk::ImageLayout::eColorAttachmentOptimal && NewLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+    {
+        // Memory permisions
+        SrcAccess = vk::AccessFlagBits::eColorAttachmentWrite;  // Wait for previous color writes to finish
+        DstAccess = vk::AccessFlagBits::eShaderRead;            // Allow shaders to read the texture
+
+        // Pipeline stage syncronization
+        SrcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // After color writes complete
+        DstStage = vk::PipelineStageFlagBits::eFragmentShader;          // Before fragment shader reads
+    }
+    // DeapthAttachment-to-ShaderRead layout transition
+    // After depth testing, want to read depth values in shader (e.g., for shadows)
+    else if (OldLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal && NewLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+    {
+        // Memory permisions
+        SrcAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Wait for deapth stencil writes to finish 
+        DstAccess = vk::AccessFlagBits::eShaderRead;                    // Allow shader reads
+
+        // Pipeline stage syncronization
+        SrcStage = vk::PipelineStageFlagBits::eLateFragmentTests;   // After late fragment tests (depth writes)
+        DstStage = vk::PipelineStageFlagBits::eFragmentShader;      // Before fragment shader reads
+    }
+    // ShaderRead-to-ColorAttachment layout transition
+    // Reusing a texture that was read from as a new render target (e.g., ping-pong rendering)
+    else if (OldLayout == vk::ImageLayout::eShaderReadOnlyOptimal && NewLayout == vk::ImageLayout::eColorAttachmentOptimal)
+    {
+        // Memory permisions
+        SrcAccess = vk::AccessFlagBits::eShaderRead;            // Wait for previoues shader reads to complete 
+        DstAccess = vk::AccessFlagBits::eColorAttachmentWrite;  // Enable color writes
+
+        // Pipeline stage syncronization
+        SrcStage = vk::PipelineStageFlagBits::eFragmentShader;          // After shader reads complete
+        DstStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // Before color writes begin
+    }
+    // TODO: Add more transitions as needed:
+    // - Transfer Dst -> Shader Read (for uploading textures)
+    // - Color Attachment -> Present (for swapchain images)
+    // - Shader Read -> Transfer Src (for reading back textures to CPU)
+    else
+    {
+        // Handle unsopported transition combinations
+        throw std::invalid_argument("Unsupported layout transition!");
+    }
+
+    // Apply the access masks
+    Barrier.setSrcAccessMask(SrcAccess).setDstAccessMask(DstAccess);
+
+    CommandBuffer.pipelineBarrier(
+        SrcStage,                        // Wait for this operations to complete
+        DstStage,                   // Before allowing these operations to begin
+        vk::DependencyFlagBits::eByRegion,  // Enable region-local optimization
+        {}, {}, { Barrier }                 // Apply image barrier
+    );
 }
 
-void Rendergraph::AddPass(const std::string& Name, const std::vector<std::string>& Inputs, const std::vector<std::string>& Outputs, std::function<void(vk::raii::CommandBuffer&)> ExecuteFunc)
+void Rendergraph::AddResource(const std::string& Name, vk::Format Format, vk::Extent2D Extent, vk::ImageUsageFlags Usage, vk::ImageAspectFlags Aspect, vk::ImageLayout InitLayout, vk::ImageLayout FinalLayout)
 {
-    Pass NewPass;
-    NewPass.Name = Name;
-    NewPass.Inputs = Inputs;
-    NewPass.Outputs = Outputs;
-    NewPass.ExecuteFunc = std::move(ExecuteFunc);
+    Resources.try_emplace(Name, Name, Format, Extent, Usage, Aspect, InitLayout, FinalLayout);
+}
 
-    Passes.push_back(std::move(NewPass)); 
+void Rendergraph::RemoveRenderPass(const std::string& Name)
+{
+    auto it = Passes.find(Name);
+    if (it != Passes.end())
+    {
+        Passes.erase(it);
+        bIsPassesDirty = true;
+    }
+}
+
+RenderPassBase* Rendergraph::GetRenderPass(const std::string& Name)
+{
+    auto it = Passes.find(Name);
+    if (it != Passes.end())
+    {
+        return it->second.get();
+    }
+
+    return nullptr;
 }
 
 Resource* Rendergraph::GetResource(const std::string& Name)
@@ -287,6 +326,79 @@ Resource* Rendergraph::GetResource(const std::string& Name)
     }
 
     return nullptr;
+}
+
+void Rendergraph::SortPasses()
+{
+    SortedPasses.clear();
+
+    // Build dependency graph: For each pass, list of passes it depends on (writers of its inputs)
+    std::unordered_map<std::string, std::vector<std::string>> Dependencies;
+    std::unordered_map<std::string, std::vector<std::string>> Dependents;   // optional, not used in sort
+
+    std::unordered_map<std::string, std::string> ResourceWriters;
+
+    // Analyze each pass to determine data flow relationships
+    for (const auto& [CurName, CurRenderPass] : Passes)
+    {
+        for(const std::string& Input : CurRenderPass->GetInputs())
+        {
+            auto it = ResourceWriters.find(Input);
+            if (it != ResourceWriters.end())
+            {
+                Dependencies[CurName].push_back(it->second);    // current depends on writer
+                Dependents[it->second].push_back(CurName);
+            }
+        }
+        
+        for(const std::string& Output: CurRenderPass->GetOutputs())
+        {
+            ResourceWriters[Output] = CurName;
+        }
+    }
+
+    // Topological Sort for optimal execution order (depth-first algorithm)
+    std::unordered_set<std::string> Visited;    // Tracks complited nodes
+    std::unordered_set<std::string> Visiting;   // Tracks current recursion path
+
+    for (const auto& [CurName, CurPass] : Passes)
+    {
+        if (Visited.find(CurName) == Visited.end())
+        {
+            TopologicalSort(CurName, Dependencies, Visited, Visiting);
+        }
+    }
+
+}
+
+void Rendergraph::TopologicalSort(const std::string& Name, const std::unordered_map<std::string, std::vector<std::string>>& Dependencies, std::unordered_set<std::string>& Visited, std::unordered_set<std::string>& Visiting)
+{
+    if (Visiting.count(Name))
+    {
+        throw std::runtime_error("Cycle detected in rendergraph");
+    }
+
+    if (Visited.count(Name))
+    {
+        return; // Was already processed
+    }
+
+    Visiting.insert(Name);
+
+    const auto& CurDeps = Dependencies.at(Name);
+
+    for (const auto& Dep : CurDeps)
+    {
+        if (Visited.find(Dep) == Visited.end())
+        {
+            TopologicalSort(Dep, Dependencies, Visited, Visiting);
+        }
+    }
+
+    Visiting.erase(Name);
+    Visited.insert(Name);
+
+    SortedPasses.push_back(Passes[Name].get());
 }
 
 uint32_t Rendergraph::FindMemoryType(const uint32_t& TypeFilter, const vk::MemoryPropertyFlags& Properties) const

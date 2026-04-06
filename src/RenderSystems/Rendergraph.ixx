@@ -3,10 +3,14 @@ module;
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
+#include <memory>
 #include <vulkan/vulkan_raii.hpp>
 
 export module Rendergraph;
+
+import RenderPassBase;
 
 // Resource description and management structure
 // Represents Image resurce used during rendering (texture)
@@ -16,13 +20,15 @@ export struct Resource
 	Resource() = default;
 
 	// Parameterized constructor
-	Resource(const std::string& name, vk::Format format, vk::Extent2D extent,
-		vk::ImageLayout initialLayout, vk::ImageLayout finalLayout)
-		: Name(name)
-		, Format(format)
-		, Extent(extent)
-		, InitialLayout(initialLayout)
-		, FinalLayout(finalLayout)
+	Resource(const std::string& InName, vk::Format InFormat, vk::Extent2D InExtent, vk::ImageUsageFlags InUsage, vk::ImageAspectFlags InAspect,
+		vk::ImageLayout InInitialLayout, vk::ImageLayout InFinalLayout)
+		: Name(InName)
+		, Format(InFormat)
+		, Extent(InExtent)
+		, Usage(InUsage)
+		, Aspect(InAspect)
+		, InitialLayout(InInitialLayout)
+		, FinalLayout(InFinalLayout)
 	{
 	}
 
@@ -38,6 +44,7 @@ export struct Resource
 	vk::Format Format;				// Pixel format
 	vk::Extent2D Extent;			// Dimenstions in pixels
 	vk::ImageUsageFlags Usage;		// How resource will be used (color attachment, texture, etc.)
+	vk::ImageAspectFlags Aspect;	// Which aspects (color, depth, stencil) 
 	vk::ImageLayout InitialLayout;	// Expected layout when the frame begins
 	vk::ImageLayout FinalLayout;	// Required layout when the frame ens
 
@@ -46,18 +53,6 @@ export struct Resource
 	vk::raii::DeviceMemory Memory = nullptr;	// Backing memory allocation
 	vk::raii::ImageView View = nullptr;			// Shader-accessible view of the image
 };
-
-// Render pass representation within the graph structure
-// Each pass represents an operation with distinct inputs and outputs
-export struct Pass
-{
-	std::string Name;					// Human readable name for debugging
-	std::vector<std::string> Inputs;	// Resources this pass will read (dependencies)
-	std::vector<std::string> Outputs;	// Resources this pass will write to (products)
-
-	std::function<void(vk::raii::CommandBuffer&)> ExecuteFunc; // Rendering code
-};
-
 
 export class Rendergraph
 {
@@ -68,31 +63,66 @@ public:
 
 	void Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue);
 
+	void TransitionImageLayout(
+		vk::raii::CommandBuffer& CommandBuffer, 
+		vk::Image Image, 
+		vk::ImageAspectFlags Aspect,
+		vk::ImageLayout OldLayout, 
+		vk::ImageLayout NewLayout);
+
+
 	void AddResource(
 		const std::string& Name,
 		vk::Format Format,
 		vk::Extent2D Extent,
+		vk::ImageUsageFlags Usage,
+		vk::ImageAspectFlags Aspect,
 		vk::ImageLayout InitLayout,
 		vk::ImageLayout FinalLayout);
 
-	void AddPass(
-		const std::string& Name,
-		const std::vector<std::string>& Inputs,
-		const std::vector<std::string>& Outputs,
-		std::function<void(vk::raii::CommandBuffer&)> ExecuteFunc);
+	template<typename T, typename... Args>
+	T* AddRenderPass(const std::string& Name, Args&&... args)
+	{
+		static_assert(std::is_base_of<RenderPassBase, T>::value, "T must derive from RenderPassBase");
 
+		auto it = Passes.find(Name);
+		if (it != Passes.end())
+		{
+			return dynamic_cast<T*>(it->second.get());
+		}
+
+		auto NewPass = std::make_unique<T>(std::forward<Args>(args)...);
+		T* NewPassPtr = NewPass.get();
+		Passes[Name] = std::move(NewPass);
+		bIsPassesDirty = true;
+
+		return NewPassPtr;
+	}
+
+	void RemoveRenderPass(const std::string& Name);
+
+	RenderPassBase* GetRenderPass(const std::string& Name);
+	
 	Resource* GetResource(const std::string& Name);
 
 private:
+	void SortPasses();
+
+	void TopologicalSort(
+		const std::string& Name, 
+		const std::unordered_map<std::string, std::vector<std::string>>& Dependencies,
+		std::unordered_set<std::string>& Visited,
+		std::unordered_set<std::string>& Visiting);
+
+	// TODO: maybe move find memory type to somewhere else
 	uint32_t FindMemoryType(const uint32_t& TypeFilter, const vk::MemoryPropertyFlags& Properties) const;
 
-	std::unordered_map<std::string, Resource> Resources; // All referenced resource
-	std::vector<Pass> Passes;							 // All rendering passes in definition order
-	std::vector<size_t> ExecOrder;						 // Optimal execution order
+	std::unordered_map<std::string, Resource> Resources;						// All referenced resource
+	std::unordered_map<std::string, std::unique_ptr<RenderPassBase>> Passes;	// All rendering passes 
+	std::vector<RenderPassBase*> SortedPasses;									// Optimal execution order
+	bool bIsPassesDirty = true;
 
-	// Syncronization management
-	std::vector<vk::raii::Semaphore> Semaphores; // Sync primitives
-	std::vector<std::pair<size_t, size_t>> SemaphoreWaitPairs; // Signaling pass | Waiting pass
+	std::unordered_map<std::string, vk::ImageLayout> CurrentLayouts; // Current layouts of resources
 
 	vk::raii::Device& Device;
 	vk::raii::PhysicalDevice& PhysicalDevice;
