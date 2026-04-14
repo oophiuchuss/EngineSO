@@ -30,7 +30,7 @@ public:
 	
 	inline bool IsEnabled() const { return bIsEnabled; }
 
-	virtual void Execute(vk::raii::CommandBuffer& Cmd, const Rendergraph& Graph)
+	virtual void Execute(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
 	{
 		if (!bIsEnabled)
 		{
@@ -43,9 +43,9 @@ public:
 	}
 
 protected:
-	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, const Rendergraph& Graph) = 0;
-	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, const Rendergraph& Graph) = 0;
-	virtual void EndPass(vk::raii::CommandBuffer& Cmd, const Rendergraph& Graph) = 0;
+	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) = 0;
+	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) = 0;
+	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) = 0;
 
 private:
 	std::string Name;					// Human-readable name

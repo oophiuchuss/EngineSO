@@ -63,11 +63,6 @@ void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queu
         bIsPassesDirty = false;
     }
 
-
-    // Command buffer prep and Resource layout transitions
-    // Set up command recording and transition resources to appropriate layouts
-    CommandBuffer.begin({}); // TODO: should this command buffer begin with no additional info?
-
     // Pass execution with dependency-sage order
     for (const auto& CurPass: SortedPasses)
     {
@@ -102,7 +97,7 @@ void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queu
             }
             else if(CurResource.Usage & vk::ImageUsageFlagBits::eDepthStencilAttachment)
             {
-                TargetLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal; // Deapth Buffer
+                TargetLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal; // Depth Buffer
             }
             else
             {
@@ -149,17 +144,6 @@ void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queu
         }
     }
 
-    // Command submission with sync
-    // Submit buffer and signal semaphores
-    CommandBuffer.end();
-
-    // TODO: Maybe move submition to external place?
-
-    vk::SubmitInfo SubmitInfo;
-    SubmitInfo.setCommandBufferCount(1)       // Single command buffer
-        .setPCommandBuffers(&*CommandBuffer); // Command buffer to exec
-
-    Queue.submit(SubmitInfo);   // Submit to GPU queue
 
     // Note: Rremoved per-pass submissions and semaphores because:
     // 1. Submitting one command buffer is more efficient (less driver overhead)
@@ -228,7 +212,7 @@ void Rendergraph::TransitionImageLayout(vk::raii::CommandBuffer& CommandBuffer, 
     {
         // Memory permisions
         SrcAccess = vk::AccessFlagBits::eNone;                          // No previous access 
-        DstAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Will write to deapth stencil attachment
+        DstAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Will write to depth stencil attachment
 
         // Pipeline stage syncronization
         SrcStage = vk::PipelineStageFlagBits::eTopOfPipe;           // Don't wait for anything
@@ -246,12 +230,12 @@ void Rendergraph::TransitionImageLayout(vk::raii::CommandBuffer& CommandBuffer, 
         SrcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // After color writes complete
         DstStage = vk::PipelineStageFlagBits::eFragmentShader;          // Before fragment shader reads
     }
-    // DeapthAttachment-to-ShaderRead layout transition
+    // DepthAttachment-to-ShaderRead layout transition
     // After depth testing, want to read depth values in shader (e.g., for shadows)
     else if (OldLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal && NewLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
     {
         // Memory permisions
-        SrcAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Wait for deapth stencil writes to finish 
+        SrcAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Wait for depth stencil writes to finish 
         DstAccess = vk::AccessFlagBits::eShaderRead;                    // Allow shader reads
 
         // Pipeline stage syncronization
@@ -304,28 +288,6 @@ void Rendergraph::RemoveRenderPass(const std::string& Name)
         Passes.erase(it);
         bIsPassesDirty = true;
     }
-}
-
-RenderPassBase* Rendergraph::GetRenderPass(const std::string& Name)
-{
-    auto it = Passes.find(Name);
-    if (it != Passes.end())
-    {
-        return it->second.get();
-    }
-
-    return nullptr;
-}
-
-Resource* Rendergraph::GetResource(const std::string& Name)
-{
-    auto it = Resources.find(Name);
-    if (it != Resources.end())
-    {
-        return &(it->second);
-    }
-
-    return nullptr;
 }
 
 void Rendergraph::SortPasses()

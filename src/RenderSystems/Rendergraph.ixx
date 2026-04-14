@@ -91,7 +91,7 @@ public:
 			return dynamic_cast<T*>(it->second.get());
 		}
 
-		auto NewPass = std::make_unique<T>(std::forward<Args>(args)...);
+		auto NewPass = std::make_unique<T>(Name, std::forward<Args>(args)...);
 		T* NewPassPtr = NewPass.get();
 		Passes[Name] = std::move(NewPass);
 		bIsPassesDirty = true;
@@ -101,9 +101,27 @@ public:
 
 	void RemoveRenderPass(const std::string& Name);
 
-	RenderPassBase* GetRenderPass(const std::string& Name);
-	
-	Resource* GetResource(const std::string& Name);
+	RenderPassBase* GetRenderPass(const std::string& Name)
+	{
+		auto it = Passes.find(Name);
+		if (it != Passes.end())
+		{
+			return it->second.get();
+		}
+
+		return nullptr;
+	}
+
+	Resource* GetResource(const std::string& Name)
+	{
+		auto it = Resources.find(Name);
+		if (it != Resources.end())
+		{
+			return &(it->second);
+		}
+
+		return nullptr;
+	}
 
 private:
 	void SortPasses();

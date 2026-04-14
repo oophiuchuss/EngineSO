@@ -1,3 +1,7 @@
+module;
+
+#include <vector>
+
 module CullingSystem;
 
 import Entity;
