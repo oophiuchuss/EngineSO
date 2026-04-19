@@ -43,7 +43,7 @@ public:
 
 	bool RemoveListener(EventListener* Listener)
 	{
-		auto it = std::find(
+		auto it = std::find_if(
 			Listeners.begin(), Listeners.end(),
 			[Listener](const ListenerInfo& Info) { return Info.Listener == Listener; }
 		);
