@@ -2,7 +2,7 @@
 #include <iostream>
 #include "vulkan/vulkan_raii.hpp"
 
-import Engine;
+import VulkanEngine;
 import HotReloadResourceManager;
 import Texture;
 import Mesh;
@@ -15,7 +15,7 @@ int main() {
     try
     {
         VulkanEngine engine;
-        engine.run();
+        engine.Run();
 
 
         HotReloadResourceManager resourceManager;
@@ -52,9 +52,6 @@ int main() {
             }
 			});
 
-
-
-        std::getchar();
     }
     catch (const std::exception& err)
     {

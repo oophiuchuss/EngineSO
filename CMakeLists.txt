@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
+message(STATUS "CMAKE_TOOLCHAIN_FILE = ${CMAKE_TOOLCHAIN_FILE}")
 project(EngineSO VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -11,6 +12,11 @@ endif()
 
 #Find Vulkan
 find_package(Vulkan REQUIRED)
+
+#Find GLFW
+message(STATUS "Looking for glfw3...")
+find_package(glfw3 CONFIG REQUIRED)
+message(STATUS "glfw3 found: ${glfw3_FOUND}")
 
 # Glob all source files in the src directory
 file(GLOB_RECURSE ENGINE_SOURCES 
@@ -48,6 +54,7 @@ endif()
 
 # Link the Vulkan library to the target
 target_link_libraries(EngineSO PRIVATE Vulkan::Vulkan)
+target_link_libraries(EngineSO PRIVATE glfw)
 
 # Include the Vulkan headers
 target_include_directories(EngineSO PRIVATE ${Vulkan_INCLUDE_DIRS})
