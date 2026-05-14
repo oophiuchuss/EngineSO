@@ -72,7 +72,7 @@ void VulkanEngine::InitVulkan()
 
     vk::raii::SurfaceKHR Surface(Instance, std::move(RawSurface));
 
-    //RendererPtr = std::make_unique<Renderer>(*Instance, std::move(Surface));
+    RendererPtr = std::make_unique<Renderer>(Instance, std::move(Surface));
 }
 
 void VulkanEngine::Run()
@@ -87,7 +87,7 @@ void VulkanEngine::MainLoop()
     {
         glfwPollEvents();
 
-        //RendererPtr->DrawFrame();
+        RendererPtr->RenderFrame({});
     }
 }
 
@@ -107,7 +107,7 @@ void VulkanEngine::OnResize(int Width, int Height)
 
     if (RendererPtr)
     {
-        // RendererPtr->RecreateSwapchain();
+        RendererPtr->RecreateSwapchain(Width, Height);
     }
 }
 
