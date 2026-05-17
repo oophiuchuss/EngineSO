@@ -14,6 +14,8 @@ LightingPass::LightingPass(
 	RenderPassBase(InName),
 	GBufferColorResourceName(InGBufferColorResourceName)
 {
+	AddInput(GBufferColorResourceName);
+	AddOutput(GBufferColorResourceName);
 }
 
 void LightingPass::AddLight(Light* LightToAdd)

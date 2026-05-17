@@ -29,6 +29,8 @@ private:
 
 	int ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk::raii::SurfaceKHR& Surface);
 
+	bool IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usage);
+
 	vk::raii::Instance& Instance;	// Non-owning instance
 	vk::raii::SurfaceKHR Surface;	// Owning surface, moved in
 
@@ -50,7 +52,7 @@ private:
 	vk::Format SwapchainImageFormat;
 	vk::Extent2D SwapchainExtent;
 
-	// Synchronization (double buffered, but swapchain may have 3 images
+	// Synchronization (double buffered, but swapchain may have 3 images)
 	static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 	std::vector<vk::raii::Semaphore> ImageAvailableSemaphores;
 	std::vector<vk::raii::Semaphore> RenderFinishedSemaphores;

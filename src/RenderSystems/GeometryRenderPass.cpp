@@ -22,6 +22,8 @@ GeometryRenderPass::GeometryRenderPass(
 	GBufferColorResourceName(InGBufferColorResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName)
 {
+	AddOutput(GBufferColorResourceName);
+	AddOutput(GBufferDepthResourceName);
 }
 
 void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)

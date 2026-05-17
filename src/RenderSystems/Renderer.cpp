@@ -4,6 +4,7 @@ module;
 #include <vector>
 #include <optional>
 #include <memory>
+#include <iostream>
 
 module Renderer;
 
@@ -42,10 +43,16 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 
 	// Set up render passes and framebuffers in the rendergraph
 	SetupRenderPasses();
+	RendergraphPtr->Compile();
 }
 
 Renderer::~Renderer()
 {
+	if (Device != nullptr)
+	{
+		// vk::raii::Device is truthy if valid
+		Device.waitIdle();
+	}
 }
 
 void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
@@ -96,8 +103,68 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 	RendergraphPtr->Execute(Cmd, GraphicsQueue);
 
 	// Copy "Main_Color" to swapchain image (transition layouts accordingly)
-	// TODO: implement blit/copy using rendergraph or manual barrier+copy.
-	// For now, we'll just end command buffer and present (image will be black)
+	Resource* MainColorResource = RendergraphPtr->GetResource("Main_Color");
+
+	if (!MainColorResource || MainColorResource->Image == nullptr)
+	{
+		throw std::runtime_error("Main_Color resource not found in rendergraph");
+	}
+
+	vk::Image SrcImage = *MainColorResource->Image; // Get the Vulkan image handle from the resource
+
+	// Transition the acquired swapchain image to be a transfer destination
+	vk::ImageMemoryBarrier PreCopyBarrier(
+		vk::AccessFlagBits::eNone,						// No previous access required (image was just acquired)
+		vk::AccessFlagBits::eTransferWrite,				// Make it writable for transfer
+		vk::ImageLayout::eUndefined,					// Current layout is undefined after acquire
+		vk::ImageLayout::eTransferDstOptimal,			// Transition to transfer destination optimal for copy
+		VK_QUEUE_FAMILY_IGNORED,						// No queue family ownership transfer
+		VK_QUEUE_FAMILY_IGNORED,
+		SwapchainImages[ImageIndex],					// The specific swapchain image we're targeting
+		{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 } // Full image, color aspect]
+	);
+
+	Cmd.pipelineBarrier(
+		vk::PipelineStageFlagBits::eTopOfPipe,		// Earliest stage – we don't wait for anything
+		vk::PipelineStageFlagBits::eTransfer,		// Before any transfer operations
+		vk::DependencyFlagBits::eByRegion,			// Enable region-local optimization
+		{}, {}, { PreCopyBarrier }
+	);
+
+	// Copy whole Main_Color image to swapchain image
+	vk::ImageCopy CopyRegion;
+	CopyRegion.setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })	// Source subresource (full image)
+		.setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })		// Destination subresource (full image)
+		.setExtent(vk::Extent3D(MainColorResource->Extent, 1));					// Copy extent (full image size)
+	
+	std::cout << "Copying from " << MainColorResource->Name << " to swapchain image " << ImageIndex << "\n";
+
+
+	Cmd.copyImage(
+		SrcImage,						vk::ImageLayout::eTransferSrcOptimal,	// Source image and layout
+		SwapchainImages[ImageIndex],	vk::ImageLayout::eTransferDstOptimal,	// Destination image and layout
+		{ CopyRegion } // Regions to copy
+	);
+
+	// Transition swapchain image to present layout for presentation
+	vk::ImageMemoryBarrier PresentBarrier(
+		vk::AccessFlagBits::eTransferWrite,			// Wait for the copy to finish
+		vk::AccessFlagBits::eNone,					// The presentation engine doesn't need any specific GPU access flags
+		vk::ImageLayout::eTransferDstOptimal,       // Layout after copy is done
+		vk::ImageLayout::ePresentSrcKHR,			// Target layout – required for presentation
+		VK_QUEUE_FAMILY_IGNORED,                  // We're not transferring queue ownership
+		VK_QUEUE_FAMILY_IGNORED,
+		SwapchainImages[ImageIndex],              // The specific swapchain image we acquired
+		{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }  // Full image, color aspect
+	);
+
+	// Execute the barrier
+	Cmd.pipelineBarrier(
+		vk::PipelineStageFlagBits::eTransfer,		// After transfer stage where copy happens
+		vk::PipelineStageFlagBits::eBottomOfPipe,	// Latest stage – make sure layout change is done before anything later
+		vk::DependencyFlagBits::eByRegion,			// Enable region-local optimization
+		{}, {}, { PresentBarrier }
+	);
 
 	// Command submission with sync
 	// Submit buffer
@@ -112,7 +179,7 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 		.setPWaitSemaphores(&*ImageAvailableSemaphores[CurrentFrame])
 		.setPWaitDstStageMask(WaitStages)
 		.setSignalSemaphoreCount(1)
-		.setPSignalSemaphores(&*RenderFinishedSemaphores[CurrentFrame]);
+		.setPSignalSemaphores(&*RenderFinishedSemaphores[ImageIndex]);
 
 
 	GraphicsQueue.submit(SubmitInfo, *InFlightFences[CurrentFrame]);   // Submit to GPU queue
@@ -121,7 +188,7 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 	vk::PresentInfoKHR PresentInfo;
 	PresentInfo.setImageIndices(ImageIndex)
 			   .setWaitSemaphoreCount(1)
-			   .setPWaitSemaphores(&*RenderFinishedSemaphores[CurrentFrame])
+			   .setPWaitSemaphores(&*RenderFinishedSemaphores[ImageIndex])
 			   .setSwapchainCount(1)
 			   .setPSwapchains(&*Swapchain);
 
@@ -160,6 +227,7 @@ void Renderer::RecreateSwapchain(int Width, int Height)
 	// TODO: rendergraph might need re-initializion
 	
 	SetupRenderPasses();
+	RendergraphPtr->Compile();
 }
 
 void Renderer::PickPhysicalDevice()
@@ -267,6 +335,11 @@ void Renderer::CreateLogicalDevice()
 		throw std::runtime_error("Failed to find a queue family that supports both graphics and present");
 	}
 
+	std::vector<const char*> DeviceExtensions = {
+	   VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+	   VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
+	};
+
 	// Create logical device with required queues
 	std::vector<vk::DeviceQueueCreateInfo> QueueCreateInfos;
 	float QueuePriority = 1.0f;
@@ -282,7 +355,15 @@ void Renderer::CreateLogicalDevice()
 		QueueCreateInfos.push_back(TransferQueueCreateInfo);
 	}
 
-	vk::DeviceCreateInfo DeviceCreateInfo({}, QueueCreateInfos);
+	vk::DeviceCreateInfo DeviceCreateInfo({}, QueueCreateInfos, {}, DeviceExtensions);
+
+	// Enable dynamic rendering feature
+	vk::PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature;
+	dynamicRenderingFeature.setDynamicRendering(VK_TRUE);
+
+	// Chain it into the device create info
+	DeviceCreateInfo.setPNext(&dynamicRenderingFeature);
+
 	Device = vk::raii::Device(PhysicalDevice, DeviceCreateInfo);
 
 	GraphicsQueueFamilyIndex = GraphicsAndPresentFamily.value();
@@ -308,17 +389,52 @@ void Renderer::CreateSwapchain()
 	auto SurfaceFormats = PhysicalDevice.getSurfaceFormatsKHR(*Surface);
 	auto PresentModes = PhysicalDevice.getSurfacePresentModesKHR(*Surface);
 
-	// Choose surface format (prefer SRGB)
-	vk::Format SurfaceFormat = vk::Format::eB8G8R8A8Unorm; // Fallback default
+	// Choose format that works even with overlay injections
+	//
+	// Overlays (RTSS, Steam, Discord, etc.) often hook into swapchain creation
+	// and silently add VK_IMAGE_USAGE_STORAGE_BIT and VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+	// to the image usage. This causes a validation error (or even a crash) if the
+	// chosen format does not support those extra flags.
+	//
+	// To avoid this, we ask the GPU what formats support our required usage PLUS
+	// the extra usage that overlays typically add. If we find one, we use it.
+	// Otherwise we fall back to a format that supports only our required usage.
+	//
+	// The visual output will always be correct sRGB because we pair the format
+	// with VK_COLOR_SPACE_SRGB_NONLINEAR_KHR, which tells the display hardware
+	// to apply the sRGB gamma curve during presentation.
+
+	vk::Format        SurfaceFormat = vk::Format::eUndefined;
 	vk::ColorSpaceKHR SurfaceColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
-	for (auto& AvailableFormat : SurfaceFormats)
-	{
-		if(AvailableFormat.format == vk::Format::eB8G8R8A8Srgb && AvailableFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
-		{
-			SurfaceFormat = AvailableFormat.format;
-			SurfaceColorSpace = AvailableFormat.colorSpace;
+
+	vk::ImageUsageFlags RequiredUsage = vk::ImageUsageFlagBits::eColorAttachment
+		| vk::ImageUsageFlagBits::eTransferDst;
+
+	vk::ImageUsageFlags ExtraUsage = vk::ImageUsageFlagBits::eStorage
+		| vk::ImageUsageFlagBits::eTransferSrc;
+
+	// First pass: required + extra usage
+	for (auto& Fmt : SurfaceFormats) {
+		if (IsFormatUsageSupported(Fmt.format, RequiredUsage | ExtraUsage)) {
+			SurfaceFormat = Fmt.format;
+			SurfaceColorSpace = Fmt.colorSpace;
 			break;
 		}
+	}
+
+	// Second pass: fallback – required usage only
+	if (SurfaceFormat == vk::Format::eUndefined) {
+		for (auto& Fmt : SurfaceFormats) {
+			if (IsFormatUsageSupported(Fmt.format, RequiredUsage)) {
+				SurfaceFormat = Fmt.format;
+				SurfaceColorSpace = Fmt.colorSpace;
+				break;
+			}
+		}
+	}
+
+	if (SurfaceFormat == vk::Format::eUndefined) {
+		throw std::runtime_error("No suitable swapchain format found");
 	}
 
 	// Choose present mode (prefer mailbox, then FIFO)
@@ -349,26 +465,22 @@ void Renderer::CreateSwapchain()
 		ImageCount = min(ImageCount, SurfaceCaps.maxImageCount); // Clamp to max if there is a limit
 	}
 
-	vk::SwapchainCreateInfoKHR SwapchainCreateInfo
-	(
-		{},																					// Flags
-		*Surface,
-		ImageCount,
-		SurfaceFormat,
-		SurfaceColorSpace,
-		SwapchainExtent,
-		1,																					// Image array layers
-		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,	// Usage
-		vk::SharingMode::eExclusive,														// Sharing mode
-		{},																					// Queue family indices if concurent (ignored for exclusive mode)
-		SurfaceCaps.currentTransform,														// Pre-transform
-		vk::CompositeAlphaFlagBitsKHR::eOpaque,												
-		PresentMode,
-		VK_TRUE,																			// Clipped
-		nullptr																				// Old swapchain (for resizing)
-	);
+	vk::SwapchainCreateInfoKHR SwapchainCreateInfo;
 
-	Swapchain = vk::raii::SwapchainKHR(Device, SwapchainCreateInfo);
+	SwapchainCreateInfo.setSurface(*Surface)
+		.setMinImageCount(ImageCount)
+		.setImageFormat(SurfaceFormat)
+		.setImageColorSpace(SurfaceColorSpace)
+		.setImageExtent(SwapchainExtent)
+		.setImageArrayLayers(1)											
+		.setImageUsage(vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst)	// Usage
+		.setImageSharingMode(vk::SharingMode::eExclusive)												// Pre-transform
+		.setPreTransform(SurfaceCaps.currentTransform)
+		.setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
+		.setPresentMode(PresentMode)																	// Sharing mode
+		.setClipped(VK_TRUE);																			// Clipped
+
+	Swapchain = vk::raii::SwapchainKHR(Device.createSwapchainKHR(SwapchainCreateInfo, nullptr));
 	SwapchainImages = Swapchain.getImages();
 	SwapchainImageFormat = SurfaceFormat;
 
@@ -397,11 +509,25 @@ void Renderer::CreateSwapchain()
 
 void Renderer::CreateSyncObjects()
 {
+	ImageAvailableSemaphores.clear();
+	RenderFinishedSemaphores.clear();
+	InFlightFences.clear();
+	
+	// Per‑frame semaphores for acquisition
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		ImageAvailableSemaphores.emplace_back(Device, vk::SemaphoreCreateInfo());
+	}
+
+	// Per‑image semaphores for rendering finished (size = swapchain image count)
+	for (size_t i = 0; i < SwapchainImages.size(); i++)
+	{
+		RenderFinishedSemaphores.emplace_back(Device, vk::SemaphoreCreateInfo());
+	}
+
+	// Fences stay per‑frame
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
-		ImageAvailableSemaphores[i] = vk::raii::Semaphore(Device, vk::SemaphoreCreateInfo());
-		RenderFinishedSemaphores[i] = vk::raii::Semaphore(Device, vk::SemaphoreCreateInfo());
-		InFlightFences[i] = vk::raii::Fence(Device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)); // Start signaled so we can wait on it immediately
+		InFlightFences.emplace_back(Device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled));	// Start signaled so we can wait on it immediately
 	}
 }
 
@@ -411,7 +537,9 @@ void Renderer::SetupRenderPasses()
 		"Main_Color",
 		vk::Format::eB8G8R8A8Unorm,					// Format – swapchain compatible
 		SwapchainExtent,							// Extent – screen size
-		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc, // Usage – render target + transfer to swapchain
+		vk::ImageUsageFlagBits::eColorAttachment |	// Usage – render target
+		vk::ImageUsageFlagBits::eTransferSrc |		// Usage – also allow transfer to swapchain for presentation
+		vk::ImageUsageFlagBits::eSampled,			// Usage - allow sampling for post-process or UI
 		vk::ImageAspectFlagBits::eColor,			// Aspect – color only
 		vk::ImageLayout::eUndefined,				// Initial layout – don't care (will be cleared)
 		vk::ImageLayout::eTransferSrcOptimal		// Final layout – ready for copy to swapchain
@@ -465,4 +593,19 @@ int Renderer::ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk:
 	Score += static_cast<int>(VRAM / (1024 * 1024 * 100)); // More VRAM is better, per 100MB
 
 	return Score;
+}
+
+bool Renderer::IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usage)
+{
+	try {
+		PhysicalDevice.getImageFormatProperties(
+			Format,
+			vk::ImageType::e2D,
+			vk::ImageTiling::eOptimal,
+			Usage);
+		return true;
+	}
+	catch (...) {
+		return false;
+	}
 }

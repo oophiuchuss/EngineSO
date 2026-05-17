@@ -63,13 +63,11 @@ public:
 
 	void Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue);
 
-	void TransitionImageLayout(
-		vk::raii::CommandBuffer& CommandBuffer, 
-		vk::Image Image, 
-		vk::ImageAspectFlags Aspect,
+	void TransitionResourceImageLayout(
+		vk::raii::CommandBuffer& CommandBuffer,
+		Resource* ResourcePtr,
 		vk::ImageLayout OldLayout, 
 		vk::ImageLayout NewLayout);
-
 
 	void AddResource(
 		const std::string& Name,
@@ -101,7 +99,7 @@ public:
 
 	void RemoveRenderPass(const std::string& Name);
 
-	RenderPassBase* GetRenderPass(const std::string& Name)
+	inline RenderPassBase* GetRenderPass(const std::string& Name)
 	{
 		auto it = Passes.find(Name);
 		if (it != Passes.end())
@@ -112,7 +110,7 @@ public:
 		return nullptr;
 	}
 
-	Resource* GetResource(const std::string& Name)
+	inline Resource* GetResource(const std::string& Name)
 	{
 		auto it = Resources.find(Name);
 		if (it != Resources.end())
@@ -124,6 +122,13 @@ public:
 	}
 
 private:
+	void TransitionImageLayout(
+		vk::raii::CommandBuffer& CommandBuffer,
+		vk::Image Image,
+		vk::ImageAspectFlags Aspect,
+		vk::ImageLayout OldLayout,
+		vk::ImageLayout NewLayout);
+
 	void SortPasses();
 
 	void TopologicalSort(

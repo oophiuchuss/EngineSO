@@ -15,6 +15,8 @@ PostProcessPass::PostProcessPass(
 	RenderPassBase(InName), 
 	GBufferColorResourceName(InGBufferColorResourceName)
 {
+	AddInput(GBufferColorResourceName);
+	AddOutput(GBufferColorResourceName);
 }
 
 void PostProcessPass::AddPostProcessEffect(PostProcessEffect* EffectToAdd)

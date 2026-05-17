@@ -12,51 +12,43 @@ import AsyncResourceLoader;
 import MeshComponent;
 
 int main() {
-    try
-    {
-        VulkanEngine engine;
-        engine.Run();
+    VulkanEngine engine;
+    engine.Run();
 
 
-        HotReloadResourceManager resourceManager;
+    HotReloadResourceManager resourceManager;
 		
-        auto TextureResource = resourceManager.Load<Texture>("example_texture");
-		auto MeshResource = resourceManager.Load<Mesh>("example_mesh");
-		auto ShaderResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eVertex);
-		auto FragmentResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eFragment);
+    auto TextureResource = resourceManager.Load<Texture>("example_texture");
+	auto MeshResource = resourceManager.Load<Mesh>("example_mesh");
+	auto ShaderResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eVertex);
+	auto FragmentResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eFragment);
         
-		if (TextureResource.IsValid() && MeshResource.IsValid() && ShaderResource.IsValid() && FragmentResource.IsValid())
-        {
-            Material material/*(vertexShader, fragmentShader)*/;
-        
-            // Set texture in material
-            //material.SetTexture("diffuse", texture);
-        
-			Entity entity("ExampleEntity");
-        
-            auto meshComponent = entity.AddComponent<MeshComponent>(MeshResource.Get(), &material);
-        }
-        
-        //resourceManager.Release(TextureResource.GetResourceID());
-
-		AsyncResourceLoader asyncLoader(&resourceManager);
-
-        asyncLoader.LoadAsync<Texture>("async_texture", [](ResourceHandle<Texture> LoadedTexture) {
-            if (LoadedTexture.IsValid())
-            {
-                std::cout << "Asynchronously loaded texture: " << LoadedTexture.GetResourceID() << std::endl;
-            }
-            else
-            {
-                std::cout << "Failed to load texture asynchronously." << std::endl;
-            }
-			});
-
-    }
-    catch (const std::exception& err)
+	if (TextureResource.IsValid() && MeshResource.IsValid() && ShaderResource.IsValid() && FragmentResource.IsValid())
     {
-        std::cerr << "std::exception: " << err.what() << std::endl;
-        return 1;
+        Material material/*(vertexShader, fragmentShader)*/;
+        
+        // Set texture in material
+        //material.SetTexture("diffuse", texture);
+        
+		Entity entity("ExampleEntity");
+        
+        auto meshComponent = entity.AddComponent<MeshComponent>(MeshResource.Get(), &material);
     }
+        
+    //resourceManager.Release(TextureResource.GetResourceID());
+
+	AsyncResourceLoader asyncLoader(&resourceManager);
+
+    asyncLoader.LoadAsync<Texture>("async_texture", [](ResourceHandle<Texture> LoadedTexture) {
+        if (LoadedTexture.IsValid())
+        {
+            std::cout << "Asynchronously loaded texture: " << LoadedTexture.GetResourceID() << std::endl;
+        }
+        else
+        {
+            std::cout << "Failed to load texture asynchronously." << std::endl;
+        }
+		});
+
     return 0;
 }
