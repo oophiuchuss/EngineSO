@@ -8,58 +8,34 @@ import Entity;
 import MeshComponent;
 import TransformComponent;
 
-void CullingSystem::CullScene(const std::vector<Entity*>& AllEntitites)
+void CullingSystem::CullScene(const std::vector<Entity*>& AllEntities)
 {
 	VisibleEntities.clear();
+    if (!CameraComponentPtr)
+    {
+		return; // No active camera, cannot perform culling
+    }
 
-	if (!CameraPtr)
-	{
-		return; // No camera, can't cull
-	}
+    Frustum CurFrustum = CameraComponentPtr->GetFrustum();
 
-	Frustum CameraFrustum = CameraPtr->GetFrustum();
+    // TODO: For now, no frustum culling – add all active entities with a mesh.
+    for (auto* Entity : AllEntities)
+    {
+        if (!Entity || !Entity->IsActive())
+            continue;
 
-	for (auto* CurEntity : AllEntitites)
-	{
-		if (IsEntityVisible(CurEntity, CameraFrustum))
-		{
-			VisibleEntities.push_back(CurEntity);
-		}
-	}
-}
+        MeshComponent* Mesh = Entity->GetComponent<MeshComponent>();
+        TransformComponent* Transform = Entity->GetComponent<TransformComponent>();
 
-bool CullingSystem::IsEntityVisible(const Entity* InEntity, const Frustum& CameraFrustum) const
-{
-	if (InEntity == nullptr)
-	{
-		return false;
-	}
+        if (Mesh && Transform)
+        {
+            BoundingBox WorldBox = Mesh->GetBoundingBox();  
+            WorldBox.Transform(Transform->GetTransformMatrix());
 
-	if (!InEntity->IsActive())
-	{
-		return false;
-	}
-
-	MeshComponent* MeshComp = InEntity->GetComponent<MeshComponent>();
-	if (!MeshComp)
-	{
-		return false;
-	}
-
-	TransformComponent* TransformComp = InEntity->GetComponent<TransformComponent>();
-	if (!TransformComp)
-	{
-		return false;
-	}
-
-	BoundingBox EntityBoundingBox = MeshComp->GetBoundingBox();
-
-	EntityBoundingBox.Transform(TransformComp->GetTransformMatrix());
-
-	if (!CameraFrustum.Intersects(EntityBoundingBox))
-	{
-		return false;
-	}
-
-	return true;
+            if(CurFrustum.Intersects(WorldBox))
+            {
+                VisibleEntities.push_back(Entity);
+            }
+        }
+    }
 }

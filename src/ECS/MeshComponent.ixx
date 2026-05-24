@@ -36,7 +36,7 @@ public:
 
 	void Render() override;
 
-	BoundingBox GetBoundingBox() const
+	inline BoundingBox GetBoundingBox() const
 	{
 		//TODO: Implement the actual bounding box calculation based on the mesh data
 		return BoundingBox();

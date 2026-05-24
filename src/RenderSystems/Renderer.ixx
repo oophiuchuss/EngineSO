@@ -9,7 +9,9 @@ export module Renderer;
 
 import Rendergraph;
 import CullingSystem;
+import CameraComponent;
 import Entity;
+import CameraUniform;
 
 export class Renderer
 {
@@ -19,6 +21,8 @@ public:
 
 	void RenderFrame(const std::vector<Entity*>& Entities);
 	void RecreateSwapchain(int Width, int Height);
+
+	void SetActiveCamera(CameraComponent* Camera); // TODO: make better place where to get active camera
 
 private:
 	void PickPhysicalDevice();
@@ -64,4 +68,5 @@ private:
 
 	std::unique_ptr<Rendergraph>   RendergraphPtr;
 	std::unique_ptr<CullingSystem> CullingSystemPtr;
+	std::unique_ptr<CameraUniformBuffer> CameraUBO;
 };

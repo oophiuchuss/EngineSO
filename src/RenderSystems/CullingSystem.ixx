@@ -6,37 +6,22 @@ export module CullingSystem;
 
 import Entity;
 import MeshComponent;
-
-// TODO: Implement the Camera and Frustrum class and its methods
-export class Frustum
-{
-public:
-	bool Intersects(const BoundingBox& Box) const
-	{
-		return true; // Placeholder implementation
-	}
-};
-export class Camera
-{
-public:
-	Frustum GetFrustum() const { return Frustum(); } // Placeholder implementation
-};
-
+import CameraComponent;
 
 export class CullingSystem
 {
 public:
-	explicit CullingSystem(Camera* camera) : CameraPtr(camera) {}
+	explicit CullingSystem() : CameraComponentPtr(nullptr) {}
 
-	void SetCamera(Camera* camera) { CameraPtr = camera; }
+	void SetActiveCamera(CameraComponent* Camera) { CameraComponentPtr = Camera; }
 
-	void CullScene(const std::vector<Entity*>& AllEntitites);
+	void CullScene(const std::vector<Entity*>& AllEntities);
 
-	bool IsEntityVisible(const Entity* InEntity, const Frustum& CameraFrustum) const;
-	
 	inline std::vector<Entity*> GetAllVisibleEntities() const { return VisibleEntities; };
 
+	inline CameraComponent* GetActiveCamera() const { return CameraComponentPtr; }
+
 private:
-	Camera* CameraPtr;	
+	CameraComponent* CameraComponentPtr;	
 	std::vector<Entity*> VisibleEntities;
 };

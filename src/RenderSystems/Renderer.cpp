@@ -1,6 +1,7 @@
 module;
 
 #include <vulkan/vulkan_raii.hpp>
+#include <glm/glm.hpp>
 #include <vector>
 #include <optional>
 #include <memory>
@@ -14,6 +15,9 @@ import Entity;
 import GeometryRenderPass;
 import LightingPass;
 import PostProcessPass;
+import CameraUniform;
+
+import TransformComponent; // TODO: maybe not the best idea to have tansform component coupled with the renderer, but for now it simplifies things
 
 Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface) : Instance(Instance), Surface(std::move(Surface))
 {
@@ -26,10 +30,9 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 	// Create synchronization primitives
 	CreateSyncObjects();
 
-	// Initialize rendergraph and CullingSystem
-
 	RendergraphPtr = std::make_unique<Rendergraph>(Device, PhysicalDevice);
-	CullingSystemPtr = std::make_unique<CullingSystem>(nullptr);   // no camera (we'll pass camera per frame)
+	CullingSystemPtr = std::make_unique<CullingSystem>();   // no camera 
+	CameraUBO = std::make_unique<CameraUniformBuffer>(Device, PhysicalDevice);
 
 	// Create command pool and buffers
 	vk::CommandPoolCreateInfo PoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, 
@@ -96,6 +99,19 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 	vk::CommandBufferBeginInfo BeginInfo({});
 	Cmd.begin(BeginInfo); // TODO: should this command buffer begin with no additional info?
 	
+	if (CullingSystemPtr->GetActiveCamera())
+	{
+		CameraComponent* CamComp = CullingSystemPtr->GetActiveCamera();
+
+		TransformComponent* CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
+
+		CameraUniformData Data;
+		Data.ViewProj = CamComp->GetViewMatrix() * CamComp->GetProjectionMatrix();
+		Data.CameraPos = glm::vec4(CamTrans->GetPosition(), 1.0f);
+
+		CameraUBO->Update(Data);
+	}
+
 	// Cull scene and update per-frame data
 	CullingSystemPtr->CullScene(Entities);
 
@@ -228,6 +244,18 @@ void Renderer::RecreateSwapchain(int Width, int Height)
 	
 	SetupRenderPasses();
 	RendergraphPtr->Compile();
+}
+
+void Renderer::SetActiveCamera(CameraComponent* Camera)
+{
+	CullingSystemPtr->SetActiveCamera(Camera);
+
+	// Update camera component aspect ratio to match swapchain extent
+	if (Camera)
+	{
+		float AspectRatio = static_cast<float>(SwapchainExtent.width) / static_cast<float>(SwapchainExtent.height);
+		Camera->SetPerspective(Camera->GetFieldOfView(), AspectRatio, Camera->GetNearPlane(), Camera->GetFarPlane());
+	}
 }
 
 void Renderer::PickPhysicalDevice()
@@ -458,11 +486,11 @@ void Renderer::CreateSwapchain()
 	}
 
 	// Image count: tripple buffering (min + 1, at least 3)
-	uint32_t ImageCount = max(SurfaceCaps.minImageCount + 1, 3u);
+	uint32_t ImageCount = std::max(SurfaceCaps.minImageCount + 1, 3u);
 
 	if (SurfaceCaps.maxImageCount > 0)
 	{
-		ImageCount = min(ImageCount, SurfaceCaps.maxImageCount); // Clamp to max if there is a limit
+		ImageCount = std::min(ImageCount, SurfaceCaps.maxImageCount); // Clamp to max if there is a limit
 	}
 
 	vk::SwapchainCreateInfoKHR SwapchainCreateInfo;
@@ -598,7 +626,7 @@ int Renderer::ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk:
 bool Renderer::IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usage)
 {
 	try {
-		PhysicalDevice.getImageFormatProperties(
+		vk::ImageFormatProperties ImageFormatProps = PhysicalDevice.getImageFormatProperties(
 			Format,
 			vk::ImageType::e2D,
 			vk::ImageTiling::eOptimal,

@@ -48,7 +48,7 @@ public:
 		}
 	}
 
-	Entity* GetOwner() const { return Owner; }
+	inline Entity* GetOwner() const { return Owner; }
 
 	template<typename T>
 	static size_t GetTypeID()
