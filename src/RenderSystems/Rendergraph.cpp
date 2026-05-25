@@ -11,6 +11,7 @@ module;
 module Rendergraph;
 
 import RenderPassBase;
+import VulkanUtils;
 
 void Rendergraph::Compile()
 {
@@ -37,7 +38,7 @@ void Rendergraph::Compile()
 
         vk::MemoryAllocateInfo AllocInfo;
         AllocInfo.setAllocationSize(MemRequirements.size) // Required memory size
-            .setMemoryTypeIndex(FindMemoryType(MemRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal)); // GPU-local memory
+            .setMemoryTypeIndex(VulkanUtils::FindMemoryType(PhysicalDevice, MemRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal)); // GPU-local memory
 
         CurResource.Memory = Device.allocateMemory(AllocInfo);  // Allocate GPU memory
         CurResource.Image.bindMemory(*CurResource.Memory, 0);   // Bind memory to image TODO: cannot do offsets for better memory management?
@@ -53,6 +54,16 @@ void Rendergraph::Compile()
 
         CurrentLayouts[CurName] = CurResource.InitialLayout;    // Initialize Layouts of Resources
     }
+}
+
+void Rendergraph::Reset()
+{
+	// RAII -based resource cleanup (automatic when objects go out of scope)
+	Resources.clear();
+	Passes.clear();
+	SortedPasses.clear();
+	CurrentLayouts.clear();
+    bIsPassesDirty = true;
 }
 
 void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue)
@@ -376,25 +387,4 @@ void Rendergraph::TopologicalSort(const std::string& Name, const std::unordered_
     Visited.insert(Name);
 
     SortedPasses.push_back(Passes[Name].get());
-}
-
-uint32_t Rendergraph::FindMemoryType(const uint32_t& TypeFilter, const vk::MemoryPropertyFlags& Properties) const
-{
-    vk::PhysicalDeviceMemoryProperties MemProperties =  PhysicalDevice.getMemoryProperties();
-
-    for (uint32_t i = 0; i < MemProperties.memoryTypeCount; i++)
-    {
-        if (TypeFilter & (1 << i))
-        {
-            vk::MemoryPropertyFlags RequiredPropertiesMatch = MemProperties.memoryTypes[i].propertyFlags & Properties;
-        
-            if (RequiredPropertiesMatch == Properties)
-            {
-                return i;
-            }
-        }
-
-    }
-
-    throw std::runtime_error("Failed to find suitable memory type");
 }

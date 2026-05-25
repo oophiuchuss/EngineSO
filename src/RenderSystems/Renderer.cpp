@@ -66,31 +66,38 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 	{
 		throw std::runtime_error("Failed to wait for in-flight fence");
 	}
-	
-	Device.resetFences({ *InFlightFences[CurrentFrame] }); // Reset the fence for the current frame
-	
+
 	// Acquire next image from swapchain
-	vk::Result AcquireNextImageResult;
+	vk::Result AcquireNextImageResult = vk::Result::eErrorUnknown;
 	uint32_t ImageIndex;
 
-	// Check for the feature test macro for the new API
+	try {
+		// Check for the feature test macro for the new API
 #ifdef VULKAN_HPP_RAII_VERSION_1
-	auto AcquireResult = Swapchain.acquireNextImage(UINT64_MAX, *ImageAvailableSemaphores[CurrentFrame]);
-	AcquireNextImageResult = AcquireResult.result;
-	ImageIndex = AcquireResult.value;
+		auto AcquireResult = Swapchain.acquireNextImage(UINT64_MAX, *ImageAvailableSemaphores[CurrentFrame]);
+		AcquireNextImageResult = AcquireResult.result;
+		ImageIndex = AcquireResult.value;
 #else
-	// Fallback for older versions returning std::pair
-	std::tie(AcquireNextImageResult, ImageIndex) = Swapchain.acquireNextImage(UINT64_MAX, *ImageAvailableSemaphores[CurrentFrame]);
+		// Fallback for older versions returning std::pair
+		std::tie(AcquireNextImageResult, ImageIndex) = Swapchain.acquireNextImage(UINT64_MAX, *ImageAvailableSemaphores[CurrentFrame]);
 #endif
-
+	}
+	catch (const vk::OutOfDateKHRError&) {
+		AcquireNextImageResult = vk::Result::eErrorOutOfDateKHR;
+	}
+	catch (const vk::SystemError& e) {
+		throw;   // re‑throw other unexpected errors
+	}
 	if (AcquireNextImageResult == vk::Result::eErrorOutOfDateKHR) {
-		RecreateSwapchain(0, 0);
-		return;
+		RecreateSwapchain();
+		return;	
 	}
 	else if (AcquireNextImageResult != vk::Result::eSuccess && AcquireNextImageResult != vk::Result::eSuboptimalKHR) {
 		throw std::runtime_error("Failed to acquire swapchain image");
 	}
 
+	// Reset the fence for the current frame only after successfully acquiring an image, to avoid waiting on a fence that won't be signaled if acquisition fails
+	Device.resetFences({ *InFlightFences[CurrentFrame] }); 
 
 	// Reset command buffer before usage
 	auto& Cmd = CommandBuffers[CurrentFrame];
@@ -153,9 +160,6 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 		.setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })		// Destination subresource (full image)
 		.setExtent(vk::Extent3D(MainColorResource->Extent, 1));					// Copy extent (full image size)
 	
-	std::cout << "Copying from " << MainColorResource->Name << " to swapchain image " << ImageIndex << "\n";
-
-
 	Cmd.copyImage(
 		SrcImage,						vk::ImageLayout::eTransferSrcOptimal,	// Source image and layout
 		SwapchainImages[ImageIndex],	vk::ImageLayout::eTransferDstOptimal,	// Destination image and layout
@@ -208,10 +212,20 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 			   .setSwapchainCount(1)
 			   .setPSwapchains(&*Swapchain);
 
-	vk::Result PresentResult = PresentQueue.presentKHR(PresentInfo);
-	if (PresentResult == vk::Result::eErrorOutOfDateKHR || PresentResult == vk::Result::eSuboptimalKHR)
-	{
-		RecreateSwapchain(0, 0);
+	vk::Result PresentResult = vk::Result::eErrorUnknown;
+	try {
+		PresentResult = PresentQueue.presentKHR(PresentInfo);
+	}
+	catch (const vk::OutOfDateKHRError&) {
+		PresentResult = vk::Result::eErrorOutOfDateKHR;
+	}
+	catch (const vk::SystemError& e) {
+		throw;   // re‑throw other unexpected errors
+	}
+
+	if (PresentResult == vk::Result::eErrorOutOfDateKHR ||
+		PresentResult == vk::Result::eSuboptimalKHR) {
+		RecreateSwapchain();
 	}
 	else if (PresentResult != vk::Result::eSuccess)
 	{
@@ -221,15 +235,18 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 	CurrentFrame = (CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT; // Advance to next frame index
 }
 
-void Renderer::RecreateSwapchain(int Width, int Height)
+void Renderer::RecreateSwapchain()
 {
 	// Handle minimization of window
+	// Make sure that extent is not zero before proceeding due to perfomance
+	auto SurfaceCaps = PhysicalDevice.getSurfaceCapabilitiesKHR(*Surface);
 
-	if (Width == 0 || Height == 0)
+	if (SurfaceCaps.currentExtent.width == 0 ||
+		SurfaceCaps.currentExtent.height == 0)
 	{
-		return; // Skip recreation if window is minimized
+		return; // Minimized window, skip
 	}
-
+	
 	Device.waitIdle(); // Wait for device to be idle before recreating swapchain
 
 	// Clean up old swapchain resources
@@ -240,10 +257,10 @@ void Renderer::RecreateSwapchain(int Width, int Height)
 	CreateSwapchain();
 
 	// Recreate framebuffers and render passes that depend on swapchain images 
-	// TODO: rendergraph might need re-initializion
-	
+	RendergraphPtr->Reset(); // Clear existing rendergraph resources and passes
 	SetupRenderPasses();
 	RendergraphPtr->Compile();
+	CreateSyncObjects(); // Recreate synchronization objects if they depend on swapchain (e.g. semaphores for each swapchain image)
 }
 
 void Renderer::SetActiveCamera(CameraComponent* Camera)

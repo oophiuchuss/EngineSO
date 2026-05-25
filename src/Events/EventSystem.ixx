@@ -30,15 +30,17 @@ public:
 
 	void AddListener(EventListener* Listener, int CategoryFilter = -1, int Priority = 0)
 	{
-		Listeners.push_back({Listener, CategoryFilter});
+		ListenerInfo Info({Listener, CategoryFilter, Priority});
 
-		// Sort listeners by priority (higher priority first)
-		std::sort(Listeners.begin(), Listeners.end(),
+		// Vector should be always sorted by priority, insert new listener in the correct position to maintain order
+		auto It = std::lower_bound(
+			Listeners.begin(), Listeners.end(), Info,
 			[](const ListenerInfo& A, const ListenerInfo& B)
-			{
-				return A.Priority > B.Priority;
-			}
-		);
+			{ 
+				return A.Priority > B.Priority; 
+			});
+
+		Listeners.insert(It, Info);
 	}
 
 	bool RemoveListener(EventListener* Listener)

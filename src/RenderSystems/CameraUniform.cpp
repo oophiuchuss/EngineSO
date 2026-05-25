@@ -5,18 +5,7 @@ module;
 #include <stdexcept>
 
 module CameraUniform;
-
-static uint32_t FindMemoryType(const vk::raii::PhysicalDevice& PhysDev, uint32_t TypeFilter, vk::MemoryPropertyFlags Properties) {
-    auto MemProps = PhysDev.getMemoryProperties();
-    for (uint32_t i = 0; i < MemProps.memoryTypeCount; i++) 
-    {
-        if ((TypeFilter & (1 << i)) && (MemProps.memoryTypes[i].propertyFlags & Properties) == Properties)
-        {
-            return i;
-        }
-    }
-    throw std::runtime_error("Failed to find suitable memory type for camera UBO");
-}
+import VulkanUtils;
 
 CameraUniformBuffer::CameraUniformBuffer(
     const vk::raii::Device& Device, 
@@ -50,7 +39,7 @@ void CameraUniformBuffer::CreateBuffer()
 
 	// Get memory requirements and allocate memory
     auto MemReqs = Buffer.getMemoryRequirements();
-	uint32_t MemoryTypeIndex = FindMemoryType(PhysicalDevice, MemReqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+	uint32_t MemoryTypeIndex = VulkanUtils::FindMemoryType(PhysicalDevice, MemReqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
 	vk::MemoryAllocateInfo AllocInfo(MemReqs.size, MemoryTypeIndex);
 

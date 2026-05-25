@@ -20,7 +20,7 @@ public:
 	~Renderer();
 
 	void RenderFrame(const std::vector<Entity*>& Entities);
-	void RecreateSwapchain(int Width, int Height);
+	void RecreateSwapchain();
 
 	void SetActiveCamera(CameraComponent* Camera); // TODO: make better place where to get active camera
 

@@ -104,10 +104,9 @@ void VulkanEngine::FrameBufferResizeCallback(GLFWwindow* Window, int Width, int 
 void VulkanEngine::OnResize(int Width, int Height)
 {
     // Forward to the renderer to recreate a swapchain
-
     if (RendererPtr)
     {
-        RendererPtr->RecreateSwapchain(Width, Height);
+        RendererPtr->RecreateSwapchain();
     }
 }
 

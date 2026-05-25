@@ -40,6 +40,7 @@ public:
 		//Create a new component and add it to the entity's component list
 		auto NewComponent = std::make_unique<T>(std::forward<Args>(args)...);
 		T* ComponentPtr = NewComponent.get();
+		ComponentMap[TypeID] = ComponentPtr;
 		ComponentPtr->SetOwner(this);
 		Components.push_back(std::move(NewComponent));
 		return ComponentPtr;

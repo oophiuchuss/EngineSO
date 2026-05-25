@@ -14,9 +14,10 @@ endif()
 find_package(Vulkan REQUIRED)
 
 #Find GLFW
-message(STATUS "Looking for glfw3...")
 find_package(glfw3 CONFIG REQUIRED)
-message(STATUS "glfw3 found: ${glfw3_FOUND}")
+
+#Find GLM
+find_path(GLM_INCLUDE_DIRS "glm/glm.hpp")
 
 # Glob all source files in the src directory
 file(GLOB_RECURSE ENGINE_SOURCES 
@@ -58,6 +59,9 @@ target_link_libraries(EngineSO PRIVATE glfw)
 
 # Include the Vulkan headers
 target_include_directories(EngineSO PRIVATE ${Vulkan_INCLUDE_DIRS})
+
+# Include the GLM headers
+target_include_directories(EngineSO PRIVATE ${GLM_INCLUDE_DIRS})
 
 # Set the output directory for the executable
 set_target_properties(EngineSO PROPERTIES

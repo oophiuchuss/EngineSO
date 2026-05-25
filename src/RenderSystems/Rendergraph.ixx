@@ -49,8 +49,8 @@ export struct Resource
 	vk::ImageLayout FinalLayout;	// Required layout when the frame ens
 
 	// Actual GPU handles - populated during compilation
-	vk::raii::Image Image = nullptr;			// GPU image object
 	vk::raii::DeviceMemory Memory = nullptr;	// Backing memory allocation
+	vk::raii::Image Image = nullptr;			// GPU image object
 	vk::raii::ImageView View = nullptr;			// Shader-accessible view of the image
 };
 
@@ -60,6 +60,8 @@ public:
 	explicit Rendergraph(vk::raii::Device& Device, vk::raii::PhysicalDevice& PhysicalDevice) : Device(Device), PhysicalDevice(PhysicalDevice) {};
 
 	void Compile();
+
+	void Reset();
 
 	void Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue);
 
@@ -136,9 +138,6 @@ private:
 		const std::unordered_map<std::string, std::vector<std::string>>& Dependencies,
 		std::unordered_set<std::string>& Visited,
 		std::unordered_set<std::string>& Visiting);
-
-	// TODO: maybe move find memory type to somewhere else
-	uint32_t FindMemoryType(const uint32_t& TypeFilter, const vk::MemoryPropertyFlags& Properties) const;
 
 	std::unordered_map<std::string, Resource> Resources;						// All referenced resource
 	std::unordered_map<std::string, std::unique_ptr<RenderPassBase>> Passes;	// All rendering passes 
