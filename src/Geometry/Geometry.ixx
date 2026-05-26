@@ -27,3 +27,9 @@ public:
     glm::vec3 Min;
     glm::vec3 Max;
 };
+
+export struct Vertex
+{
+	glm::vec3 Position;
+	// TODO: add more vertex attributes like normals, UVs, etc.
+};

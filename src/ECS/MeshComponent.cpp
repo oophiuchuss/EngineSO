@@ -20,3 +20,13 @@ void MeshComponent::Render()
 
 	//TODO: render material and mesh
 }
+
+BoundingBox MeshComponent::GetBoundingBox() const
+{
+	if (MeshData)
+	{
+		return MeshData->GetBoundingBox();
+	}
+
+	return BoundingBox();
+}

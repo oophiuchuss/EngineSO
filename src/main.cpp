@@ -5,27 +5,37 @@
 import VulkanEngine;
 import HotReloadResourceManager;
 import Texture;
-import Mesh;
+
 import Shader;
 import Entity;
 import AsyncResourceLoader;
 import MeshComponent;
+import TransformComponent;
+import CameraComponent;
 
 int main() {
-    VulkanEngine engine;
-    engine.Run();
+    VulkanEngine Engine;
+
+    Entity MainEntity("MainEntity");
+
+    MainEntity.AddComponent<TransformComponent>();
+    CameraComponent* MainCamera = MainEntity.AddComponent<CameraComponent>();
+
+	Engine.GetRenderer()->SetActiveCamera(MainCamera);
+
+    Engine.Run();
 
 
     HotReloadResourceManager resourceManager;
 		
     auto TextureResource = resourceManager.Load<Texture>("example_texture");
-	auto MeshResource = resourceManager.Load<Mesh>("example_mesh");
+	//auto MeshResource = resourceManager.Load<Mesh>("example_mesh");
 	auto ShaderResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eVertex);
 	auto FragmentResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eFragment);
         
-	if (TextureResource.IsValid() && MeshResource.IsValid() && ShaderResource.IsValid() && FragmentResource.IsValid())
+/*	if (TextureResource.IsValid() && MeshResource.IsValid() && ShaderResource.IsValid() && FragmentResource.IsValid())
     {
-        Material material/*(vertexShader, fragmentShader)*/;
+        Material material(vertexShader, fragmentShader);
         
         // Set texture in material
         //material.SetTexture("diffuse", texture);
@@ -48,7 +58,7 @@ int main() {
         {
             std::cout << "Failed to load texture asynchronously." << std::endl;
         }
-		});
+		});*/
 
     return 0;
 }

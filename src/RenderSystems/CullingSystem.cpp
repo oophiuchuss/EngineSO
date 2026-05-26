@@ -18,7 +18,6 @@ void CullingSystem::CullScene(const std::vector<Entity*>& AllEntities)
 
     Frustum CurFrustum = CameraComponentPtr->GetFrustum();
 
-    // TODO: For now, no frustum culling – add all active entities with a mesh.
     for (auto* Entity : AllEntities)
     {
         if (!Entity || !Entity->IsActive())

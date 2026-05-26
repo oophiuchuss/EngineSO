@@ -16,6 +16,8 @@ public:
 
     void Run();
 
+	Renderer* GetRenderer() const { return RendererPtr.get(); }
+
 private:
     void InitWindow();
     void InitVulkan();
