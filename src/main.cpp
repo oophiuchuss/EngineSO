@@ -28,10 +28,10 @@ int main() {
 
     HotReloadResourceManager resourceManager;
 		
-    auto TextureResource = resourceManager.Load<Texture>("example_texture");
+    //auto TextureResource = resourceManager.Load<Texture>("example_texture");
 	//auto MeshResource = resourceManager.Load<Mesh>("example_mesh");
-	auto ShaderResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eVertex);
-	auto FragmentResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eFragment);
+	//auto ShaderResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eVertex);
+	//auto FragmentResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eFragment);
         
 /*	if (TextureResource.IsValid() && MeshResource.IsValid() && ShaderResource.IsValid() && FragmentResource.IsValid())
     {

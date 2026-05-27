@@ -61,7 +61,9 @@ void CameraUniformBuffer::CreateDescriptor()
 
 	// Descriptor pool (support one UBO)
 	vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eUniformBuffer, 1);
-	vk::DescriptorPoolCreateInfo PoolInfo({}, 1, PoolSize);
+	vk::DescriptorPoolCreateInfo PoolInfo(
+		vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+		1, PoolSize);
 	DescriptorPool = Device.createDescriptorPool(PoolInfo);
 
 	// Allocate descriptor set
