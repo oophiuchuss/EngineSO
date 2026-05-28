@@ -148,5 +148,4 @@ private:
 
 	vk::raii::Device& Device;
 	vk::raii::PhysicalDevice& PhysicalDevice;
-
 };

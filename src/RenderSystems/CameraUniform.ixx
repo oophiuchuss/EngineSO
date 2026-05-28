@@ -22,7 +22,7 @@ public:
 	void Update(const CameraUniformData& Data);
 
 	// Bind the uniform buffer to the command buffer before drawing
-	void Bind(vk::CommandBuffer& Cmd, vk::PipelineLayout PipelineLayout, vk::PipelineBindPoint BindPoint = vk::PipelineBindPoint::eGraphics);
+	void Bind(vk::CommandBuffer Cmd, vk::PipelineLayout PipelineLayout, vk::PipelineBindPoint BindPoint = vk::PipelineBindPoint::eGraphics);
 
 	// Get the descriptor set layout - needed for creating pipeline layouts
 	const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }

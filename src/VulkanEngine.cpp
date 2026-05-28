@@ -4,10 +4,18 @@ module;
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <stdexcept>
+#include <memory>
 
 module VulkanEngine;
 
 import Renderer;
+
+import Component;
+import Entity;
+import MeshComponent;
+import TransformComponent;
+
+
 
 VulkanEngine::VulkanEngine()
     : Context()
@@ -16,6 +24,14 @@ VulkanEngine::VulkanEngine()
     // Initialize all needed resources for vulkan and GLFW  
     InitWindow();
     InitVulkan();
+
+
+    RenderEntity = std::make_unique<Entity>("RenderEntity");
+
+    RenderEntity->AddComponent<TransformComponent>();
+    RenderEntity->AddComponent<MeshComponent>(RendererPtr->TesttriangleMesh, nullptr); // TODO: add actual mesh and material
+
+	RenderEntity->GetComponent<TransformComponent>()->SetPosition({ 0.0f, 0.0f, -1.0f });
 }
 
 VulkanEngine::~VulkanEngine()
@@ -87,7 +103,7 @@ void VulkanEngine::MainLoop()
     {
         glfwPollEvents();
 
-        RendererPtr->RenderFrame({});
+        RendererPtr->RenderFrame({ RenderEntity.get() });
     }
 }
 

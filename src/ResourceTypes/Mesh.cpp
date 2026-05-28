@@ -125,9 +125,9 @@ std::unique_ptr<Mesh> Mesh::CreateTestTriangle(const vk::raii::Device& Device, c
 {
 	// World-space triangle vertices 
 	std::vector<Vertex> Verticies = {
-		{ glm::vec3( 0.0f, -0.5f, 0.0f ) },
-		{ glm::vec3( 0.5f, 0.5f, 0.0f ) },
-		{ glm::vec3( -0.5f, 0.5f, 0.0f ) }
+		{ glm::vec3(0.0f, -0.5f, -5.0f) },
+		{ glm::vec3(0.5f,  0.5f, -5.0f) },
+		{ glm::vec3(-0.5f,  0.5f, -5.0f) }
 	};
 
 	// Index drawing

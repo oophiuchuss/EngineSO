@@ -12,16 +12,26 @@ public:
 
 	void Transform(const glm::mat4& TransformMatrix)
 	{
-		// TODO: potentially improve to 8 corners
-		
-		// Apply matrix to both corners, then recompute min and max
-		glm::vec4 Corners[2] = {
-			TransformMatrix * glm::vec4(Min, 1.0f),
-			TransformMatrix * glm::vec4(Max, 1.0f)
-		};
+        glm::vec3 Corners[8] = {
+           { Min.x, Min.y, Min.z },
+           { Max.x, Min.y, Min.z },
+           { Min.x, Max.y, Min.z },
+           { Max.x, Max.y, Min.z },
+           { Min.x, Min.y, Max.z },
+           { Max.x, Min.y, Max.z },
+           { Min.x, Max.y, Max.z },
+           { Max.x, Max.y, Max.z },
+        };
 
-		Min = glm::min(glm::vec3(Corners[0]), glm::vec3(Corners[1]));
-		Max = glm::max(glm::vec3(Corners[0]), glm::vec3(Corners[1]));
+        Min = glm::vec3(FLT_MAX);
+        Max = glm::vec3(-FLT_MAX);
+
+        for (auto& Corner : Corners)
+        {
+            glm::vec3 Transformed = glm::vec3(TransformMatrix * glm::vec4(Corner, 1.0f));
+            Min = glm::min(Min, Transformed);
+            Max = glm::max(Max, Transformed);
+        }
 	}
 
     glm::vec3 Min;

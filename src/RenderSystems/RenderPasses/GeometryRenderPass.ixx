@@ -1,11 +1,13 @@
 module;
 
 #include <string>
+#include <vulkan/vulkan_raii.hpp>
 
 export module GeometryRenderPass;
 
 import RenderPassBase;
 import CullingSystem;
+import CameraUniform;
 
 export class GeometryRenderPass : public RenderPassBase
 {
@@ -14,7 +16,12 @@ public:
 		std::string InName,
 		CullingSystem* InCulling,
 		std::string InGBufferColorResourceName,
-		std::string InGBufferDepthResourceName);
+		std::string InGBufferDepthResourceName,
+		vk::raii::Pipeline&& InPipeline,
+		vk::raii::PipelineLayout&& InPipelineLayout,
+		CameraUniformBuffer* InCameraUBO);
+
+	void SetRenderArea(vk::Extent2D InRenderArea) { RenderArea = InRenderArea; }
 
 protected:
 	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) override;
@@ -28,4 +35,11 @@ private:
 
 	std::string GBufferColorResourceName; // TODO: potentially optimize access to pointers
 	std::string GBufferDepthResourceName; // TODO: potentially optimize access to pointers
+
+	// Pipeline
+	vk::raii::Pipeline Pipeline;
+	vk::raii::PipelineLayout PipelineLayout;
+	CameraUniformBuffer* CameraUBOPtr = nullptr;
+
+	vk::Extent2D RenderArea = { 1280, 720 }; // Default render area, updated by Renderer
 };

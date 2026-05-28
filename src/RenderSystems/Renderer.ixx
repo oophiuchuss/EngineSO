@@ -13,6 +13,12 @@ import CameraComponent;
 import Entity;
 import CameraUniform;
 
+import Shader;	// TODO: For now, but should be per material
+import Mesh;	// TODO: For now, but should be per material
+import RenderPassBase;
+
+
+
 export class Renderer
 {
 public:
@@ -23,6 +29,9 @@ public:
 	void RecreateSwapchain();
 
 	void SetActiveCamera(CameraComponent* Camera); // TODO: make better place where to get active camera
+
+
+	std::shared_ptr<Mesh> TesttriangleMesh; // TODO: For now, but should be removed
 
 private:
 	void PickPhysicalDevice();
@@ -69,4 +78,9 @@ private:
 	std::unique_ptr<Rendergraph>   RendergraphPtr;
 	std::unique_ptr<CullingSystem> CullingSystemPtr;
 	std::unique_ptr<CameraUniformBuffer> CameraUBO;
+
+	// TODO: For now, but should be per material
+	std::unique_ptr<Shader> DefaultShader;			
+	vk::raii::PipelineLayout DefaultPipelineLayout = nullptr;
+	vk::raii::Pipeline DefaultPipeline = nullptr;	
 };

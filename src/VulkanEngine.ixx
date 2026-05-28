@@ -8,6 +8,9 @@ export module VulkanEngine;
 
 import Renderer;
 
+
+import Entity;
+
 export class VulkanEngine
 {
 public:
@@ -35,4 +38,7 @@ private:
 
     static void FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height);
     void OnResize(int Width, int Height);
+
+
+    std::unique_ptr<Entity> RenderEntity;
 };

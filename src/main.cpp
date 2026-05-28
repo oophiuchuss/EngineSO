@@ -20,7 +20,7 @@ int main() {
 
     MainEntity.AddComponent<TransformComponent>();
     CameraComponent* MainCamera = MainEntity.AddComponent<CameraComponent>();
-
+  
 	Engine.GetRenderer()->SetActiveCamera(MainCamera);
 
     Engine.Run();

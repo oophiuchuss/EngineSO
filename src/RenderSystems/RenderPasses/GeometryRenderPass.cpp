@@ -10,17 +10,23 @@ import CullingSystem;
 import Rendergraph;
 import Entity;
 import MeshComponent;
-import TransformComponent;
+import Mesh;
 
 GeometryRenderPass::GeometryRenderPass(
 	std::string InName, 
 	CullingSystem* InCulling, 
 	std::string InGBufferColorResourceName, 
-	std::string InGBufferDepthResourceName) : 
+	std::string InGBufferDepthResourceName,
+	vk::raii::Pipeline&& InPipeline,
+	vk::raii::PipelineLayout&& InPipelineLayout,
+	CameraUniformBuffer* InCameraUBO) :
 	RenderPassBase(InName), 
 	CullingSystemPtr(InCulling),
 	GBufferColorResourceName(InGBufferColorResourceName),
-	GBufferDepthResourceName(InGBufferDepthResourceName)
+	GBufferDepthResourceName(InGBufferDepthResourceName),
+	Pipeline(std::move(InPipeline)),
+	PipelineLayout(std::move(InPipelineLayout)),
+	CameraUBOPtr(InCameraUBO)
 {
 	AddOutput(GBufferColorResourceName);
 	AddOutput(GBufferDepthResourceName);
@@ -64,6 +70,25 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 
 void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
 {
+	// Set dynamic states 
+	Cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, 
+		static_cast<float>(RenderArea.width),
+		static_cast<float>(RenderArea.height), 0.0f, 1.0f));
+
+	Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderArea));
+
+	// Bind pipeline
+	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *Pipeline);
+
+	// Bind camera uniform buffer
+	if (CameraUBOPtr)
+	{
+		CameraUBOPtr->Bind(*Cmd, *PipelineLayout);
+	}
+
+
+
+
 	// Get all visible entities
 	const auto& AllEntities = CullingSystemPtr->GetAllVisibleEntities();
 
@@ -71,16 +96,33 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	{
 		// Get mesh and transform components
 		MeshComponent* CurMeshComp = CurEntity->GetComponent<MeshComponent>();
-		TransformComponent* CurTransfComp = CurEntity->GetComponent<TransformComponent>();
+		Mesh* CurMesh = CurMeshComp->GetMesh().get();
 
-		if (CurMeshComp && CurTransfComp)
+		// TODO: Add full implementation for drawing meshes, including setting model matrix and material properties. For now, just check if mesh exists and draw it.
+		if (!CurMeshComp || !CurMesh)
 		{
-			// TODO: Add implementation 
-			// Bind pipeline for G-buffer rendering
+			continue;
+		}
 
-			// Set model matrix
+		VertexBuffer* VB = CurMesh->GetVertexBuffer();
+		IndexBuffer* IB = CurMesh->GetIndexBuffer();
 
-			//Draw mesh
+		// Check if only vertex buffer exists (e.g., for drawing non-indexed geometry)
+		if (!VB)
+		{
+			continue;
+		}
+
+		VB->Bind(Cmd);
+
+		if (IB)
+		{
+			IB->Bind(Cmd);
+			Cmd.drawIndexed(IB->GetIndexCount(), 1, 0, 0, 0);
+		}
+		else
+		{
+			Cmd.draw(VB->GetVertexCount(), 1, 0, 0);
 		}
 	}
 }

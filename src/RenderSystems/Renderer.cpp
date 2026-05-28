@@ -19,6 +19,10 @@ import CameraUniform;
 
 import TransformComponent; // TODO: maybe not the best idea to have tansform component coupled with the renderer, but for now it simplifies things
 
+import Shader;	// TODO: For now, but should be per material
+import Mesh;	// TODO: For now, but should be per material
+import Geometry;
+
 Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface) : Instance(Instance), Surface(std::move(Surface))
 {
 	// Pick physical device
@@ -43,6 +47,86 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 	vk::CommandBufferAllocateInfo CmdAllocInfo(*CommandPool, vk::CommandBufferLevel::ePrimary, MAX_FRAMES_IN_FLIGHT);
 
 	CommandBuffers = std::move(Device.allocateCommandBuffers(CmdAllocInfo));
+
+	{
+		// Load default shader for geometry pass (TODO: should be per material, but for now we just want to test the rendergraph)
+		DefaultShader = Shader::CreateGraphicsShader(Device, "shaders/basic_geometry_vert.spv", "shaders/basic_geometry_frag.spv");
+
+		vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, { *CameraUBO->GetDescriptorSetLayout() });
+		DefaultPipelineLayout = vk::raii::PipelineLayout(Device, PipelineLayoutInfo);
+
+		auto Stages = DefaultShader->GetVertexShaderStageInfo();
+
+		vk::VertexInputBindingDescription BindingDesc(
+			0, sizeof(Vertex));
+
+		vk::VertexInputAttributeDescription AttribDesc(
+			0, 0, vk::Format::eR32G32B32Sfloat, 0);
+
+		vk::PipelineVertexInputStateCreateInfo VertexInputInfo({}, BindingDesc, AttribDesc);
+		vk::PipelineInputAssemblyStateCreateInfo InputAssemblyInfo({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
+
+		// Viewport and scissor will be dynamic states, so we don't specify them here
+		vk::PipelineViewportStateCreateInfo ViewportStateInfo({}, 1, nullptr, 1, nullptr);
+
+		vk::PipelineRasterizationStateCreateInfo RasterizerInfo(
+			{}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill,
+			vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
+			VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f);
+
+		vk::PipelineMultisampleStateCreateInfo MultisampleInfo(
+			{}, vk::SampleCountFlagBits::e1, VK_FALSE);
+
+		vk::PipelineDepthStencilStateCreateInfo DepthStencilInfo(
+			{}, VK_FALSE, VK_FALSE, vk::CompareOp::eLess,		 // TODO: disable for now
+			VK_FALSE, VK_FALSE);
+
+		vk::PipelineColorBlendAttachmentState ColorBlendAttachment;
+		ColorBlendAttachment.setColorWriteMask(
+			vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+			vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
+		
+		ColorBlendAttachment.setBlendEnable(VK_FALSE);
+
+		vk::PipelineColorBlendStateCreateInfo ColorBlendInfo(
+			{}, VK_FALSE, vk::LogicOp::eCopy, ColorBlendAttachment);
+
+		vk::DynamicState DynamicStates[] = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
+		vk::PipelineDynamicStateCreateInfo DynamicStateInfo({}, DynamicStates);
+
+		// Dynamic rendering info to render to the "Main_Color" and "Main_Depth" attachments defined in the rendergraph (these will be created as part of the rendergraph setup)
+		const std::array<vk::Format, 1> ColorFormats = { vk::Format::eB8G8R8A8Unorm };
+		vk::PipelineRenderingCreateInfo DynamicRenderingInfo(
+			{},                         // viewMask (0)
+			ColorFormats,               // colour attachment formats
+			vk::Format::eD32Sfloat      // depth format
+			// stencil format defaults to eUndefined, pNext defaults to nullptr
+		);
+
+		vk::GraphicsPipelineCreateInfo PipelineInfo(
+			{},
+			Stages, 
+			&VertexInputInfo,
+			&InputAssemblyInfo,
+			nullptr,				// No tessellation
+			&ViewportStateInfo,
+			&RasterizerInfo, 
+			&MultisampleInfo, 
+			&DepthStencilInfo, 
+			&ColorBlendInfo, 
+			&DynamicStateInfo,
+			DefaultPipelineLayout,
+			nullptr,				// No render pass since we're using dynamic rendering
+			0,						// Subpass
+			nullptr,				// No base pipeline
+			0);						// No base pipeline index
+
+		PipelineInfo.setPNext(&DynamicRenderingInfo); // Chain dynamic rendering info to pipeline create info
+
+		DefaultPipeline = Device.createGraphicsPipeline(nullptr, PipelineInfo);
+
+		TesttriangleMesh = Mesh::CreateTestTriangle(Device, PhysicalDevice);
+	}
 
 	// Set up render passes and framebuffers in the rendergraph
 	SetupRenderPasses();
@@ -121,6 +205,13 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 
 	// Cull scene and update per-frame data
 	CullingSystemPtr->CullScene(Entities);
+
+	// TODO: make better handling of this
+	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphPtr->GetRenderPass("GeometryPass"));
+	if (GPass)
+	{
+		GPass->SetRenderArea(SwapchainExtent);
+	}
 
 	// Record rendering commands into command buffer using rendergraph
 	RendergraphPtr->Execute(Cmd, GraphicsQueue);
@@ -602,9 +693,17 @@ void Renderer::SetupRenderPasses()
 
 	// TODO G buffer resources to add;
 
-	auto GeomtryPass = RendergraphPtr->AddRenderPass<GeometryRenderPass>("GeometryPass", CullingSystemPtr.get(), "Main_Color", "Main_Depth");
-	auto LightPass = RendergraphPtr->AddRenderPass<LightingPass>("LightPass", "Main_Color");
-	auto PostProcess = RendergraphPtr->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");
+	auto GeomtryPass = RendergraphPtr->AddRenderPass<GeometryRenderPass>(
+		"GeometryPass",
+		CullingSystemPtr.get(), 
+		"Main_Color", 
+		"Main_Depth",
+		std::move(DefaultPipeline),
+		std::move(DefaultPipelineLayout),
+		CameraUBO.get());
+
+	//auto LightPass = RendergraphPtr->AddRenderPass<LightingPass>("LightPass", "Main_Color");
+	//auto PostProcess = RendergraphPtr->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");
 }
 
 int Renderer::ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk::raii::SurfaceKHR& Surface)

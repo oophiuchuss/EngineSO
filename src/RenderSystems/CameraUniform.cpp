@@ -23,7 +23,7 @@ void CameraUniformBuffer::Update(const CameraUniformData& Data)
 	std::memcpy(MappedMemory, &Data, sizeof(CameraUniformData));
 }
 
-void CameraUniformBuffer::Bind(vk::CommandBuffer& Cmd, vk::PipelineLayout PipelineLayout, vk::PipelineBindPoint BindPoint)
+void CameraUniformBuffer::Bind(vk::CommandBuffer Cmd, vk::PipelineLayout PipelineLayout, vk::PipelineBindPoint BindPoint)
 {
 	Cmd.bindDescriptorSets(BindPoint, PipelineLayout, 0, { *DescriptorSet }, nullptr);
 }
