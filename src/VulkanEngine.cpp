@@ -29,7 +29,7 @@ VulkanEngine::VulkanEngine()
     RenderEntity = std::make_unique<Entity>("RenderEntity");
 
     RenderEntity->AddComponent<TransformComponent>();
-    RenderEntity->AddComponent<MeshComponent>(RendererPtr->TesttriangleMesh, nullptr); // TODO: add actual mesh and material
+    RenderEntity->AddComponent<MeshComponent>(RendererPtr->GetTestTriangleMesh(), nullptr); // TODO: add actual mesh and material
 
 	RenderEntity->GetComponent<TransformComponent>()->SetPosition({ 0.0f, 0.0f, -1.0f });
 }
@@ -128,6 +128,9 @@ void VulkanEngine::OnResize(int Width, int Height)
 
 void VulkanEngine::Cleanup()
 {
+	// TODO: remove render entity per say, but for now it should be destroyed before the renderer as it may hold references to renderer resources (e.g. mesh buffers)
+    RenderEntity.reset();
+
     // Destroy renderer first as it should release GPU resources before vulkan instance is destroyed
     RendererPtr.reset();
 

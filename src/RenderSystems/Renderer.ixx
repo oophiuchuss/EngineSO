@@ -30,8 +30,7 @@ public:
 
 	void SetActiveCamera(CameraComponent* Camera); // TODO: make better place where to get active camera
 
-
-	std::shared_ptr<Mesh> TesttriangleMesh; // TODO: For now, but should be removed
+	std::shared_ptr<Mesh> GetTestTriangleMesh() { return TesttriangleMesh; } // TODO: For now, but should be removed
 
 private:
 	void PickPhysicalDevice();
@@ -44,6 +43,8 @@ private:
 
 	bool IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usage);
 
+	bool CanAcquireSwapchainImage() const;
+	
 	vk::raii::Instance& Instance;	// Non-owning instance
 	vk::raii::SurfaceKHR Surface;	// Owning surface, moved in
 
@@ -83,4 +84,7 @@ private:
 	std::unique_ptr<Shader> DefaultShader;			
 	vk::raii::PipelineLayout DefaultPipelineLayout = nullptr;
 	vk::raii::Pipeline DefaultPipeline = nullptr;	
+
+	std::shared_ptr<Mesh> TesttriangleMesh; // TODO: For now, but should be removed
+
 };

@@ -131,7 +131,7 @@ std::unique_ptr<Mesh> Mesh::CreateTestTriangle(const vk::raii::Device& Device, c
 	};
 
 	// Index drawing
-	std::vector<uint32_t> Indices = { 0, 1, 2 };
+	std::vector<uint32_t> Indices = { 0, 2, 1 };
 
 	// Convert vertex data to byte array for buffer creation
 	std::vector<uint8_t> VertexData(Verticies.size() * sizeof(Vertex));

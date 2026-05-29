@@ -17,15 +17,15 @@ GeometryRenderPass::GeometryRenderPass(
 	CullingSystem* InCulling, 
 	std::string InGBufferColorResourceName, 
 	std::string InGBufferDepthResourceName,
-	vk::raii::Pipeline&& InPipeline,
-	vk::raii::PipelineLayout&& InPipelineLayout,
+	vk::raii::Pipeline* InPipeline,
+	vk::raii::PipelineLayout* InPipelineLayout,
 	CameraUniformBuffer* InCameraUBO) :
 	RenderPassBase(InName), 
 	CullingSystemPtr(InCulling),
 	GBufferColorResourceName(InGBufferColorResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
-	Pipeline(std::move(InPipeline)),
-	PipelineLayout(std::move(InPipelineLayout)),
+	Pipeline(InPipeline),
+	PipelineLayout(InPipelineLayout),
 	CameraUBOPtr(InCameraUBO)
 {
 	AddOutput(GBufferColorResourceName);
@@ -70,6 +70,11 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 
 void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
 {
+	if (Pipeline == nullptr || PipelineLayout == nullptr)
+	{
+		throw std::runtime_error("Pipeline or pipeline layout not set for GeometryRenderPass");
+	}
+	
 	// Set dynamic states 
 	Cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, 
 		static_cast<float>(RenderArea.width),
@@ -78,16 +83,13 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderArea));
 
 	// Bind pipeline
-	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *Pipeline);
+	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, **Pipeline);
 
 	// Bind camera uniform buffer
 	if (CameraUBOPtr)
 	{
-		CameraUBOPtr->Bind(*Cmd, *PipelineLayout);
+		CameraUBOPtr->Bind(*Cmd, **PipelineLayout);
 	}
-
-
-
 
 	// Get all visible entities
 	const auto& AllEntities = CullingSystemPtr->GetAllVisibleEntities();

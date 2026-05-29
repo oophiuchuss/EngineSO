@@ -151,6 +151,13 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 		throw std::runtime_error("Failed to wait for in-flight fence");
 	}
 
+	// Check if swapchain is still compatible with the surface before acquiring an image, and recreate if not (e.g. window resized)
+	if (!CanAcquireSwapchainImage())
+	{
+		RecreateSwapchain();
+		return;
+	}
+
 	// Acquire next image from swapchain
 	vk::Result AcquireNextImageResult = vk::Result::eErrorUnknown;
 	uint32_t ImageIndex;
@@ -698,8 +705,8 @@ void Renderer::SetupRenderPasses()
 		CullingSystemPtr.get(), 
 		"Main_Color", 
 		"Main_Depth",
-		std::move(DefaultPipeline),
-		std::move(DefaultPipelineLayout),
+		&DefaultPipeline,
+		&DefaultPipelineLayout,
 		CameraUBO.get());
 
 	//auto LightPass = RendergraphPtr->AddRenderPass<LightingPass>("LightPass", "Main_Color");
@@ -752,4 +759,17 @@ bool Renderer::IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usa
 	catch (...) {
 		return false;
 	}
+}
+
+bool Renderer::CanAcquireSwapchainImage() const
+{
+	auto Caps = PhysicalDevice.getSurfaceCapabilitiesKHR(*Surface);
+	// If the surface is minimised, extent will be zero
+	if (Caps.currentExtent.width == 0 || Caps.currentExtent.height == 0)
+		return false;
+
+	// Optional: check if swapchain is too old vs current transform, etc.
+	// maybe also compare swapchainExtent with caps.currentExtent if needed.
+
+	return true;
 }

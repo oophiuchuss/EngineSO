@@ -17,8 +17,8 @@ public:
 		CullingSystem* InCulling,
 		std::string InGBufferColorResourceName,
 		std::string InGBufferDepthResourceName,
-		vk::raii::Pipeline&& InPipeline,
-		vk::raii::PipelineLayout&& InPipelineLayout,
+		vk::raii::Pipeline* InPipeline,
+		vk::raii::PipelineLayout* InPipelineLayout,
 		CameraUniformBuffer* InCameraUBO);
 
 	void SetRenderArea(vk::Extent2D InRenderArea) { RenderArea = InRenderArea; }
@@ -37,8 +37,8 @@ private:
 	std::string GBufferDepthResourceName; // TODO: potentially optimize access to pointers
 
 	// Pipeline
-	vk::raii::Pipeline Pipeline;
-	vk::raii::PipelineLayout PipelineLayout;
+	vk::raii::Pipeline* Pipeline = nullptr;
+	vk::raii::PipelineLayout* PipelineLayout = nullptr;
 	CameraUniformBuffer* CameraUBOPtr = nullptr;
 
 	vk::Extent2D RenderArea = { 1280, 720 }; // Default render area, updated by Renderer
