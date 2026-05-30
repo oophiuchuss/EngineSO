@@ -11,11 +11,6 @@ import Mesh;
 import Geometry;
 
 
-// TODO: implement the Material and Bounding Box classes
-export class Material
-{
-};
-
 export class MeshComponent : public ComponentBase
 {
 public:

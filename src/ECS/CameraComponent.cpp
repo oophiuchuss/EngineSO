@@ -26,6 +26,11 @@ bool Frustum::Intersects(const BoundingBox& Box) const
 	return true;
 }
 
+CameraComponent::CameraComponent(float InFieldOfView, float InAspectRatio, float InNearPlane, float InFarPlane)
+{
+	SetPerspective(InFieldOfView, InAspectRatio, InNearPlane, InFarPlane);
+}
+
 void CameraComponent::SetPerspective(float InFieldOfView, float InAspectRatio, float InNearPlane, float InFarPlane)
 {
 	FieldOfView = InFieldOfView;

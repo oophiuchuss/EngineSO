@@ -8,8 +8,7 @@ export module VulkanEngine;
 
 import Renderer;
 
-
-import Entity;
+import Scene;
 
 export class VulkanEngine
 {
@@ -20,7 +19,7 @@ public:
     void Run();
 
 	Renderer* GetRenderer() const { return RendererPtr.get(); }
-
+	Scene* GetMainScene() const { return MainScene.get(); }
 private:
     void InitWindow();
     void InitVulkan();
@@ -36,8 +35,8 @@ private:
 
     std::unique_ptr<Renderer> RendererPtr;
 
+	std::unique_ptr<Scene> MainScene;
+
     static void FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height);
     void OnResize(int Width, int Height);
-
-    std::unique_ptr<Entity> RenderEntity;
 };

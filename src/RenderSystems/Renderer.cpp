@@ -16,6 +16,7 @@ import GeometryRenderPass;
 import LightingPass;
 import PostProcessPass;
 import CameraUniform;
+import Scene;
 
 import TransformComponent; // TODO: maybe not the best idea to have tansform component coupled with the renderer, but for now it simplifies things
 
@@ -78,7 +79,7 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 			{}, vk::SampleCountFlagBits::e1, VK_FALSE);
 
 		vk::PipelineDepthStencilStateCreateInfo DepthStencilInfo(
-			{}, VK_FALSE, VK_FALSE, vk::CompareOp::eLess,		 // TODO: disable for now
+			{}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess,		 // TODO: disable for now
 			VK_FALSE, VK_FALSE);
 
 		vk::PipelineColorBlendAttachmentState ColorBlendAttachment;
@@ -125,6 +126,7 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 
 		DefaultPipeline = Device.createGraphicsPipeline(nullptr, PipelineInfo);
 
+		// TODO: clean up!
 		TesttriangleMesh = Mesh::CreateTestTriangle(Device, PhysicalDevice);
 	}
 
@@ -142,7 +144,7 @@ Renderer::~Renderer()
 	}
 }
 
-void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
+void Renderer::RenderFrame(Scene* SceneToRender)
 {
 	// Wait for previous frame to finish
 	vk::Result FenceResult = Device.waitForFences({ *InFlightFences[CurrentFrame] }, VK_TRUE, UINT64_MAX);
@@ -197,9 +199,11 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 	vk::CommandBufferBeginInfo BeginInfo({});
 	Cmd.begin(BeginInfo); // TODO: should this command buffer begin with no additional info?
 	
-	if (CullingSystemPtr->GetActiveCamera())
+	CameraComponent* CamComp = SceneToRender->GetActiveCameraComponent();
+
+	if (CamComp)
 	{
-		CameraComponent* CamComp = CullingSystemPtr->GetActiveCamera();
+		SetActiveCamera(CamComp);
 
 		TransformComponent* CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
 
@@ -211,7 +215,7 @@ void Renderer::RenderFrame(const std::vector<Entity*>& Entities)
 	}
 
 	// Cull scene and update per-frame data
-	CullingSystemPtr->CullScene(Entities);
+	CullingSystemPtr->CullScene(SceneToRender->GetRenderableEntities());
 
 	// TODO: make better handling of this
 	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphPtr->GetRenderPass("GeometryPass"));

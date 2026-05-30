@@ -12,7 +12,9 @@ import Component;
 export class Entity 
 {
 public:
-	explicit Entity(const std::string& InName) : Name(InName) {}
+
+	friend class Scene; // Allow Scene to access private constructors and members for entity management
+
 	virtual ~Entity() = default;
 
 	const std::string& GetName() const { return Name; }
@@ -92,5 +94,9 @@ protected:
 	bool bIsActive = true;
 	std::vector<std::unique_ptr<ComponentBase>> Components;
 	std::unordered_map<size_t, ComponentBase*> ComponentMap;
+
+private:
+	// Private constructor to enforce creation through the Scene class, which manages entity lifetimes and ensures proper initialization
+	explicit Entity(const std::string& InName) : Name(InName) {}
 
 };

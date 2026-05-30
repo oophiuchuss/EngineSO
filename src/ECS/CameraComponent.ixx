@@ -17,6 +17,7 @@ export struct Frustum
 export class CameraComponent : public ComponentBase
 {
 public:
+	CameraComponent(float InFieldOfView = 60.0f, float InAspectRatio = 16.0f / 9.0f, float InNearPlane = 0.1f, float InFarPlane = 100.0f);
 	void SetPerspective(float InFieldOfView, float InAspectRatio, float InNearPlane, float InFarPlane);
     glm::mat4 GetViewMatrix() const;
 	glm::mat4 GetProjectionMatrix() const;

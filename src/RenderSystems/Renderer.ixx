@@ -12,6 +12,7 @@ import CullingSystem;
 import CameraComponent;
 import Entity;
 import CameraUniform;
+import Scene;
 
 import Shader;	// TODO: For now, but should be per material
 import Mesh;	// TODO: For now, but should be per material
@@ -25,7 +26,7 @@ public:
 	Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface);
 	~Renderer();
 
-	void RenderFrame(const std::vector<Entity*>& Entities);
+	void RenderFrame(Scene* SceneToRender);
 	void RecreateSwapchain();
 
 	void SetActiveCamera(CameraComponent* Camera); // TODO: make better place where to get active camera

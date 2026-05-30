@@ -16,12 +16,11 @@ import CameraComponent;
 int main() {
     VulkanEngine Engine;
 
-    Entity MainEntity("MainEntity");
+	Engine.GetMainScene()->SetActiveCameraEntity(Engine.GetMainScene()->CreateCameraEntity("MainCamera"));
 
-    MainEntity.AddComponent<TransformComponent>();
-    CameraComponent* MainCamera = MainEntity.AddComponent<CameraComponent>();
-  
-	Engine.GetRenderer()->SetActiveCamera(MainCamera);
+	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", Engine.GetRenderer()->GetTestTriangleMesh(), nullptr);
+    
+	TriangleEntity->GetComponent<TransformComponent>()->SetPosition({ 0.0f, 0.0f, -1.0f });
 
     Engine.Run();
 
