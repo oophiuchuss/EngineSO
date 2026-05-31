@@ -87,7 +87,7 @@ set(ALL_SPV_FILES "")
 foreach(SHADER_SRC ${ALL_SHADER_SOURCES})
     file(RELATIVE_PATH REL_SRC "${SHADER_SRC_DIR}" "${SHADER_SRC}")
 
-    string(REGEX REPLACE "\\.(vert|frag|comp)$" "_\\1.spv" SPV_FILE "${REL_SRC}")
+    string(REGEX REPLACE "\\.(vert|frag|comp)$" ".\\1.spv" SPV_FILE "${REL_SRC}")
     set(SPV_PATH "${SHADER_OUT_DIR}/${SPV_FILE}")
 
     # Extract the shader stage from the file extension

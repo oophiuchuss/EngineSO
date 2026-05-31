@@ -41,5 +41,6 @@ public:
 export struct Vertex
 {
 	glm::vec3 Position;
-	// TODO: add more vertex attributes like normals, UVs, etc.
+	glm::vec2 UV = glm::vec2(0.0f);
+	glm::vec3 Normal = glm::vec3(0.0f, 0.0f, 0.0f);
 };

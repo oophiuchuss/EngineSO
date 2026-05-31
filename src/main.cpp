@@ -12,13 +12,23 @@ import AsyncResourceLoader;
 import MeshComponent;
 import TransformComponent;
 import CameraComponent;
+import MeshData;
+import ShaderData;
 
 int main() {
     VulkanEngine Engine;
 
 	Engine.GetMainScene()->SetActiveCameraEntity(Engine.GetMainScene()->CreateCameraEntity("MainCamera"));
 
-	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", Engine.GetRenderer()->GetTestTriangleMesh(), nullptr);
+
+	ShaderData* NewShaderData = Engine.GetResourceManager()->GetResource<ShaderData>("basic_geometry");
+
+    ResourceHandle<ShaderData> NewShaderHandle("basic_geometry", Engine.GetResourceManager());
+
+    // Triangle mesh (procedural)
+    ResourceHandle<MeshData> NewMeshData = Engine.GetResourceManager()->Load<MeshData>("Triangle");
+    
+	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewShaderHandle);
     
 	TriangleEntity->GetComponent<TransformComponent>()->SetPosition({ 0.0f, 0.0f, -1.0f });
 

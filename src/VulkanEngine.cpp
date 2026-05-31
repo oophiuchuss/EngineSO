@@ -15,17 +15,21 @@ import Entity;
 import MeshComponent;
 import TransformComponent;
 
-
+import ShaderData; // TODO: REMOVE THIS
 
 VulkanEngine::VulkanEngine()
     : Context()
 {
+    MainScene = std::make_unique<Scene>();
+    ResourceManagerInstance = std::make_unique<ResourceManager>();
+    
+    // TODO: REMOVE THISGeometry shader (from SPIR‑V files)
+    ResourceManagerInstance->Load<ShaderData>("basic_geometry");
+
     // Context should be create with default constructor
     // Initialize all needed resources for vulkan and GLFW  
     InitWindow();
     InitVulkan();
-
-	MainScene = std::make_unique<Scene>();
 }
 
 VulkanEngine::~VulkanEngine()
@@ -82,7 +86,7 @@ void VulkanEngine::InitVulkan()
 
     vk::raii::SurfaceKHR Surface(Instance, std::move(RawSurface));
 
-    RendererPtr = std::make_unique<Renderer>(Instance, std::move(Surface));
+    RendererPtr = std::make_unique<Renderer>(Instance, std::move(Surface), ResourceManagerInstance.get());
 }
 
 void VulkanEngine::Run()

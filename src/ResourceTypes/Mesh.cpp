@@ -113,75 +113,31 @@ void IndexBuffer::Bind(const vk::raii::CommandBuffer& CommandBuffer, uint32_t bi
 }
 
 Mesh::Mesh(	std::unique_ptr<VertexBuffer> VertexBuffer,
-			std::unique_ptr<IndexBuffer> IndexBuffer,
-			const BoundingBox& Bounds)
+			std::unique_ptr<IndexBuffer> IndexBuffer)
 	: VertexBufferPtr(std::move(VertexBuffer)),
-	IndexBufferPtr(std::move(IndexBuffer)),
-	Bounds(Bounds)
+	IndexBufferPtr(std::move(IndexBuffer))
 {
 }
 
-std::unique_ptr<Mesh> Mesh::CreateTestTriangle(const vk::raii::Device& Device, const vk::raii::PhysicalDevice& PhysicalDevice)
+std::unique_ptr<Mesh> Mesh::CreateFromMeshData(
+	const vk::raii::Device& Device, 
+	const vk::raii::PhysicalDevice& PhysicalDevice, 
+	const MeshData& MeshData)
 {
-	// World-space triangle vertices 
-	std::vector<Vertex> Verticies = {
-		{ glm::vec3(0.0f, -0.5f, -5.0f) },
-		{ glm::vec3(0.5f,  0.5f, -5.0f) },
-		{ glm::vec3(-0.5f,  0.5f, -5.0f) }
-	};
+	// Convert vertex array to raw bytes
+	std::vector<uint8_t> RawVertexData(MeshData.GetVertices().size() * sizeof(Vertex));
+	std::memcpy(RawVertexData.data(), MeshData.GetVertices().data(), RawVertexData.size());
 
-	// Index drawing
-	std::vector<uint32_t> Indices = { 0, 2, 1 };
+	auto VB = VertexBuffer::Create(Device, PhysicalDevice, RawVertexData, sizeof(Vertex));
+	auto IB = IndexBuffer::Create(Device, PhysicalDevice, MeshData.GetIndices());
 
-	// Convert vertex data to byte array for buffer creation
-	std::vector<uint8_t> VertexData(Verticies.size() * sizeof(Vertex));
-	std::memcpy(VertexData.data(), Verticies.data(), VertexData.size());
+	if (!VB || !IB) return nullptr;
 
-	// Create vertex and index buffers
-	auto VertexBufferPtr = VertexBuffer::Create(Device, PhysicalDevice, VertexData, sizeof(Vertex));
-	auto IndexBufferPtr = IndexBuffer::Create(Device, PhysicalDevice, Indices);
-
-	// Calculate bounding box
-	BoundingBox Bounds;
-	Bounds.Min = glm::vec3( -0.5f, -0.5f, 0.0f );
-	Bounds.Max = glm::vec3( 0.5f, 0.5f, 0.0f );
-
-	return std::unique_ptr<Mesh>(
-		new Mesh(std::move(VertexBufferPtr), std::move(IndexBufferPtr), Bounds));
+	return std::unique_ptr<Mesh>(new Mesh(std::move(VB), std::move(IB)));
 }
 
-
-
-/*bool Mesh::LoadResource(const std::string& FilePath)
+std::unique_ptr<Mesh> Mesh::Create(std::unique_ptr<VertexBuffer> VB,
+								   std::unique_ptr<IndexBuffer> IB)
 {
-	// Load the mesh data from the file, including vertex attributes and indices
-	std::vector<Vertex> Vertices;
-	std::vector<uint32_t> Indices;
-	if (!LoadMeshData(FilePath, Vertices, Indices))
-	{
-		return false; // Failed to load mesh data
-	}
-	
-	// Create Vulkan buffers for the vertex and index data, and upload the data to GPU memory
-	CreateVertexBuffer(Vertices);
-	CreateIndexBuffer(Indices);
-
-	// Cache metadata about the vertex and index counts for later use during rendering
-	VertexCount = static_cast<uint32_t>(Vertices.size());
-	IndexCount = static_cast<uint32_t>(Indices.size());
-
-	return true; // Result will mark the resource as loaded
+	return std::unique_ptr<Mesh>(new Mesh(std::move(VB), std::move(IB)));
 }
-
-void Mesh::UnloadResource()
-{
-	VertexBuffer.reset();
-	VertexBufferMemory.reset();
-	VertexBufferOffset = 0;
-	VertexCount = 0;
-
-	IndexBuffer.reset();
-	IndexBufferMemory.reset();
-	IndexBufferOffset = 0;
-	IndexCount = 0;
-}*/

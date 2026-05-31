@@ -6,6 +6,8 @@ module;
 
 export module RenderPassBase;
 
+import FrameData;
+
 export class Rendergraph;
 
 // Base render pass representation within the graph structure
@@ -30,22 +32,22 @@ public:
 	
 	inline bool IsEnabled() const { return bIsEnabled; }
 
-	virtual void Execute(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+	virtual void Execute(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 	{
 		if (!bIsEnabled)
 		{
 			return;
 		}
 
-		BeginPass(Cmd, Graph);
-		ExecuteMainLogic(Cmd, Graph);
-		EndPass(Cmd, Graph);
+		BeginPass(Cmd, Graph, CurrentFrameData);
+		ExecuteMainLogic(Cmd, Graph, CurrentFrameData);
+		EndPass(Cmd, Graph, CurrentFrameData);
 	}
 
 protected:
-	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) = 0;
-	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) = 0;
-	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) = 0;
+	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) = 0;
+	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) = 0;
+	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) = 0;
 
 private:
 	std::string Name;					// Human-readable name

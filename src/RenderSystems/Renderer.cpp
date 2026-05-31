@@ -17,14 +17,20 @@ import LightingPass;
 import PostProcessPass;
 import CameraUniform;
 import Scene;
+import ResourceManager;
+import RenderResourceCache;
+import FrameData;
 
+import MeshComponent;
 import TransformComponent; // TODO: maybe not the best idea to have tansform component coupled with the renderer, but for now it simplifies things
 
+import MeshData;	// TODO: For now, but should be per material
+import ShaderData;	// TODO: For now, but should be per material
 import Shader;	// TODO: For now, but should be per material
 import Mesh;	// TODO: For now, but should be per material
 import Geometry;
 
-Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface) : Instance(Instance), Surface(std::move(Surface))
+Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface, ResourceManager* InResourceManagerPtr) : Instance(Instance), Surface(std::move(Surface)), ResourceManagerPtr(InResourceManagerPtr)
 {
 	// Pick physical device
 	PickPhysicalDevice();
@@ -38,6 +44,7 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 	RendergraphPtr = std::make_unique<Rendergraph>(Device, PhysicalDevice);
 	CullingSystemPtr = std::make_unique<CullingSystem>();   // no camera 
 	CameraUBO = std::make_unique<CameraUniformBuffer>(Device, PhysicalDevice);
+	RenderCache = std::make_unique<RenderResourceCache>(Device, PhysicalDevice);
 
 	// Create command pool and buffers
 	vk::CommandPoolCreateInfo PoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, 
@@ -51,12 +58,23 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 
 	{
 		// Load default shader for geometry pass (TODO: should be per material, but for now we just want to test the rendergraph)
-		DefaultShader = Shader::CreateGraphicsShader(Device, "shaders/basic_geometry_vert.spv", "shaders/basic_geometry_frag.spv");
+		auto* ShaderDataPtr = ResourceManagerPtr->GetResource<ShaderData>("basic_geometry");
+		if (!ShaderDataPtr)
+		{
+			throw std::runtime_error("GeometryShader not found in ResourceManager");
+		}
+
+		// Compile (or retrieve) the GPU shader
+		Shader* GeometryShader = RenderCache->GetOrCompileShader("GeometryShader", *ShaderDataPtr);
+		if (!GeometryShader)
+		{
+			throw std::runtime_error("Failed to compile GeometryShader");
+		}
 
 		vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, { *CameraUBO->GetDescriptorSetLayout() });
 		DefaultPipelineLayout = vk::raii::PipelineLayout(Device, PipelineLayoutInfo);
 
-		auto Stages = DefaultShader->GetVertexShaderStageInfo();
+		auto Stages = GeometryShader->GetVertexShaderStageInfo();
 
 		vk::VertexInputBindingDescription BindingDesc(
 			0, sizeof(Vertex));
@@ -125,9 +143,6 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface)
 		PipelineInfo.setPNext(&DynamicRenderingInfo); // Chain dynamic rendering info to pipeline create info
 
 		DefaultPipeline = Device.createGraphicsPipeline(nullptr, PipelineInfo);
-
-		// TODO: clean up!
-		TesttriangleMesh = Mesh::CreateTestTriangle(Device, PhysicalDevice);
 	}
 
 	// Set up render passes and framebuffers in the rendergraph
@@ -217,6 +232,41 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	// Cull scene and update per-frame data
 	CullingSystemPtr->CullScene(SceneToRender->GetRenderableEntities());
 
+	// Build FrameData
+	const auto& VisibleEntities = CullingSystemPtr->GetAllVisibleEntities();
+
+	FrameData CurrentFrameData;
+	CurrentFrameData.Camera = CameraUBO->GetLastData();
+
+	for (Entity* E : VisibleEntities)
+	{
+		MeshComponent* MC = E->GetComponent<MeshComponent>();
+		TransformComponent* TC = E->GetComponent<TransformComponent>();
+		if (!MC || !TC) continue;
+
+		// Resolve CPU data
+		const MeshData* MD = MC->GetMeshData();
+		const ShaderData* SD = MC->GetShaderData();
+		if (!MD || !SD) continue;
+
+		// Get GPU objects from cache (upload if necessary)
+		Mesh* GPUMesh = RenderCache->GetOrUploadMesh(MD->GetResourceID(), *MD);
+		Shader* GPUShader = RenderCache->GetOrCompileShader(SD->GetResourceID(), *SD);
+		if (!GPUMesh || !GPUShader) continue;
+
+		// Compute world-space bounds
+		BoundingBox WorldBounds = MD->GetBoundingBox();
+		WorldBounds.Transform(TC->GetTransformMatrix());
+
+		CurrentFrameData.Renderables.push_back({
+			GPUMesh,
+			GPUShader,
+			TC->GetTransformMatrix(),
+			WorldBounds
+			});
+	}
+
+
 	// TODO: make better handling of this
 	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphPtr->GetRenderPass("GeometryPass"));
 	if (GPass)
@@ -225,7 +275,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	}
 
 	// Record rendering commands into command buffer using rendergraph
-	RendergraphPtr->Execute(Cmd, GraphicsQueue);
+	RendergraphPtr->Execute(Cmd, GraphicsQueue, CurrentFrameData);
 
 	// Copy "Main_Color" to swapchain image (transition layouts accordingly)
 	Resource* MainColorResource = RendergraphPtr->GetResource("Main_Color");
@@ -706,7 +756,6 @@ void Renderer::SetupRenderPasses()
 
 	auto GeomtryPass = RendergraphPtr->AddRenderPass<GeometryRenderPass>(
 		"GeometryPass",
-		CullingSystemPtr.get(), 
 		"Main_Color", 
 		"Main_Depth",
 		&DefaultPipeline,

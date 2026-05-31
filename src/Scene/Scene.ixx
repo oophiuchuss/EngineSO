@@ -7,8 +7,11 @@ module;
 export module Scene;
 
 import Entity;
-import Mesh;
+import MeshData;
+import ShaderData;
 import CameraComponent;
+import ResourceManager;
+
 
 export class Ray
 {
@@ -32,7 +35,7 @@ public:
 	// Entity factories
 	Entity* CreateEntity(const std::string& Name);
 	Entity* CreateCameraEntity(const std::string& Name, float FieldOfView = 60.0f, float AspectRatio = 16.0f / 9.0f, float NearPlane = 0.1f, float FarPlane = 100.0f);
-	Entity* CreateMeshEntity(const std::string& Name, std::shared_ptr<Mesh> Mesh, Material* Material = nullptr);
+	Entity* CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData> InMeshHandle, ResourceHandle<ShaderData> InShaderHandle);
 
 	// Active camera management
 	void SetActiveCameraEntity(Entity* CameraEntity);

@@ -5,6 +5,10 @@ module;
 
 module ResourceManager;
 
+import ResourceBase;
+import Texture;
+import MeshData;
+import ShaderData;
 
 void ResourceManager::Release(const std::string& ResourceID, const std::type_index& ResourceType)
 {
@@ -65,11 +69,11 @@ std::type_index ResourceManager::GetAssetType(const std::string& FilePath) const
 	}
 	else if (ParentFolder == "meshes")
 	{
-		return std::type_index(typeid(Mesh));
+		return std::type_index(typeid(MeshData));
 	}
 	else if (ParentFolder == "shaders")
 	{
-		return std::type_index(typeid(Shader));
+		return std::type_index(typeid(ShaderData));
 	}
 	else return std::type_index(typeid(ResourceBase));
 }

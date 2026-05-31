@@ -6,6 +6,7 @@ module;
 export module LightingPass;
 
 import RenderPassBase;
+import FrameData;
 
 // TODO implement light class
 export class Light
@@ -25,11 +26,11 @@ public:
 	void RemoveLight(Light* LightToRemove);
 
 protected:
-	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) override;
+	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
 
-	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) override;
+	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
 
-	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) override;
+	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
 
 private:
 	std::vector<Light*> Lights;

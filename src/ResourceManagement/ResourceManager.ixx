@@ -9,8 +9,8 @@ export module ResourceManager;
 
 import ResourceBase;
 import Texture;
-import Mesh;
-import Shader;
+import MeshData;
+import ShaderData;
 
 // Forward declaration for handle (defined later in same module)
 export template<typename T> class ResourceHandle;
@@ -77,9 +77,6 @@ protected:
 // Refcount can go negative
 // ResourceData lacks encapsulation
 // Missing copy / move control for manager
-
-
-// TODO: Is resource handle even needed?
 
 // ------------------------------------------------------------------
 // ResourceHandle (exported, defined after ResourceManager)
@@ -179,8 +176,8 @@ template<typename T>
 std::string ResourceManager::GetAssetFolder() const
 {
 	if constexpr (std::is_same_v<T, Texture>) return "textures";
-	else if constexpr (std::is_same_v<T, Mesh>) return "meshes";
-	else if constexpr (std::is_same_v<T, Shader>) return "shaders";
+	else if constexpr (std::is_same_v<T, MeshData>) return "meshes";
+	else if constexpr (std::is_same_v<T, ShaderData>) return "shaders";
 	else return "";
 }
 
@@ -188,13 +185,16 @@ template<typename T>
 std::string ResourceManager::GetFileExtension() const
 {
 	if constexpr (std::is_same_v<T, Texture>) return ".ktx";
-	else if constexpr (std::is_same_v<T, Mesh>) return ".obj";
-	else if constexpr (std::is_same_v<T, Shader>) return ".spv";
+	else if constexpr (std::is_same_v<T, MeshData>) return ".obj";
+	else if constexpr (std::is_same_v<T, ShaderData>) return ".spv";
 	else return "";
 }
 
 template<typename T>
 std::string ResourceManager::GetResourceFilePath(const std::string& ResourceID) const
 {
-	return "assets/" + GetAssetFolder<T>() + "/" + ResourceID + GetFileExtension<T>();
+	if constexpr (std::is_same_v<T, ShaderData>)
+		return "shaders/" + ResourceID;   // runtime SPIR‑V, no extension
+	else
+		return "assets/" + GetAssetFolder<T>() + "/" + ResourceID + GetFileExtension<T>();
 }

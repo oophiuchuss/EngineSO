@@ -7,6 +7,7 @@ module;
 module LightingPass;
 
 import Rendergraph;
+import FrameData;
 
 LightingPass::LightingPass(
 	std::string InName, 
@@ -32,7 +33,7 @@ void LightingPass::RemoveLight(Light* LightToRemove)
 	}
 }
 
-void LightingPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void LightingPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// Begin rendering with dynamic rendering 
 	vk::RenderingInfoKHR RenderingInfo;
@@ -58,7 +59,7 @@ void LightingPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
 	Cmd.beginRendering(RenderingInfo);
 }
 
-void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// Get needed resources
 	Resource* GBufferColor = Graph.GetResource(GBufferColorResourceName);
@@ -78,7 +79,7 @@ void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& G
 
 }
 
-void LightingPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void LightingPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// End dynamic rendering
 	Cmd.endRendering();		

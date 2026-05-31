@@ -7,6 +7,7 @@ module;
 module PostProcessPass;
 
 import Rendergraph;
+import FrameData;
 
 
 PostProcessPass::PostProcessPass(
@@ -33,7 +34,7 @@ void PostProcessPass::RemovePostProcessEffect(PostProcessEffect* EffectToRemove)
 	}
 }
 
-void PostProcessPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void PostProcessPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// Begin rendering with dynamic rendering 
 	vk::RenderingInfoKHR RenderingInfo;
@@ -59,7 +60,7 @@ void PostProcessPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph
 	Cmd.beginRendering(RenderingInfo);
 }
 
-void PostProcessPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void PostProcessPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// With dynamic rendering, each effect can set up its own rendering state and access input textures directly as shader resources
 
@@ -70,7 +71,7 @@ void PostProcessPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph
 	}
 }
 
-void PostProcessPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void PostProcessPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// End dynamic rendering
 	Cmd.endRendering();

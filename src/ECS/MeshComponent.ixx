@@ -1,32 +1,30 @@
 module;
 
-#include <glm/ext/matrix_float4x4.hpp>
 #include <memory>
+#include <string>
 
 export module MeshComponent;
 
 import Component;
+import ResourceManager;
+import MeshData;
+import ShaderData;
 
-import Mesh;
-import Geometry;
+// TODO: figure out where to put material
+export class Material
+{
 
+};
 
 export class MeshComponent : public ComponentBase
 {
 public:
-	explicit MeshComponent(std::shared_ptr<Mesh> Mesh = nullptr, Material* Material = nullptr) : MeshData(std::move(Mesh)), MaterialData(Material) {}
+	explicit MeshComponent(ResourceHandle<MeshData> InMeshHandle, ResourceHandle<ShaderData> InShaderHandle) : MeshHandle(InMeshHandle), ShaderHandle(InShaderHandle) {}
 
-	void SetMesh(std::shared_ptr<Mesh> InMesh) { MeshData = InMesh; }
-	void SetMaterial(Material* InMaterial) { MaterialData = InMaterial; }
-
-	std::shared_ptr<Mesh> GetMesh() const { return MeshData; }
-	Material* GetMaterial() const { return MaterialData; }
-
-	void Render() override;
-
-	BoundingBox GetBoundingBox() const;
+	const MeshData* GetMeshData() const { return MeshHandle.Get(); }
+	const ShaderData* GetShaderData() const { return ShaderHandle.Get(); }
 
 private:
-	std::shared_ptr<Mesh> MeshData = nullptr;
-	Material* MaterialData = nullptr; // TODO: replace with smart pointer and implement material management
+	ResourceHandle<MeshData> MeshHandle;
+	ResourceHandle<ShaderData> ShaderHandle;
 };

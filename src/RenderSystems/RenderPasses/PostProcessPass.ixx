@@ -7,6 +7,7 @@ module;
 export module PostProcessPass;
 
 import RenderPassBase;
+import FrameData;
 
 export class PostProcessEffect
 {
@@ -27,11 +28,11 @@ public:
 	void RemovePostProcessEffect(PostProcessEffect* EffectToRemove);
 
 protected:
-	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) override;
+	virtual void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
 
-	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) override;
+	virtual void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
 
-	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph) override;
+	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
 
 private:
 	std::vector<PostProcessEffect*> Effects;

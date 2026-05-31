@@ -7,8 +7,8 @@ module;
 export module VulkanEngine;
 
 import Renderer;
-
 import Scene;
+import ResourceManager;
 
 export class VulkanEngine
 {
@@ -20,6 +20,8 @@ public:
 
 	Renderer* GetRenderer() const { return RendererPtr.get(); }
 	Scene* GetMainScene() const { return MainScene.get(); }
+	ResourceManager* GetResourceManager() const { return ResourceManagerInstance.get(); }
+
 private:
     void InitWindow();
     void InitVulkan();
@@ -36,6 +38,8 @@ private:
     std::unique_ptr<Renderer> RendererPtr;
 
 	std::unique_ptr<Scene> MainScene;
+
+	std::unique_ptr<ResourceManager> ResourceManagerInstance;
 
     static void FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height);
     void OnResize(int Width, int Height);

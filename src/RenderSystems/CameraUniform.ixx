@@ -26,6 +26,9 @@ public:
 
 	// Get the descriptor set layout - needed for creating pipeline layouts
 	const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }
+	
+	// Get the last updated camera data
+	const CameraUniformData& GetLastData() const { return LastData; }
 
 private:
 	void CreateBuffer();
@@ -42,4 +45,6 @@ private:
 	vk::raii::DescriptorPool DescriptorPool = nullptr;
 	vk::raii::DescriptorSetLayout DescriptorSetLayout = nullptr;
 	vk::raii::DescriptorSet DescriptorSet = nullptr;
+
+	CameraUniformData LastData; // Cache the last data for later retrieval if needed
 };

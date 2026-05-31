@@ -11,17 +11,16 @@ import Rendergraph;
 import Entity;
 import MeshComponent;
 import Mesh;
+import FrameData;
 
 GeometryRenderPass::GeometryRenderPass(
 	std::string InName, 
-	CullingSystem* InCulling, 
 	std::string InGBufferColorResourceName, 
 	std::string InGBufferDepthResourceName,
 	vk::raii::Pipeline* InPipeline,
 	vk::raii::PipelineLayout* InPipelineLayout,
 	CameraUniformBuffer* InCameraUBO) :
 	RenderPassBase(InName), 
-	CullingSystemPtr(InCulling),
 	GBufferColorResourceName(InGBufferColorResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
 	Pipeline(InPipeline),
@@ -32,7 +31,7 @@ GeometryRenderPass::GeometryRenderPass(
 	AddOutput(GBufferDepthResourceName);
 }
 
-void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// Begin rendering with dynamic rendering 
 	vk::RenderingInfoKHR RenderingInfo;
@@ -68,7 +67,7 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 	Cmd.beginRendering(RenderingInfo);
 }
 
-void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	if (Pipeline == nullptr || PipelineLayout == nullptr)
 	{
@@ -91,23 +90,16 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 		CameraUBOPtr->Bind(*Cmd, **PipelineLayout);
 	}
 
-	// Get all visible entities
-	const auto& AllEntities = CullingSystemPtr->GetAllVisibleEntities();
-
-	for (const Entity* CurEntity : AllEntities)
+	for (const RenderableMesh& Renderable : CurrentFrameData.Renderables)
 	{
-		// Get mesh and transform components
-		MeshComponent* CurMeshComp = CurEntity->GetComponent<MeshComponent>();
-		Mesh* CurMesh = CurMeshComp->GetMesh().get();
-
 		// TODO: Add full implementation for drawing meshes, including setting model matrix and material properties. For now, just check if mesh exists and draw it.
-		if (!CurMeshComp || !CurMesh)
+		if (!Renderable.GPUMesh || !Renderable.GPUShader)
 		{
 			continue;
 		}
 
-		VertexBuffer* VB = CurMesh->GetVertexBuffer();
-		IndexBuffer* IB = CurMesh->GetIndexBuffer();
+		VertexBuffer* VB = Renderable.GPUMesh->GetVertexBuffer();
+		IndexBuffer* IB = Renderable.GPUMesh->GetIndexBuffer();
 
 		// Check if only vertex buffer exists (e.g., for drawing non-indexed geometry)
 		if (!VB)
@@ -129,7 +121,7 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	}
 }
 
-void GeometryRenderPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph)
+void GeometryRenderPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
 	// End dynamic rendering
 	Cmd.endRendering();

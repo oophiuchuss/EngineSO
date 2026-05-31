@@ -12,6 +12,7 @@ module Rendergraph;
 
 import RenderPassBase;
 import VulkanUtils;
+import FrameData;
 
 void Rendergraph::Compile()
 {
@@ -66,7 +67,7 @@ void Rendergraph::Reset()
     bIsPassesDirty = true;
 }
 
-void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue)
+void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue, FrameData& CurrentFrameData)
 {
     if (bIsPassesDirty)
     {
@@ -115,7 +116,7 @@ void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queu
         // - vkCmdBeginRendering (with dynamic rendering)
         // - Draw calls
         // - vkCmdEndRendering
-        CurPass->Execute(CommandBuffer, *this); 
+        CurPass->Execute(CommandBuffer, *this, CurrentFrameData); 
     }
 
     // Final layout transition

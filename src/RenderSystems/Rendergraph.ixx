@@ -11,6 +11,7 @@ module;
 export module Rendergraph;
 
 import RenderPassBase;
+import FrameData;
 
 // Resource description and management structure
 // Represents Image resurce used during rendering (texture)
@@ -63,7 +64,7 @@ public:
 
 	void Reset();
 
-	void Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue);
+	void Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue, FrameData& CurrentFrameData);
 
 	void TransitionResourceImageLayout(
 		vk::raii::CommandBuffer& CommandBuffer,

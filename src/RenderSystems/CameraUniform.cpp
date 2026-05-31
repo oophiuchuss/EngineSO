@@ -21,6 +21,7 @@ void CameraUniformBuffer::Update(const CameraUniformData& Data)
 {
 	// Copy data to mapped memory
 	std::memcpy(MappedMemory, &Data, sizeof(CameraUniformData));
+	LastData = Data;
 }
 
 void CameraUniformBuffer::Bind(vk::CommandBuffer Cmd, vk::PipelineLayout PipelineLayout, vk::PipelineBindPoint BindPoint)

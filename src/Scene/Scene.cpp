@@ -7,10 +7,12 @@ module;
 module Scene;
 
 import Entity;
-import Mesh;
+import MeshData;
+import ShaderData;
 import CameraComponent;
 import TransformComponent;
 import MeshComponent;
+import ResourceManager;
 
 Entity* Scene::CreateEntity(const std::string& Name)
 {
@@ -33,11 +35,11 @@ Entity* Scene::CreateCameraEntity(const std::string& Name, float FieldOfView, fl
 	return CameraEntity;
 }
 
-Entity* Scene::CreateMeshEntity(const std::string& Name, std::shared_ptr<Mesh> Mesh, Material* Material)
+Entity* Scene::CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData> InMeshHandle, ResourceHandle<ShaderData> InShaderHandle)
 {
 	Entity* MeshEntity = CreateEntity(Name);
 	MeshEntity->AddComponent<TransformComponent>();
-	MeshEntity->AddComponent<MeshComponent>(Mesh, Material);
+	MeshEntity->AddComponent<MeshComponent>(InMeshHandle, InShaderHandle);
 	return MeshEntity;
 }
 
@@ -84,7 +86,7 @@ std::vector<Entity*> Scene::GetRenderableEntities() const
 			continue;
 		}
 
-		if (CurEntity->GetComponent<MeshComponent>() && CurEntity->GetComponent<MeshComponent>() )
+		if (CurEntity->GetComponent<MeshComponent>() && CurEntity->GetComponent<TransformComponent>() )
 		{
 			RenderableEntities.push_back(CurEntity);
 		}

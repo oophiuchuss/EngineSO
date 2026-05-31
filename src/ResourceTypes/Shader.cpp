@@ -6,35 +6,21 @@ module;
 
 module Shader;
 
-std::unique_ptr<ShaderModule> ShaderModule::LoadFromFile(
-	const vk::raii::Device& Device, 
-	const std::string& FilePath)
+std::unique_ptr<ShaderModule> ShaderModule::Create(const vk::raii::Device& Device, const std::vector<uint32_t>& Code)
 {
-	// Read binary files
-	
-	std::ifstream File(FilePath, std::ios::binary | std::ios::ate);
-	if (!File)
-	{
-		throw std::runtime_error("Failed to open shader file: " + FilePath);
-	}
+	vk::ShaderModuleCreateInfo createInfo({}, Code);
+	vk::raii::ShaderModule module(Device, createInfo);
+	return std::unique_ptr<ShaderModule>(new ShaderModule(std::move(module)));
+}
 
-	auto FileSize = File.tellg();
-
-	if (FileSize % sizeof(uint32_t) != 0)
-	{
-		throw std::runtime_error("Shader file size is not a multiple of uint32_t: " + FilePath);
-	}
-
-	std::vector<uint32_t> ShaderCode(FileSize / sizeof(uint32_t));
-	File.seekg(0);
-	File.read(reinterpret_cast<char*>(ShaderCode.data()), FileSize);
-	File.close();
-	
-	// Create Vulkan shader module
-	vk::ShaderModuleCreateInfo CreateInfo({}, ShaderCode);
-	vk::raii::ShaderModule Module(Device, CreateInfo);
-
-	return std::unique_ptr<ShaderModule>(new ShaderModule(std::move(Module)));
+std::unique_ptr<Shader> Shader::CreateFromBytecode(
+	const vk::raii::Device& Device, 
+	const std::vector<uint32_t>& VertexBytecode, 
+	const std::vector<uint32_t>& FragmentBytecode)
+{
+	auto Vert = ShaderModule::Create(Device, VertexBytecode);
+	auto Frag = ShaderModule::Create(Device, FragmentBytecode);
+	return std::unique_ptr<Shader>(new Shader(std::move(Vert), std::move(Frag)));
 }
 
 std::unique_ptr<Shader> Shader::CreateGraphicsShader(
@@ -42,10 +28,27 @@ std::unique_ptr<Shader> Shader::CreateGraphicsShader(
 	const std::string& VertexShaderPath, 
 	const std::string& FragmentShaderPath)
 {
-	auto Vert = ShaderModule::LoadFromFile(Device, VertexShaderPath);
-	auto Frag = ShaderModule::LoadFromFile(Device, FragmentShaderPath);
+	// Read vertex SPIR‑V
+	std::ifstream VertFile(VertexShaderPath, std::ios::binary | std::ios::ate);
+	if (!VertFile)
+		throw std::runtime_error("Failed to open vertex shader: " + VertexShaderPath);
+	auto vertSize = VertFile.tellg();
+	std::vector<uint32_t> vertCode(vertSize / sizeof(uint32_t));
+	VertFile.seekg(0);
+	VertFile.read(reinterpret_cast<char*>(vertCode.data()), vertSize);
+	VertFile.close();
 
-	return std::unique_ptr<Shader>(new Shader(std::move(Vert), std::move(Frag)));
+	// Read fragment SPIR‑V
+	std::ifstream FragFile(FragmentShaderPath, std::ios::binary | std::ios::ate);
+	if (!FragFile)
+		throw std::runtime_error("Failed to open fragment shader: " + FragmentShaderPath);
+	auto fragSize = FragFile.tellg();
+	std::vector<uint32_t> fragCode(fragSize / sizeof(uint32_t));
+	FragFile.seekg(0);
+	FragFile.read(reinterpret_cast<char*>(fragCode.data()), fragSize);
+	FragFile.close();
+
+	return CreateFromBytecode(Device, vertCode, fragCode);
 }
 
 std::vector<vk::PipelineShaderStageCreateInfo> Shader::GetVertexShaderStageInfo() const
@@ -66,24 +69,3 @@ std::vector<vk::PipelineShaderStageCreateInfo> Shader::GetVertexShaderStageInfo(
 
 	return ShaderStages;
 }
-
-
-/*
-bool Shader::LoadResource(const std::string& FilePath)
-{
-	std::vector<char> ShaderCode;
-	if (!ReadShaderCode(FilePath, ShaderCode))
-	{
-		return false; // Failed to read shader code from file
-	}
-
-	CreateShaderModule(ShaderCode);
-
-	return true;
-}
-
-void Shader::UnloadResource()
-{
-	ShaderModule.reset();
-	ShaderCodeType = {};
-}*/
