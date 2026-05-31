@@ -9,6 +9,7 @@ import RenderPassBase;
 import CullingSystem;
 import CameraUniform;
 import FrameData;
+import PipelineCache;
 
 export class GeometryRenderPass : public RenderPassBase
 {
@@ -17,8 +18,7 @@ public:
 		std::string InName,
 		std::string InGBufferColorResourceName,
 		std::string InGBufferDepthResourceName,
-		vk::raii::Pipeline* InPipeline,
-		vk::raii::PipelineLayout* InPipelineLayout,
+		PipelineCache* InPipelineCache,
 		CameraUniformBuffer* InCameraUBO);
 
 	void SetRenderArea(vk::Extent2D InRenderArea) { RenderArea = InRenderArea; }
@@ -34,9 +34,7 @@ private:
 	std::string GBufferColorResourceName; // TODO: potentially optimize access to pointers
 	std::string GBufferDepthResourceName; // TODO: potentially optimize access to pointers
 
-	// Pipeline
-	vk::raii::Pipeline* Pipeline = nullptr;
-	vk::raii::PipelineLayout* PipelineLayout = nullptr;
+	PipelineCache* PipelineCachePtr = nullptr;
 	CameraUniformBuffer* CameraUBOPtr = nullptr;
 
 	vk::Extent2D RenderArea = { 1280, 720 }; // Default render area, updated by Renderer

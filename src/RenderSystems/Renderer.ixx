@@ -15,6 +15,7 @@ import CameraUniform;
 import Scene;
 import ResourceManager;
 import RenderResourceCache;
+import PipelineCache;
 
 export class Renderer
 {
@@ -73,12 +74,9 @@ private:
 	vk::raii::CommandPool CommandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer>  CommandBuffers;
 
-	std::unique_ptr<Rendergraph>   RendergraphPtr;
-	std::unique_ptr<CullingSystem> CullingSystemPtr;
-	std::unique_ptr<CameraUniformBuffer> CameraUBO;
-	std::unique_ptr<RenderResourceCache> RenderCache;
-
-	// TODO: For now, but should be per material
-	vk::raii::PipelineLayout DefaultPipelineLayout = nullptr;
-	vk::raii::Pipeline DefaultPipeline = nullptr;	
+	std::unique_ptr<Rendergraph>			RendergraphPtr;
+	std::unique_ptr<CullingSystem>			CullingSystemPtr;
+	std::unique_ptr<CameraUniformBuffer>	CameraUBO;
+	std::unique_ptr<RenderResourceCache>	RenderCache;
+	std::unique_ptr<PipelineCache>			PipelineCachePtr;
 };

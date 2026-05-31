@@ -45,6 +45,7 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 	CullingSystemPtr = std::make_unique<CullingSystem>();   // no camera 
 	CameraUBO = std::make_unique<CameraUniformBuffer>(Device, PhysicalDevice);
 	RenderCache = std::make_unique<RenderResourceCache>(Device, PhysicalDevice);
+	PipelineCachePtr = std::make_unique<PipelineCache>(Device, *CameraUBO->GetDescriptorSetLayout(), "PipelineCache.bin"); // TODO: path should be provided by something else, and not hardcoded in the renderer
 
 	// Create command pool and buffers
 	vk::CommandPoolCreateInfo PoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, 
@@ -55,95 +56,6 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 	vk::CommandBufferAllocateInfo CmdAllocInfo(*CommandPool, vk::CommandBufferLevel::ePrimary, MAX_FRAMES_IN_FLIGHT);
 
 	CommandBuffers = std::move(Device.allocateCommandBuffers(CmdAllocInfo));
-
-	{
-		// Load default shader for geometry pass (TODO: should be per material, but for now we just want to test the rendergraph)
-		auto* ShaderDataPtr = ResourceManagerPtr->GetResource<ShaderData>("basic_geometry");
-		if (!ShaderDataPtr)
-		{
-			throw std::runtime_error("GeometryShader not found in ResourceManager");
-		}
-
-		// Compile (or retrieve) the GPU shader
-		Shader* GeometryShader = RenderCache->GetOrCompileShader("GeometryShader", *ShaderDataPtr);
-		if (!GeometryShader)
-		{
-			throw std::runtime_error("Failed to compile GeometryShader");
-		}
-
-		vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, { *CameraUBO->GetDescriptorSetLayout() });
-		DefaultPipelineLayout = vk::raii::PipelineLayout(Device, PipelineLayoutInfo);
-
-		auto Stages = GeometryShader->GetVertexShaderStageInfo();
-
-		vk::VertexInputBindingDescription BindingDesc(
-			0, sizeof(Vertex));
-
-		vk::VertexInputAttributeDescription AttribDesc(
-			0, 0, vk::Format::eR32G32B32Sfloat, 0);
-
-		vk::PipelineVertexInputStateCreateInfo VertexInputInfo({}, BindingDesc, AttribDesc);
-		vk::PipelineInputAssemblyStateCreateInfo InputAssemblyInfo({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
-
-		// Viewport and scissor will be dynamic states, so we don't specify them here
-		vk::PipelineViewportStateCreateInfo ViewportStateInfo({}, 1, nullptr, 1, nullptr);
-
-		vk::PipelineRasterizationStateCreateInfo RasterizerInfo(
-			{}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill,
-			vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
-			VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f);
-
-		vk::PipelineMultisampleStateCreateInfo MultisampleInfo(
-			{}, vk::SampleCountFlagBits::e1, VK_FALSE);
-
-		vk::PipelineDepthStencilStateCreateInfo DepthStencilInfo(
-			{}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess,		 // TODO: disable for now
-			VK_FALSE, VK_FALSE);
-
-		vk::PipelineColorBlendAttachmentState ColorBlendAttachment;
-		ColorBlendAttachment.setColorWriteMask(
-			vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-			vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-		
-		ColorBlendAttachment.setBlendEnable(VK_FALSE);
-
-		vk::PipelineColorBlendStateCreateInfo ColorBlendInfo(
-			{}, VK_FALSE, vk::LogicOp::eCopy, ColorBlendAttachment);
-
-		vk::DynamicState DynamicStates[] = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
-		vk::PipelineDynamicStateCreateInfo DynamicStateInfo({}, DynamicStates);
-
-		// Dynamic rendering info to render to the "Main_Color" and "Main_Depth" attachments defined in the rendergraph (these will be created as part of the rendergraph setup)
-		const std::array<vk::Format, 1> ColorFormats = { vk::Format::eB8G8R8A8Unorm };
-		vk::PipelineRenderingCreateInfo DynamicRenderingInfo(
-			{},                         // viewMask (0)
-			ColorFormats,               // colour attachment formats
-			vk::Format::eD32Sfloat      // depth format
-			// stencil format defaults to eUndefined, pNext defaults to nullptr
-		);
-
-		vk::GraphicsPipelineCreateInfo PipelineInfo(
-			{},
-			Stages, 
-			&VertexInputInfo,
-			&InputAssemblyInfo,
-			nullptr,				// No tessellation
-			&ViewportStateInfo,
-			&RasterizerInfo, 
-			&MultisampleInfo, 
-			&DepthStencilInfo, 
-			&ColorBlendInfo, 
-			&DynamicStateInfo,
-			DefaultPipelineLayout,
-			nullptr,				// No render pass since we're using dynamic rendering
-			0,						// Subpass
-			nullptr,				// No base pipeline
-			0);						// No base pipeline index
-
-		PipelineInfo.setPNext(&DynamicRenderingInfo); // Chain dynamic rendering info to pipeline create info
-
-		DefaultPipeline = Device.createGraphicsPipeline(nullptr, PipelineInfo);
-	}
 
 	// Set up render passes and framebuffers in the rendergraph
 	SetupRenderPasses();
@@ -758,8 +670,7 @@ void Renderer::SetupRenderPasses()
 		"GeometryPass",
 		"Main_Color", 
 		"Main_Depth",
-		&DefaultPipeline,
-		&DefaultPipelineLayout,
+		PipelineCachePtr.get(),
 		CameraUBO.get());
 
 	//auto LightPass = RendergraphPtr->AddRenderPass<LightingPass>("LightPass", "Main_Color");

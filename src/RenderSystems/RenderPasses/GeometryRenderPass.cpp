@@ -6,25 +6,21 @@ module;
 module GeometryRenderPass;
 
 import RenderPassBase;
-import CullingSystem;
 import Rendergraph;
-import Entity;
-import MeshComponent;
 import Mesh;
 import FrameData;
+import PipelineCache;
 
 GeometryRenderPass::GeometryRenderPass(
 	std::string InName, 
 	std::string InGBufferColorResourceName, 
 	std::string InGBufferDepthResourceName,
-	vk::raii::Pipeline* InPipeline,
-	vk::raii::PipelineLayout* InPipelineLayout,
+	PipelineCache* InPipelineCache,
 	CameraUniformBuffer* InCameraUBO) :
 	RenderPassBase(InName), 
 	GBufferColorResourceName(InGBufferColorResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
-	Pipeline(InPipeline),
-	PipelineLayout(InPipelineLayout),
+	PipelineCachePtr(InPipelineCache),
 	CameraUBOPtr(InCameraUBO)
 {
 	AddOutput(GBufferColorResourceName);
@@ -69,9 +65,9 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 
 void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
-	if (Pipeline == nullptr || PipelineLayout == nullptr)
+	if (PipelineCachePtr == nullptr)
 	{
-		throw std::runtime_error("Pipeline or pipeline layout not set for GeometryRenderPass");
+		throw std::runtime_error("Pipeline cache not set for GeometryRenderPass");
 	}
 	
 	// Set dynamic states 
@@ -81,14 +77,13 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 
 	Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderArea));
 
-	// Bind pipeline
-	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, **Pipeline);
+	// Build the base key from resource formats — same for every mesh this pass
+	Resource* GBufferColor = Graph.GetResource(GBufferColorResourceName);
+	Resource* GBufferDepth = Graph.GetResource(GBufferDepthResourceName);
 
-	// Bind camera uniform buffer
-	if (CameraUBOPtr)
-	{
-		CameraUBOPtr->Bind(*Cmd, **PipelineLayout);
-	}
+	PipelineKey BaseKey;
+	BaseKey.ColorFormats = { GBufferColor->Format };
+	BaseKey.DepthFormat = GBufferDepth->Format;
 
 	for (const RenderableMesh& Renderable : CurrentFrameData.Renderables)
 	{
@@ -96,6 +91,23 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 		if (!Renderable.GPUMesh || !Renderable.GPUShader)
 		{
 			continue;
+		}
+		
+		// Per-mesh pipeline key differs only by shader
+
+		PipelineKey MeshPipelineKey = BaseKey;
+		MeshPipelineKey.ShaderPtr = Renderable.GPUShader;
+
+		// Optain pipeline and layout from cache based on shader
+		auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(MeshPipelineKey);
+
+		// Bind pipeline
+		Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
+
+		// Bind camera uniform buffer
+		if (CameraUBOPtr)
+		{
+			CameraUBOPtr->Bind(*Cmd, PipelineLayout);
 		}
 
 		VertexBuffer* VB = Renderable.GPUMesh->GetVertexBuffer();

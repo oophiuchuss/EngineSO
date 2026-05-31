@@ -49,8 +49,8 @@ public:
 	Shader& operator=(Shader&&) noexcept = default; // Enable move assignment
 	~Shader() = default;							// Default destructor
 
-	// Build a Vulkan pipeline shader stage create info for the vertex shader
-	std::vector<vk::PipelineShaderStageCreateInfo> GetVertexShaderStageInfo() const;
+	// Build a Vulkan pipeline shader stage create infos for this shader (vertex and fragment)
+	std::vector<vk::PipelineShaderStageCreateInfo> GetShaderStageInfos() const;
 
 private:
 	Shader(std::unique_ptr<ShaderModule> VertexShader,

@@ -51,7 +51,7 @@ std::unique_ptr<Shader> Shader::CreateGraphicsShader(
 	return CreateFromBytecode(Device, vertCode, fragCode);
 }
 
-std::vector<vk::PipelineShaderStageCreateInfo> Shader::GetVertexShaderStageInfo() const
+std::vector<vk::PipelineShaderStageCreateInfo> Shader::GetShaderStageInfos() const
 {
 	std::vector<vk::PipelineShaderStageCreateInfo> ShaderStages(2);
 
