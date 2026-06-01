@@ -45,6 +45,12 @@ public:
 		ComponentMap[TypeID] = ComponentPtr;
 		ComponentPtr->SetOwner(this);
 		Components.push_back(std::move(NewComponent));
+
+		if (IsActive())
+		{
+			ComponentPtr->Initialize(); // Initialize the component immediately after adding it to the entity
+		}
+
 		return ComponentPtr;
 	}
 
@@ -91,7 +97,7 @@ public:
 protected:
 
 	std::string Name;
-	bool bIsActive = true;
+	bool bIsActive = false;
 	std::vector<std::unique_ptr<ComponentBase>> Components;
 	std::unordered_map<size_t, ComponentBase*> ComponentMap;
 

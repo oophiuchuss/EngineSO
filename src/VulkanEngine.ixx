@@ -28,6 +28,14 @@ private:
     void MainLoop();
     void Cleanup();
 
+	// Input tracking
+	double LastMouseX = 0.0;
+	double LastMouseY = 0.0;
+    bool bFirstCursorEvent = true;
+
+	// Timing
+    double LastFrameTime = 0.0;
+
     // Window Handle
     GLFWwindow* Window = nullptr;
 
@@ -43,4 +51,13 @@ private:
 
     static void FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height);
     void OnResize(int Width, int Height);
+
+    static void KeyCallback(GLFWwindow* Window, int Key, int Scancode, int Action, int Mods);
+    void PublishKeyEvent(int Key, int Action);
+
+    static void MouseMoveCallback(GLFWwindow* Window, double XPos, double YPos);
+    void PublishMouseMoveEvent(double XPos, double YPos);
+
+    static void MouseButtonCallback(GLFWwindow* Window, int Button, int Action, int Mods);
+    void PublishMouseButtonEvent(int Button, int Action);
 };

@@ -56,6 +56,8 @@ public:
 		return ComponentTypeIDSystem::GetTypeID<T>();
 	}
 
+	ComponentState GetComponentState() const { return State; }
+
 
 protected:
 	inline void SetOwner(Entity* InOwner) { Owner = InOwner; }

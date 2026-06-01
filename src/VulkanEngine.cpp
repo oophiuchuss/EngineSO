@@ -14,17 +14,17 @@ import Component;
 import Entity;
 import MeshComponent;
 import TransformComponent;
-
-import ShaderData; // TODO: REMOVE THIS
+import EventSystem;
+import EventBase;
+import KeyEvent;
+import MouseMovedEvent;
+import MouseButtonEvent;
 
 VulkanEngine::VulkanEngine()
     : Context()
 {
     MainScene = std::make_unique<Scene>();
     ResourceManagerInstance = std::make_unique<ResourceManager>();
-    
-    // TODO: REMOVE THISGeometry shader (from SPIR‑V files)
-    ResourceManagerInstance->Load<ShaderData>("basic_geometry");
 
     // Context should be create with default constructor
     // Initialize all needed resources for vulkan and GLFW  
@@ -55,6 +55,11 @@ void VulkanEngine::InitWindow()
     // Store a pointer to this engine instance so the callback can access to it
     glfwSetWindowUserPointer(Window, this);
     glfwSetFramebufferSizeCallback(Window, FrameBufferResizeCallback);
+	glfwSetKeyCallback(Window, KeyCallback);
+	glfwSetCursorPosCallback(Window, MouseMoveCallback);
+    glfwSetMouseButtonCallback(Window, MouseButtonCallback);
+	glfwSetInputMode(Window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); // Capture the mouse cursor for camera control
+	LastFrameTime = glfwGetTime(); // Initialize last frame time for timing calculations
 }
 
 void VulkanEngine::InitVulkan()
@@ -99,7 +104,13 @@ void VulkanEngine::MainLoop()
 {
     while (!glfwWindowShouldClose(Window))
     {
+		double CurrentTime = glfwGetTime();
+		float DeltaTime = static_cast<float>(CurrentTime - LastFrameTime);
+		LastFrameTime = CurrentTime;
+        
         glfwPollEvents();
+
+		MainScene->Update(DeltaTime);
 
         RendererPtr->RenderFrame(MainScene.get());
     }
@@ -122,6 +133,74 @@ void VulkanEngine::OnResize(int Width, int Height)
     {
         RendererPtr->RecreateSwapchain();
     }
+}
+
+void VulkanEngine::KeyCallback(GLFWwindow* Window, int Key, int Scancode, int Action, int Mods)
+{
+    auto Engine = reinterpret_cast<VulkanEngine*>(glfwGetWindowUserPointer(Window));
+
+    if (Engine)
+    {
+        Engine->PublishKeyEvent(Key, Action);
+    }
+}
+
+void VulkanEngine::PublishKeyEvent(int Key, int Action)
+{
+    KeyAction KAction = KeyAction::Press;
+
+    switch (Action)
+    {
+	case GLFW_PRESS:    KAction = KeyAction::Press;     break;
+	case GLFW_RELEASE:  KAction = KeyAction::Release;   break;
+	case GLFW_REPEAT:   KAction = KeyAction::Repeat;    break;
+    }
+
+	EventSystem::Get().PublishEvent(KeyEvent(Key, KAction));
+}
+
+void VulkanEngine::MouseMoveCallback(GLFWwindow* Window, double XPos, double YPos)
+{
+    auto Engine = reinterpret_cast<VulkanEngine*>(glfwGetWindowUserPointer(Window));
+
+    if (Engine)
+    {
+        Engine->PublishMouseMoveEvent(XPos, YPos);
+    }
+}
+
+void VulkanEngine::PublishMouseMoveEvent(double XPos, double YPos)
+{
+	double DeltaX = XPos - LastMouseX;
+	double DeltaY = YPos - LastMouseY;
+	LastMouseX = XPos;
+	LastMouseY = YPos;
+
+    if (bFirstCursorEvent) {
+        bFirstCursorEvent = false;
+        LastMouseX = XPos;
+        LastMouseY = YPos;
+        return;
+    }
+
+	EventSystem::Get().PublishEvent(MouseMovedEvent(DeltaX, DeltaY));
+}
+
+void VulkanEngine::MouseButtonCallback(GLFWwindow* Window, int Button, int Action, int Mods)
+{
+    auto* Engine = reinterpret_cast<VulkanEngine*>(glfwGetWindowUserPointer(Window));
+    if (Engine)
+    {
+        Engine->PublishMouseButtonEvent(Button, Action);
+    }
+}
+
+void VulkanEngine::PublishMouseButtonEvent(int Button, int Action)
+{
+    MouseButtonAction BAction = (Action == GLFW_PRESS) ? MouseButtonAction::Press
+                                : MouseButtonAction::Release;
+
+    EventSystem::Get().PublishEvent(MouseButtonEvent(Button, BAction));
 }
 
 void VulkanEngine::Cleanup()

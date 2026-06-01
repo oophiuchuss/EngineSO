@@ -4,12 +4,12 @@ import CollisionEvent;
 
 void PhysicsComponent::OnInitialize()
 {
-	GetEventSystem()->AddListener(this);
+	EventSystem::Get().AddListener(this);
 }
 
 PhysicsComponent::~PhysicsComponent()
 {
-	GetEventSystem()->RemoveListener(this);
+	EventSystem::Get().RemoveListener(this);
 }
 
 void PhysicsComponent::OnEvent(const EventBase& Event)
@@ -22,11 +22,4 @@ void PhysicsComponent::OnEvent(const EventBase& Event)
 		
 		// TODO Implement physics response to the collision between EntityA and EntityB
 	}
-}
-
-EventSystem* PhysicsComponent::GetEventSystem() const
-{
-	// TODO reworrk event system access
-	static EventSystem EventSystem;
-	return &EventSystem;
 }

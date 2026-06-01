@@ -32,6 +32,8 @@ export class Scene
 {
 public:
 
+	void Update(float DeltaTime);
+
 	// Entity factories
 	Entity* CreateEntity(const std::string& Name);
 	Entity* CreateCameraEntity(const std::string& Name, float FieldOfView = 60.0f, float AspectRatio = 16.0f / 9.0f, float NearPlane = 0.1f, float FarPlane = 100.0f);

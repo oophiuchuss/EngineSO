@@ -21,6 +21,11 @@ struct ListenerInfo
 export class EventSystem
 {
 public:
+	static EventSystem& Get()
+	{
+		static EventSystem Instance;
+		return Instance;
+	}
 
 	void SetImmediateMode(bool bNewMode)
 	{
@@ -108,6 +113,8 @@ public:
 	}
 
 private:
+	EventSystem() = default; // Private constructor for singleton pattern
+
 	std::vector<ListenerInfo> Listeners;
 	std::queue<std::unique_ptr<EventBase>> EventQueue;
 	std::mutex QueueMutex;

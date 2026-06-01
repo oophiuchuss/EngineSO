@@ -1,32 +1,49 @@
 module;
 
 #include <glm/glm.hpp>
+#include <unordered_set>
 
 export module FlyCameraControllerComponent;
 
 import Component;
+import EventListener;
+import EventBase;
+import MouseMovedEvent;
+import MouseButtonEvent;
+import KeyEvent;
 
-export class FlyCameraControllerComponent : public ComponentBase
+export class FlyCameraControllerComponent : public ComponentBase, public EventListener
 {
-public:
-	FlyCameraControllerComponent();
+protected:
+	// Component lifecycle
+	void OnInitialize() override;
+	void OnDestroy() override;
+	void Update(float DeltaTime) override;
 
-	// Input processing functions
-	// TODO: implement input handling
-	void ProcessKeyboardInput(/*const CameraMovement& Direction,*/ float DeltaTime); 
-	void ProcessMouseMovement(float XOffset, float YOffset, bool bConstrainPitch = true);
-	void ProcessMouseScroll(float YOffset);
+	// Event handling
+	void OnEvent(const EventBase& Event) override;
 
 	// Configuration
 	void SetMovementSpeed(float speed) { MovementSpeed = speed; }
 	void SetMouseSensitivity(float sensitivity) { MouseSensitivity = sensitivity; }
 
 private:
-	// Internal coordinate system maintenance
-	void UpdateCameraVectors();
+	void ProcessKeyEvent(const KeyEvent& Event);
+	void ProcessMouseMovement(const MouseMovedEvent& Event);
+	void ProcessMouseButtonEvent(const MouseButtonEvent& Event);
+	// TODO: add processing for mouse scroll event for zooming in/out
+
+	std::unordered_set<int> HeldKeys; // Set of currently held keys (using key codes)
+
+	// Mouse movement tracking
+	double MouseDeltaX = 0.0;
+	double MouseDeltaY = 0.0;
+
+	float Yaw = -90.0f;	// Initialize to look along the negative Z-axis
+	float Pitch = 0.0f;
 
 	// Users interaction parameters
-	float MovementSpeed;	// Speed of camera movement
-	float MouseSensitivity;	// Sensitivity of mouse movement for camera rotation
+	float MovementSpeed = 5.0f;		// Speed of camera movement
+	float MouseSensitivity = 0.1f;	// Sensitivity of mouse movement for camera rotation
 };
 

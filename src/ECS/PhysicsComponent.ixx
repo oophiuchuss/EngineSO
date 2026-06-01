@@ -13,8 +13,4 @@ public:
 
 protected:
 	void OnInitialize() override;
-
-private:
-	
-	EventSystem* GetEventSystem() const;
 };

@@ -7,10 +7,16 @@ export enum class EventCategory
 	Input = 1 << 1,
 	Keyboard = 1 << 2,
 	Mouse = 1 << 3,
-	MouseButtom = 1 << 4,
+	MouseButton = 1 << 4,
 	Window = 1 << 5
 };
 
+export enum class KeyAction
+{
+	Press,
+	Release,
+	Repeat
+};
 
 export class EventBase
 {

@@ -14,21 +14,23 @@ import TransformComponent;
 import CameraComponent;
 import MeshData;
 import ShaderData;
+import FlyCameraControllerComponent;
 
 int main() {
     VulkanEngine Engine;
 
-	Engine.GetMainScene()->SetActiveCameraEntity(Engine.GetMainScene()->CreateCameraEntity("MainCamera"));
+    auto* MainCamera = Engine.GetMainScene()->CreateCameraEntity("MainCamera");
+    MainCamera->AddComponent<FlyCameraControllerComponent>();
+
+	Engine.GetMainScene()->SetActiveCameraEntity(MainCamera);
 
 
-	ShaderData* NewShaderData = Engine.GetResourceManager()->GetResource<ShaderData>("basic_geometry");
-
-    ResourceHandle<ShaderData> NewShaderHandle("basic_geometry", Engine.GetResourceManager());
+    ResourceHandle<ShaderData> NewShaderData = Engine.GetResourceManager()->Load<ShaderData>("basic_geometry");
 
     // Triangle mesh (procedural)
     ResourceHandle<MeshData> NewMeshData = Engine.GetResourceManager()->Load<MeshData>("Triangle");
     
-	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewShaderHandle);
+	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewShaderData);
     
 	TriangleEntity->GetComponent<TransformComponent>()->SetPosition({ 0.0f, 0.0f, -1.0f });
 

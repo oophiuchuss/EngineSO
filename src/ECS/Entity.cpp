@@ -12,6 +12,8 @@ void Entity::Initialize()
 	{
 		CurComponent->Initialize();
 	}
+
+	SetActive(true);
 }
 
 void Entity::Update(float DeltaTime)
@@ -23,7 +25,10 @@ void Entity::Update(float DeltaTime)
 
 	for (std::unique_ptr<ComponentBase>& CurComponent : Components)
 	{
-		CurComponent->Update(DeltaTime);
+		if (CurComponent->GetComponentState() == ComponentState::Active)
+		{
+			CurComponent->Update(DeltaTime);
+		}
 	}
 }
 

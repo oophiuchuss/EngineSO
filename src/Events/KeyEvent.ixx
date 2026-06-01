@@ -11,12 +11,12 @@ export class KeyEvent : public EventBase
 public:
 	DEFINE_EVENT_TYPE(KeyEvent, static_cast<int>(EventCategory::Input) | static_cast<int>(EventCategory::Keyboard))
 
-	KeyEvent(int Key, bool bRepeat) : KeyCode(Key), bIsRepeat(bRepeat) {}
+	KeyEvent(int Key, KeyAction Action) : KeyCode(Key), Action(Action){}
 
 	int GetKeyCode() const { return KeyCode; }
-	bool IsRepeat() const { return bIsRepeat; }
+	KeyAction GetAction() const { return Action; }
 
 private:
 	int KeyCode = 0;
-	bool bIsRepeat = false;
+	KeyAction Action = KeyAction::Press;
 };

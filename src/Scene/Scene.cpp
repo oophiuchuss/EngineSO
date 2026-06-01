@@ -14,6 +14,17 @@ import TransformComponent;
 import MeshComponent;
 import ResourceManager;
 
+void Scene::Update(float DeltaTime)
+{
+	for (Entity* CurEntity : EntityList)
+	{
+		if (CurEntity->IsActive())
+		{
+			CurEntity->Update(DeltaTime);
+		}
+	}
+}
+
 Entity* Scene::CreateEntity(const std::string& Name)
 {
 	std::string UniqueName = GenerateUniqueEntityName(Name);
@@ -32,6 +43,8 @@ Entity* Scene::CreateCameraEntity(const std::string& Name, float FieldOfView, fl
 	Entity* CameraEntity = CreateEntity(Name);
 	CameraEntity->AddComponent<TransformComponent>();
 	CameraEntity->AddComponent<CameraComponent>(FieldOfView, AspectRatio, NearPlane, FarPlane);
+
+	CameraEntity->Initialize();
 	return CameraEntity;
 }
 
@@ -40,6 +53,8 @@ Entity* Scene::CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData
 	Entity* MeshEntity = CreateEntity(Name);
 	MeshEntity->AddComponent<TransformComponent>();
 	MeshEntity->AddComponent<MeshComponent>(InMeshHandle, InShaderHandle);
+	
+	MeshEntity->Initialize();
 	return MeshEntity;
 }
 
