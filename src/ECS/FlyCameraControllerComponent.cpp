@@ -3,6 +3,7 @@ module;
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <GLFW/glfw3.h>
+#include <iostream>
 
 module FlyCameraControllerComponent;
 
@@ -20,6 +21,18 @@ void FlyCameraControllerComponent::OnInitialize()
 		static_cast<int>(EventCategory::Mouse) |
 		static_cast<int>(EventCategory::MouseButton),
 		0);
+
+	// Seed yaw/pitch from the current Transform rotation so the camera doesn't jump
+	if (auto* Transform = GetOwner()->GetComponent<TransformComponent>())
+	{
+		glm::quat R = Transform->GetRotation();
+		// Convert quaternion to Euler angles (yaw around world Y, pitch around local X)
+		glm::vec3 Euler = glm::eulerAngles(R);
+		Yaw = glm::degrees(Euler.y);   // GLM's eulerAngles returns radians; Y is yaw, X is pitch, Z is roll
+		Pitch = glm::degrees(Euler.x);
+		// Clamp pitch to avoid initial gimbal-lock
+		Pitch = glm::clamp(Pitch, -89.0f, 89.0f);
+	}
 }
 
 void FlyCameraControllerComponent::OnDestroy()
@@ -71,12 +84,12 @@ void FlyCameraControllerComponent::Update(float DeltaTime)
 	if (bMouseHold)
 	{
 		// Mouse movement for rotation
-		Yaw += static_cast<float>(MouseDeltaX) * MouseSensitivity;
-		Pitch += static_cast<float>(MouseDeltaY) * MouseSensitivity;
+		Yaw -= static_cast<float>(MouseDeltaX) * MouseSensitivity;
+		Pitch -= static_cast<float>(MouseDeltaY) * MouseSensitivity;
 		Pitch = glm::clamp(Pitch, -89.0f, 89.0f); // Prevent gimbal lock
 
-		glm::quat YawQuat = glm::angleAxis(glm::radians(Yaw), glm::vec3(0.0f, -1.0f, 0.0f));
-		glm::quat PitchQuat = glm::angleAxis(glm::radians(Pitch), glm::vec3(1.0f, 0.0f, 0.0f));
+		glm::quat YawQuat = glm::angleAxis(glm::radians(Yaw), glm::vec3(0.0f, 1.0f, 0.0f));   
+		glm::quat PitchQuat = glm::angleAxis(glm::radians(Pitch), glm::vec3(1.0f, 0.0f, 0.0f));   
 		Transform->SetRotation(YawQuat * PitchQuat);
 	}
 

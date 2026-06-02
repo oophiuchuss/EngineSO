@@ -128,6 +128,9 @@ void VulkanEngine::FrameBufferResizeCallback(GLFWwindow* Window, int Width, int 
 
 void VulkanEngine::OnResize(int Width, int Height)
 {
+	WindowWidth = Width;
+	WindowHeight = Height;
+
     // Forward to the renderer to recreate a swapchain
     if (RendererPtr)
     {
@@ -171,17 +174,19 @@ void VulkanEngine::MouseMoveCallback(GLFWwindow* Window, double XPos, double YPo
 
 void VulkanEngine::PublishMouseMoveEvent(double XPos, double YPos)
 {
+    if (bIgnoreNextMouseMove)
+    {
+        // Just sync position, publish nothing
+        LastMouseX = XPos;
+        LastMouseY = YPos;
+        bIgnoreNextMouseMove = false;
+        return;
+    }
+
 	double DeltaX = XPos - LastMouseX;
 	double DeltaY = YPos - LastMouseY;
 	LastMouseX = XPos;
 	LastMouseY = YPos;
-
-    if (bFirstCursorEvent) {
-        bFirstCursorEvent = false;
-        LastMouseX = XPos;
-        LastMouseY = YPos;
-        return;
-    }
 
 	EventSystem::Get().PublishEvent(MouseMovedEvent(DeltaX, DeltaY));
 }
@@ -197,8 +202,17 @@ void VulkanEngine::MouseButtonCallback(GLFWwindow* Window, int Button, int Actio
 
 void VulkanEngine::PublishMouseButtonEvent(int Button, int Action)
 {
+    // Capture / release cursor for right mouse button
+    if (Button == GLFW_MOUSE_BUTTON_RIGHT)
+    {
+        if (Action == GLFW_PRESS)
+            SetCursorCaptured(true);
+        else
+            SetCursorCaptured(false);
+    }
+
     MouseButtonAction BAction = (Action == GLFW_PRESS) ? MouseButtonAction::Press
-                                : MouseButtonAction::Release;
+                                                       : MouseButtonAction::Release;
 
     EventSystem::Get().PublishEvent(MouseButtonEvent(Button, BAction));
 }
@@ -218,4 +232,17 @@ void VulkanEngine::Cleanup()
     }
 
     glfwTerminate();
+}
+
+void VulkanEngine::SetCursorCaptured(bool bCaptured)
+{
+    if (bCaptured)
+    {
+        glfwSetInputMode(Window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		bIgnoreNextMouseMove = true; // Ignore the next mouse move event to prevent sudden camera jump
+    }
+    else
+    {
+        glfwSetInputMode(Window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
 }

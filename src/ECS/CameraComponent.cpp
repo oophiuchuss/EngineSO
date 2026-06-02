@@ -67,6 +67,9 @@ glm::mat4 CameraComponent::GetProjectionMatrix() const
 			NearPlane,
 			FarPlane
 		);
+
+		ProjectionMatrix[1][1] *= -1.0f;  // flip Y for Vulkan NDC
+
 		bProjectionDirty = false;
 	}
 
@@ -78,27 +81,29 @@ Frustum CameraComponent::GetFrustum() const
 	glm::mat4 VP = GetProjectionMatrix() * GetViewMatrix();
 	Frustum F;
 
-	// Helper to extract column
-	auto getRow = [&](int i) -> glm::vec4 {
-		return glm::vec4(VP[i][0], VP[i][1], VP[i][2], VP[i][3]);
+	// Correctly extract rows from GLM column-major matrix
+	auto GetRow = [&](int i) -> glm::vec4
+		{
+			return glm::vec4(VP[0][i], VP[1][i], VP[2][i], VP[3][i]);
 		};
-	glm::vec4 row0 = getRow(0);
-	glm::vec4 row1 = getRow(1);
-	glm::vec4 row2 = getRow(2);
-	glm::vec4 row3 = getRow(3);
 
-	F.Planes[0] = row3 + row0; // Left
-	F.Planes[1] = row3 - row0; // Right
-	F.Planes[2] = row3 + row1; // Bottom
-	F.Planes[3] = row3 - row1; // Top
-	F.Planes[4] = row3 + row2; // Near
-	F.Planes[5] = row3 - row2; // Far
+	glm::vec4 Row0 = GetRow(0);
+	glm::vec4 Row1 = GetRow(1);
+	glm::vec4 Row2 = GetRow(2);
+	glm::vec4 Row3 = GetRow(3);
 
-	// Normalize planes
-	for (auto& plane : F.Planes)
+	F.Planes[0] = Row3 + Row0; // Left
+	F.Planes[1] = Row3 - Row0; // Right
+	F.Planes[2] = Row3 + Row1; // Bottom
+	F.Planes[3] = Row3 - Row1; // Top
+	F.Planes[4] = Row2;        // Near — GLM_FORCE_DEPTH_ZERO_TO_ONE: just row2
+	F.Planes[5] = Row3 - Row2; // Far
+
+	for (auto& Plane : F.Planes)
 	{
-		float len = glm::length(glm::vec3(plane));
-		plane /= len;
+		float Len = glm::length(glm::vec3(Plane));
+		Plane /= Len;
 	}
+
 	return F;
 }

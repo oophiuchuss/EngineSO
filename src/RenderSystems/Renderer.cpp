@@ -135,7 +135,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		TransformComponent* CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
 
 		CameraUniformData Data;
-		Data.ViewProj = CamComp->GetViewMatrix() * CamComp->GetProjectionMatrix();
+		Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
 		Data.CameraPos = glm::vec4(CamTrans->GetPosition(), 1.0f);
 
 		CameraUBO->Update(Data);

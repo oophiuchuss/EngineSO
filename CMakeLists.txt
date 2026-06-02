@@ -46,6 +46,12 @@ target_compile_definitions(EngineSO PRIVATE
     VK_USE_PLATFORM_WIN32_KHR
 )
 
+# Define preprocessor macros for GLM configuration
+target_compile_definitions(EngineSO PRIVATE 
+    GLM_FORCE_DEPTH_ZERO_TO_ONE
+    GLM_FORCE_RIGHT_HANDED
+)
+
 # Define for IntelliSense (Visual Studio specific)
 if(MSVC)
     target_compile_definitions(EngineSO PRIVATE 

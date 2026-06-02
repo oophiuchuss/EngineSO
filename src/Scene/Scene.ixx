@@ -36,7 +36,7 @@ public:
 
 	// Entity factories
 	Entity* CreateEntity(const std::string& Name);
-	Entity* CreateCameraEntity(const std::string& Name, float FieldOfView = 60.0f, float AspectRatio = 16.0f / 9.0f, float NearPlane = 0.1f, float FarPlane = 100.0f);
+	Entity* CreateCameraEntity(const std::string& Name, float FieldOfView = 90.0f, float AspectRatio = 16.0f / 9.0f, float NearPlane = 0.1f, float FarPlane = 1000.0f);
 	Entity* CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData> InMeshHandle, ResourceHandle<ShaderData> InShaderHandle);
 
 	// Active camera management

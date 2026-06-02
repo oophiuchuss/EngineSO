@@ -32,8 +32,6 @@ int main() {
     
 	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewShaderData);
     
-	TriangleEntity->GetComponent<TransformComponent>()->SetPosition({ 0.0f, 0.0f, -1.0f });
-
     Engine.Run();
 
 
