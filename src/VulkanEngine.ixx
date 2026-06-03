@@ -58,12 +58,20 @@ private:
     vk::raii::Context Context;  
     vk::raii::Instance Instance = nullptr;
 
+    vk::raii::DebugUtilsMessengerEXT DebugMessenger = nullptr;
+
     std::unique_ptr<Renderer> RendererPtr;
 
 	std::unique_ptr<Scene> MainScene;
 
 	std::unique_ptr<ResourceManager> ResourceManagerInstance;
 
+    static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT      Severity,
+        VkDebugUtilsMessageTypeFlagsEXT             Type,
+        const VkDebugUtilsMessengerCallbackDataEXT* CallbackData,
+        void* UserData);
+    
     static void FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height);
     void OnResize(int Width, int Height);
 

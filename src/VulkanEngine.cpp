@@ -64,8 +64,14 @@ void VulkanEngine::InitWindow()
 
 void VulkanEngine::InitVulkan()
 {
-    uint32_t glfwExtensionCount = 0;
-    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    uint32_t GlfwExtensionCount = 0;
+    const char** GlfwExtensions = glfwGetRequiredInstanceExtensions(&GlfwExtensionCount);
+
+    // Collect GLFW required extensions
+    std::vector<const char*> Extensions(GlfwExtensions, GlfwExtensions + GlfwExtensionCount);
+
+    // Add debug utils extension for validation messenger
+    Extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
     // Configure intance
     vk::ApplicationInfo AppInfo("EngineSO", VK_MAKE_VERSION(1, 0, 0),
@@ -75,11 +81,35 @@ void VulkanEngine::InitVulkan()
     // Enable validation layers if available
     std::vector<const char*> VulkanCreateLayers = {"VK_LAYER_KHRONOS_validation"};
 
-    vk::InstanceCreateInfo CreateInfo({}, &AppInfo,
-        (uint32_t)VulkanCreateLayers.size(), VulkanCreateLayers.data(),
-        glfwExtensionCount, glfwExtensions);
+    // Build messenger create info to chain into instance creation
+    // This catches validation errors during vkCreateInstance and vkDestroyInstance
+    // which happen before/after the messenger itself exists
+
+    vk::DebugUtilsMessengerCreateInfoEXT MessengerCreateInfo(
+        {},
+        // Severity levels to report
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
+        // Message types to report
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance,
+        DebugCallback,
+        nullptr);
+
+    vk::InstanceCreateInfo CreateInfo(
+        {},
+        &AppInfo,
+        static_cast<uint32_t>(VulkanCreateLayers.size()),   VulkanCreateLayers.data(),
+        static_cast<uint32_t>(Extensions.size()),           Extensions.data());
+
+	// Chain messenger create info into instance creation info
+    CreateInfo.setPNext(&MessengerCreateInfo);
 
     Instance = vk::raii::Instance(Context, CreateInfo);
+
+	// Create debug messenger after instance is created, but it will also catch messages during instance creation due to chaining
+    DebugMessenger = Instance.createDebugUtilsMessengerEXT(MessengerCreateInfo);
 
     // Create Surface and move it to renderer
     VkSurfaceKHR RawSurface;
@@ -90,7 +120,6 @@ void VulkanEngine::InitVulkan()
     }
 
     vk::raii::SurfaceKHR Surface(Instance, std::move(RawSurface));
-
     RendererPtr = std::make_unique<Renderer>(Instance, std::move(Surface), ResourceManagerInstance.get());
 }
 
@@ -114,6 +143,27 @@ void VulkanEngine::MainLoop()
 
         RendererPtr->RenderFrame(MainScene.get());
     }
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL VulkanEngine::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT Severity, VkDebugUtilsMessageTypeFlagsEXT Type, const VkDebugUtilsMessengerCallbackDataEXT* CallbackData, void* UserData)
+{
+    // Filter by severity for clean output
+    if (Severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    {
+        std::cerr << "[Vulkan ERROR] " << CallbackData->pMessage << "\n\n";
+    }
+    else if (Severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        std::cerr << "[Vulkan WARNING] " << CallbackData->pMessage << "\n\n";
+    }
+    else
+    {
+        std::cout << "[Vulkan VERBOSE] " << CallbackData->pMessage << "\n\n";
+    }
+
+    // Returning true would abort the Vulkan call that triggered this —
+    // only the validation layers themselves should do that, not user code
+    return VK_FALSE;
 }
 
 void VulkanEngine::FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height)
