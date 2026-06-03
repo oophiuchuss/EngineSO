@@ -18,10 +18,7 @@ void Scene::Update(float DeltaTime)
 {
 	for (Entity* CurEntity : EntityList)
 	{
-		if (CurEntity->IsActive())
-		{
-			CurEntity->Update(DeltaTime);
-		}
+		CurEntity->Update(DeltaTime);
 	}
 }
 
@@ -31,6 +28,7 @@ Entity* Scene::CreateEntity(const std::string& Name)
 
 	auto NewEntity = std::unique_ptr<Entity>(new Entity(UniqueName));
 	Entity* NewEntityPtr = NewEntity.get();
+	NewEntityPtr->Initialize();
 
 	EntityMap.emplace(UniqueName, std::move(NewEntity));
 	EntityList.push_back(NewEntityPtr);
@@ -44,7 +42,6 @@ Entity* Scene::CreateCameraEntity(const std::string& Name, float FieldOfView, fl
 	CameraEntity->AddComponent<TransformComponent>();
 	CameraEntity->AddComponent<CameraComponent>(FieldOfView, AspectRatio, NearPlane, FarPlane);
 
-	CameraEntity->Initialize();
 	return CameraEntity;
 }
 
@@ -54,7 +51,6 @@ Entity* Scene::CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData
 	MeshEntity->AddComponent<TransformComponent>();
 	MeshEntity->AddComponent<MeshComponent>(InMeshHandle, InShaderHandle);
 	
-	MeshEntity->Initialize();
 	return MeshEntity;
 }
 
@@ -134,6 +130,8 @@ void Scene::DestroyEntity(Entity* EntityToDestroy)
 		ActiveCameraEntity = nullptr;
 	}
 
+	std::string EntityName = EntityToDestroy->GetName();
+
 	// Remove firstly from the list to avoid dangling pointers
 	auto it = std::find(EntityList.begin(), EntityList.end(), EntityToDestroy);
 	if (it != EntityList.end())
@@ -141,7 +139,6 @@ void Scene::DestroyEntity(Entity* EntityToDestroy)
 		EntityList.erase(it);
 	}
 
-	const std::string& EntityName = EntityToDestroy->GetName();
 	EntityMap.erase(EntityName); // Unique pointer will automatically clean up the entity
 }
 
