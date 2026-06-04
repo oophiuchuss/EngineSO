@@ -20,7 +20,7 @@ int main() {
     VulkanEngine Engine;
 
     auto* MainCamera = Engine.GetMainScene()->CreateCameraEntity("MainCamera");
-    MainCamera->AddComponent<FlyCameraControllerComponent>();
+    MainCamera->AddComponent<FlyCameraControllerComponent>(Engine.GetEventSystem());
 
 	Engine.GetMainScene()->SetActiveCameraEntity(MainCamera);
 

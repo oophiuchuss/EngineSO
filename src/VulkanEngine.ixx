@@ -9,6 +9,8 @@ export module VulkanEngine;
 import Renderer;
 import Scene;
 import ResourceManager;
+import EventSystem;
+import WindowSystem;
 
 // EngineSO Coordinate System Contract:
 // - World space: right-handed, Y-up, camera looks toward -Z
@@ -23,64 +25,38 @@ export class VulkanEngine
 {
 public:
     VulkanEngine();
-    ~VulkanEngine();
+    ~VulkanEngine() = default;
 
     void Run();
 
-	Renderer* GetRenderer() const { return RendererPtr.get(); }
-	Scene* GetMainScene() const { return MainScene.get(); }
+	Renderer* GetRenderer() const { return RendererInstance.get(); }
+	Scene* GetMainScene() const { return MainSceneInstance.get(); }
 	ResourceManager* GetResourceManager() const { return ResourceManagerInstance.get(); }
+    EventSystem* GetEventSystem() const { return EventSystemInstance.get(); }
+	WindowSystem* GetWindowSystem() const { return WindowSystemInstance.get(); }
 
 private:
-    void InitWindow();
     void InitVulkan();
     void MainLoop();
-    void Cleanup();
-
-    void SetCursorCaptured(bool bCaptured);
-
-	// Window dimensions for correct mouse input handling
-	int WindowWidth = 1280;
-	int WindowHeight = 720;
-
-	// Input tracking
-	double LastMouseX = 0.0;
-	double LastMouseY = 0.0;
-    bool bIgnoreNextMouseMove = false;
-
-	// Timing
-    double LastFrameTime = 0.0;
-
-    // Window Handle
-    GLFWwindow* Window = nullptr;
-
-    // Vulkan base objects (should live the entire engine lifetime)
-    vk::raii::Context Context;  
-    vk::raii::Instance Instance = nullptr;
-
-    vk::raii::DebugUtilsMessengerEXT DebugMessenger = nullptr;
-
-    std::unique_ptr<Renderer> RendererPtr;
-
-	std::unique_ptr<Scene> MainScene;
-
-	std::unique_ptr<ResourceManager> ResourceManagerInstance;
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
         VkDebugUtilsMessageSeverityFlagBitsEXT      Severity,
         VkDebugUtilsMessageTypeFlagsEXT             Type,
         const VkDebugUtilsMessengerCallbackDataEXT* CallbackData,
         void* UserData);
-    
-    static void FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height);
-    void OnResize(int Width, int Height);
 
-    static void KeyCallback(GLFWwindow* Window, int Key, int Scancode, int Action, int Mods);
-    void PublishKeyEvent(int Key, int Action);
+    std::unique_ptr<EventSystem> EventSystemInstance;
+    std::unique_ptr<WindowSystem> WindowSystemInstance;
+	std::unique_ptr<ResourceManager> ResourceManagerInstance;
 
-    static void MouseMoveCallback(GLFWwindow* Window, double XPos, double YPos);
-    void PublishMouseMoveEvent(double XPos, double YPos);
+    // Vulkan base objects (should live the entire engine lifetime)
+    vk::raii::Context Context;  
+    vk::raii::Instance Instance = nullptr;
+    vk::raii::DebugUtilsMessengerEXT DebugMessenger = nullptr;
 
-    static void MouseButtonCallback(GLFWwindow* Window, int Button, int Action, int Mods);
-    void PublishMouseButtonEvent(int Button, int Action);
+    std::unique_ptr<Renderer> RendererInstance;
+	std::unique_ptr<Scene> MainSceneInstance;
+
+    double LastFrameTime = 0.0;
+
 };

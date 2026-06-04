@@ -20,6 +20,8 @@ import Scene;
 import ResourceManager;
 import RenderResourceCache;
 import FrameData;
+import EventDispatcher;
+import WindowResizeEvent;
 
 import MeshComponent;
 import TransformComponent; // TODO: maybe not the best idea to have tansform component coupled with the renderer, but for now it simplifies things
@@ -736,4 +738,14 @@ bool Renderer::CanAcquireSwapchainImage() const
 	// maybe also compare swapchainExtent with caps.currentExtent if needed.
 
 	return true;
+}
+
+void Renderer::OnEvent(const EventBase& Event)
+{
+	EventDispatcher Dispatcher(Event);
+
+	Dispatcher.Dispatch<WindowResizeEvent>([this](const WindowResizeEvent& e)
+	{
+		RecreateSwapchain();
+	});
 }

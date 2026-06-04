@@ -11,7 +11,7 @@ import MeshData;
 import ShaderData;
 import CameraComponent;
 import ResourceManager;
-
+import EventSystem;
 
 export class Ray
 {
@@ -31,6 +31,7 @@ public:
 export class Scene
 {
 public:
+	Scene(EventSystem* InEventSystem) : EventSystemPtr(InEventSystem) {}
 
 	void Update(float DeltaTime);
 
@@ -59,6 +60,8 @@ public:
 private:
 
 	std::string GenerateUniqueEntityName(const std::string& BaseName) const;
+
+	EventSystem* EventSystemPtr = nullptr;
 
 	std::unordered_map<std::string, std::unique_ptr<Entity>> EntityMap;	// Primary storage of entities, keyed by unique name for easy lookup
 

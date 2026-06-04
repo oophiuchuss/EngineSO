@@ -16,7 +16,7 @@ import MouseButtonEvent;
 
 void FlyCameraControllerComponent::OnInitialize()
 {
-	EventSystem::Get().AddListener(this,
+	EventSystemPtr->AddListener(this,
 		static_cast<int>(EventCategory::Keyboard) |
 		static_cast<int>(EventCategory::Mouse) |
 		static_cast<int>(EventCategory::MouseButton),
@@ -37,7 +37,7 @@ void FlyCameraControllerComponent::OnInitialize()
 
 void FlyCameraControllerComponent::OnDestroy()
 {
-	EventSystem::Get().RemoveListener(this);
+	EventSystemPtr->RemoveListener(this);
 }
 
 void FlyCameraControllerComponent::Update(float DeltaTime)

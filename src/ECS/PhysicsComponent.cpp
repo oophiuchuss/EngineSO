@@ -4,12 +4,12 @@ import CollisionEvent;
 
 void PhysicsComponent::OnInitialize()
 {
-	EventSystem::Get().AddListener(this);
+	/*EventSystem::Get().AddListener(this);*/
 }
 
 PhysicsComponent::~PhysicsComponent()
 {
-	EventSystem::Get().RemoveListener(this);
+	/*EventSystem::Get().RemoveListener(this);*/
 }
 
 void PhysicsComponent::OnEvent(const EventBase& Event)

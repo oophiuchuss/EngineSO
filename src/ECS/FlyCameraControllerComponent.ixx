@@ -6,6 +6,7 @@ module;
 export module FlyCameraControllerComponent;
 
 import Component;
+import EventSystem;
 import EventListener;
 import EventBase;
 import MouseMovedEvent;
@@ -14,6 +15,11 @@ import KeyEvent;
 
 export class FlyCameraControllerComponent : public ComponentBase, public EventListener
 {
+public:
+	explicit FlyCameraControllerComponent(EventSystem* InEventSystem)
+		: EventSystemPtr(InEventSystem) {
+	}
+
 protected:
 	// Component lifecycle
 	void OnInitialize() override;
@@ -32,6 +38,8 @@ private:
 	void ProcessMouseMovement(const MouseMovedEvent& Event);
 	void ProcessMouseButtonEvent(const MouseButtonEvent& Event);
 	// TODO: add processing for mouse scroll event for zooming in/out
+
+	EventSystem* EventSystemPtr = nullptr;
 
 	std::unordered_set<int> HeldKeys; // Set of currently held keys (using key codes)
 

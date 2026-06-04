@@ -16,8 +16,9 @@ import Scene;
 import ResourceManager;
 import RenderResourceCache;
 import PipelineCache;
+import EventListener;
 
-export class Renderer
+export class Renderer : public EventListener
 {
 public:
 	Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface, ResourceManager* InResourceManagerPtr);
@@ -41,6 +42,8 @@ private:
 
 	bool CanAcquireSwapchainImage() const;
 	
+	void OnEvent(const EventBase& Event) override;
+
 	ResourceManager* ResourceManagerPtr;	// Non-owning resource manager
 
 	vk::raii::Instance& Instance;			// Non-owning instance
