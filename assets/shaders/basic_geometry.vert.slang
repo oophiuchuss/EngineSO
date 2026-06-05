@@ -1,3 +1,5 @@
+import PushConstants;
+
 struct VSInput
 {
     [[vk::location(0)]] float3 inPosition;
@@ -14,6 +16,9 @@ struct CameraUBO
 [[vk::binding(0, 0)]]
 ConstantBuffer<CameraUBO> uCamera;
 
+[[vk::push_constant]]
+PushConstants Push;
+
 struct VSOutput
 {
     [[vk::location(0)]] float2 outUV;
@@ -28,11 +33,15 @@ VSOutput main(VSInput input)
 {
     VSOutput output;
 
-    output.position = mul(uCamera.viewProj, float4(input.inPosition, 1.0));
+    float4 WorldPos  = mul(Push.ModelMatrix, float4(input.inPosition, 1.0));
+    output.position  = mul(uCamera.viewProj, WorldPos);
+    output.outUV       = input.inUV;
 
-    output.outUV = input.inUV;
+    // For now, pass the model‑space normal directly – the fragment shader
+    // only does placeholder visualisation, and the model matrix is identity.
     output.outNormal = input.inNormal;
-    output.outWorldPos = input.inPosition;
+
+    output.outWorldPos = WorldPos.xyz;
 
     return output;
 }

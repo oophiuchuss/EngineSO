@@ -10,6 +10,7 @@ import Rendergraph;
 import Mesh;
 import FrameData;
 import PipelineCache;
+import PushConstants;
 
 GeometryRenderPass::GeometryRenderPass(
 	std::string InName, 
@@ -109,6 +110,17 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 		{
 			CameraUBOPtr->Bind(*Cmd, PipelineLayout);
 		}
+
+		// Build and push per-draw constants
+		PushConstantData Push;
+		Push.ModelMatrix = Renderable.Transform;
+		// TODO: Add material properties to push constants as well when implemented
+		Push.Material.AlbedoColor = glm::vec4(1.0f);
+		Push.Material.Metallic = 0.0f;
+		Push.Material.Roughness = 0.5f;
+		Push.Material.EmissiveStrength = 0.0f;
+
+		Cmd.pushConstants<PushConstantData>(PipelineLayout, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, Push);
 
 		VertexBuffer* VB = Renderable.GPUMesh->GetVertexBuffer();
 		IndexBuffer* IB = Renderable.GPUMesh->GetIndexBuffer();

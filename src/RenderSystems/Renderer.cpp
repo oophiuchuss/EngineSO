@@ -47,7 +47,7 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 	CullingSystemPtr = std::make_unique<CullingSystem>();   // no camera 
 	CameraUBO = std::make_unique<CameraUniformBuffer>(Device, PhysicalDevice);
 	RenderCache = std::make_unique<RenderResourceCache>(Device, PhysicalDevice);
-	PipelineCachePtr = std::make_unique<PipelineCache>(Device, *CameraUBO->GetDescriptorSetLayout(), "PipelineCache.bin"); // TODO: path should be provided by something else, and not hardcoded in the renderer
+	PipelineCachePtr = std::make_unique<PipelineCache>(Device, PhysicalDevice, *CameraUBO->GetDescriptorSetLayout(), "PipelineCache.bin"); // TODO: path should be provided by something else, and not hardcoded in the renderer
 
 	// Create command pool and buffers
 	vk::CommandPoolCreateInfo PoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, 

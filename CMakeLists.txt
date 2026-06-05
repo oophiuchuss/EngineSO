@@ -91,7 +91,11 @@ file(GLOB_RECURSE ALL_SHADER_SOURCES CONFIGURE_DEPENDS
     "${SHADER_SRC_DIR}/*.slang"
 )
 
+# Filter to only non-stage files (modules)
+list(FILTER SHADER_MODULES EXCLUDE REGEX "\\.(vert|frag|comp)\\.slang$")
+
 set(ALL_SPV_FILES)
+
 
 foreach(SHADER_SRC ${ALL_SHADER_SOURCES})
 
@@ -102,9 +106,9 @@ foreach(SHADER_SRC ${ALL_SHADER_SOURCES})
     if("${REL_SRC}" MATCHES "\\.(vert|frag|comp)\\.slang$")
         set(STAGE_SHORT "${CMAKE_MATCH_1}")
     else()
-        message(WARNING "Skipping unknown shader: ${REL_SRC}")
-        continue()
+        continue()  # no warning — these are module files
     endif()
+
 
     # Map shader stage to Vulkan stage name
     if(STAGE_SHORT STREQUAL "vert")
@@ -129,9 +133,10 @@ foreach(SHADER_SRC ${ALL_SHADER_SOURCES})
             "${SHADER_SRC}"
             -entry main
             -stage ${VK_STAGE}
+            -I${SHADER_SRC_DIR}
             -o "${SPV_PATH}"
 
-        DEPENDS "${SHADER_SRC}"
+        DEPENDS "${SHADER_SRC}" ${SHADER_MODULES}  # rebuild if any module changes
 
         COMMENT "Compiling shader: ${REL_SRC}"
         VERBATIM

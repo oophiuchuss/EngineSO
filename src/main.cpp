@@ -1,6 +1,7 @@
 
 #include <iostream>
-#include "vulkan/vulkan_raii.hpp"
+#include <vulkan/vulkan_raii.hpp>
+#include <glm/glm.hpp>
 
 import VulkanEngine;
 import HotReloadResourceManager;
@@ -32,6 +33,8 @@ int main() {
     
 	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewShaderData);
     
+	TriangleEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(0.0f, 0.0f, -20.0f));
+
     Engine.Run();
 
 

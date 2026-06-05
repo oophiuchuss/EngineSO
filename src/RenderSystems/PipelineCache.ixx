@@ -61,6 +61,7 @@ export class PipelineCache
 {
 public:
     PipelineCache(const vk::raii::Device& Device,
+        const vk::raii::PhysicalDevice& PhysicalDevice,
         vk::DescriptorSetLayout CameraUBOLayout,
         const std::string& CacheFilePath = "");
 
@@ -89,6 +90,7 @@ private:
 	PipelineCacheEntry* CreateCacheEntry(const PipelineKey& Key);
 
     const vk::raii::Device& Device;
+    const vk::raii::PhysicalDevice& PhysicalDevice;
     vk::DescriptorSetLayout CameraUBOLayout;
     std::string             CacheFilePath;
 

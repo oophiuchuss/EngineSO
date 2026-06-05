@@ -10,16 +10,30 @@ module;
 module PipelineCache;
 
 import Geometry;
+import PushConstants;
 
 
 PipelineCache::PipelineCache(
-	const vk::raii::Device& Device, 
+	const vk::raii::Device& Device,
+	const vk::raii::PhysicalDevice& PhysicalDevice,
 	vk::DescriptorSetLayout CameraUBOLayout, 
 	const std::string& CacheFilePath)
 	: Device(Device),
+	PhysicalDevice(PhysicalDevice),
 	CameraUBOLayout(CameraUBOLayout),
 	CacheFilePath(CacheFilePath)
 {
+	auto Props = PhysicalDevice.getProperties();
+	if (sizeof(PushConstantData) > Props.limits.maxPushConstantsSize)
+	{
+		throw std::runtime_error(
+			"PushConstantData size (" +
+			std::to_string(sizeof(PushConstantData)) +
+			" bytes) exceeds device limit (" +
+			std::to_string(Props.limits.maxPushConstantsSize) +
+			" bytes)");
+	}
+
 	// Try to load previouslt serialized cache from disk
 	std::vector<char> CacheData;
 	if (!CacheFilePath.empty())
@@ -100,7 +114,11 @@ void PipelineCache::SaveToDisk() const
 
 PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 {
-	vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, { CameraUBOLayout });
+	vk::PushConstantRange PushRange(
+		vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+		0, sizeof(PushConstantData)
+	);
+	vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, { CameraUBOLayout }, PushRange);
 	vk::raii::PipelineLayout PipelineLayout = vk::raii::PipelineLayout(Device, PipelineLayoutInfo);
 
 	auto Stages = Key.ShaderPtr->GetShaderStageInfos();
