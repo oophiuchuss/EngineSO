@@ -13,6 +13,7 @@ import EventSystem;
 import KeyEvent;
 import MouseMovedEvent;
 import MouseButtonEvent;
+import MouseScrollEvent;
 import WindowResizeEvent;
 
 WindowSystem::WindowSystem(
@@ -98,6 +99,7 @@ void WindowSystem::RegisterCallbacks()
     glfwSetKeyCallback(Window, KeyCallback);
     glfwSetCursorPosCallback(Window, MouseMoveCallback);
     glfwSetMouseButtonCallback(Window, MouseButtonCallback);
+    glfwSetScrollCallback(Window, MouseScrollCallback);
 }
 
 void WindowSystem::FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height)
@@ -138,6 +140,15 @@ void WindowSystem::MouseButtonCallback(GLFWwindow* Window, int Button, int Actio
     {
         WindowSystemPtr->OnMouseButton(Button, Action);
     }
+}
+
+void WindowSystem::MouseScrollCallback(GLFWwindow* W, double XOffset, double YOffset)
+{
+	auto WindowSystemPtr = reinterpret_cast<WindowSystem*>(glfwGetWindowUserPointer(W));
+	if (WindowSystemPtr)
+	{
+		WindowSystemPtr->OnMouseScroll(XOffset, YOffset);
+	}
 }
 
 void WindowSystem::OnResize(int Width, int Height)
@@ -189,4 +200,9 @@ void WindowSystem::OnMouseButton(int Button, int Action)
         : MouseButtonAction::Release;
 
     EventSystemPtr->PublishEvent(MouseButtonEvent(Button, BAction));
+}
+
+void WindowSystem::OnMouseScroll(double XOffset, double YOffset)
+{
+    EventSystemPtr->PublishEvent(MouseScrollEvent(XOffset, YOffset));
 }

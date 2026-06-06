@@ -47,12 +47,15 @@ private:
 	static void KeyCallback(GLFWwindow* Window, int Key, int Scancode, int Action, int Mods);
 	static void MouseMoveCallback(GLFWwindow* Window, double XPos, double YPos);
 	static void MouseButtonCallback(GLFWwindow* Window, int Button, int Action, int Mods);
-	
+	static void MouseScrollCallback(GLFWwindow* W, double XOffset, double YOffset);
+
+
 	// Instance methods to handle the events and publish them to the event system
 	void OnResize(int Width, int Height);
 	void OnKey(int Key, int Action);
 	void OnMouseMove(double XPos, double YPos);
 	void OnMouseButton(int Button, int Action);
+	void OnMouseScroll(double XOffset, double YOffset);
 
 	EventSystem* EventSystemPtr = nullptr;
 

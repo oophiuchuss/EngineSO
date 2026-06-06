@@ -11,6 +11,7 @@ import EventListener;
 import EventBase;
 import MouseMovedEvent;
 import MouseButtonEvent;
+import MouseScrollEvent;
 import KeyEvent;
 
 export class FlyCameraControllerComponent : public ComponentBase, public EventListener
@@ -37,7 +38,7 @@ private:
 	void ProcessKeyEvent(const KeyEvent& Event);
 	void ProcessMouseMovement(const MouseMovedEvent& Event);
 	void ProcessMouseButtonEvent(const MouseButtonEvent& Event);
-	// TODO: add processing for mouse scroll event for zooming in/out
+	void ProcessMouseScroll(const MouseScrollEvent& Event);
 
 	EventSystem* EventSystemPtr = nullptr;
 
@@ -53,5 +54,10 @@ private:
 	// Users interaction parameters
 	float MovementSpeed = 5.0f;		// Speed of camera movement
 	float MouseSensitivity = 0.1f;	// Sensitivity of mouse movement for camera rotation
+
+	// Limits for movement speed and sensitivity to prevent extreme values
+	float MinMovementSpeed = 0.5f;
+	float MaxMovementSpeed = 50.0f;
+	float ScrollSensitivity = 1.0f;
 };
 

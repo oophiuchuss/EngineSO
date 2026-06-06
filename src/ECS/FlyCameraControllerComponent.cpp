@@ -116,6 +116,11 @@ void FlyCameraControllerComponent::OnEvent(const EventBase& Event)
 	{
 		ProcessMouseButtonEvent(e);
 	});
+
+	Dispatcher.Dispatch<MouseScrollEvent>([this](const MouseScrollEvent& E)
+	{
+		ProcessMouseScroll(E);
+	});
 }
 
 void FlyCameraControllerComponent::ProcessKeyEvent(const KeyEvent& Event)
@@ -149,6 +154,21 @@ void FlyCameraControllerComponent::ProcessMouseButtonEvent(const MouseButtonEven
 	else
 	{
 		HeldKeys.erase(Button);
+	}
+}
+
+void FlyCameraControllerComponent::ProcessMouseScroll(const MouseScrollEvent& Event)
+{
+	// Apply scroll only if right mouse button is held
+	constexpr int RightMouseButton = GLFW_MOUSE_BUTTON_RIGHT;   // 1
+	bool bMouseHold = (HeldKeys.find(RightMouseButton) != HeldKeys.end());
+
+	if (bMouseHold)
+	{
+		// YOffset is positive scrolling up, negative scrolling down
+		// Scroll up = increase speed, scroll down = decrease speed
+		MovementSpeed += static_cast<float>(Event.GetYOffset()) * ScrollSensitivity;
+		MovementSpeed = glm::clamp(MovementSpeed, MinMovementSpeed, MaxMovementSpeed);
 	}
 }
 

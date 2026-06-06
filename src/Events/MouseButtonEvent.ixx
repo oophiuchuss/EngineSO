@@ -19,9 +19,10 @@ public:
         static_cast<int>(EventCategory::Input) |
         static_cast<int>(EventCategory::MouseButton))   // uses existing enum
 
-        MouseButtonEvent(int Button, MouseButtonAction Action)
-        : Button(Button), Action(Action) {
-    }
+    MouseButtonEvent(int Button, MouseButtonAction Action)
+        : Button(Button), Action(Action) {}
+
+
 
     int                GetButton() const { return Button; }
     MouseButtonAction  GetAction() const { return Action; }
