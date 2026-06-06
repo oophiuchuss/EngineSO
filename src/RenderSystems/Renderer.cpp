@@ -24,12 +24,11 @@ import EventDispatcher;
 import WindowResizeEvent;
 
 import MeshComponent;
-import TransformComponent; // TODO: maybe not the best idea to have tansform component coupled with the renderer, but for now it simplifies things
-
-import MeshData;	// TODO: For now, but should be per material
-import ShaderData;	// TODO: For now, but should be per material
-import Shader;	// TODO: For now, but should be per material
-import Mesh;	// TODO: For now, but should be per material
+import TransformComponent;
+import MeshData;
+import ShaderData;
+import Shader;
+import Mesh;
 import Geometry;
 
 Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface, ResourceManager* InResourceManagerPtr) : Instance(Instance), Surface(std::move(Surface)), ResourceManagerPtr(InResourceManagerPtr)
@@ -160,26 +159,23 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 		// Resolve CPU data
 		const MeshData* MD = MC->GetMeshData();
-		const ShaderData* SD = MC->GetShaderData();
-		if (!MD || !SD) continue;
+		if (!MD) continue;
 
 		// Get GPU objects from cache (upload if necessary)
 		Mesh* GPUMesh = RenderCache->GetOrUploadMesh(MD->GetResourceID(), *MD);
-		Shader* GPUShader = RenderCache->GetOrCompileShader(SD->GetResourceID(), *SD);
-		if (!GPUMesh || !GPUShader) continue;
-
+		if (!GPUMesh) continue;
+		
 		// Compute world-space bounds
 		BoundingBox WorldBounds = MD->GetBoundingBox();
 		WorldBounds.Transform(TC->GetTransformMatrix());
 
 		CurrentFrameData.Renderables.push_back({
 			GPUMesh,
-			GPUShader,
+			MC->GetEffectiveMaterialPushData(),
 			TC->GetTransformMatrix(),
 			WorldBounds
 			});
 	}
-
 
 	// TODO: make better handling of this
 	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphPtr->GetRenderPass("GeometryPass"));
@@ -668,10 +664,22 @@ void Renderer::SetupRenderPasses()
 
 	// TODO G buffer resources to add;
 
+	// Load geometry shader - pass owns it, not individual meshes
+	ShaderData* GeometryShaderData = ResourceManagerPtr->GetResource<ShaderData>("basic_geometry");
+	if (!GeometryShaderData)
+	{
+		// Load shader if not already loaded
+		ResourceHandle<ShaderData> Handle = ResourceManagerPtr->Load<ShaderData>("basic_geometry");
+		GeometryShaderData = Handle.Get();
+	}
+
+	Shader* GeometryShader = RenderCache->GetOrCompileShader(GeometryShaderData->GetResourceID(), *GeometryShaderData);
+
 	auto GeomtryPass = RendergraphPtr->AddRenderPass<GeometryRenderPass>(
 		"GeometryPass",
 		"Main_Color", 
 		"Main_Depth",
+		GeometryShader,
 		PipelineCachePtr.get(),
 		CameraUBO.get());
 

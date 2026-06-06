@@ -8,7 +8,7 @@ module Scene;
 
 import Entity;
 import MeshData;
-import ShaderData;
+import Material;
 import CameraComponent;
 import TransformComponent;
 import MeshComponent;
@@ -45,11 +45,11 @@ Entity* Scene::CreateCameraEntity(const std::string& Name, float FieldOfView, fl
 	return CameraEntity;
 }
 
-Entity* Scene::CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData> InMeshHandle, ResourceHandle<ShaderData> InShaderHandle)
+Entity* Scene::CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData> InMeshHandle, ResourceHandle<Material> InMaterialHandle)
 {
 	Entity* MeshEntity = CreateEntity(Name);
 	MeshEntity->AddComponent<TransformComponent>();
-	MeshEntity->AddComponent<MeshComponent>(InMeshHandle, InShaderHandle);
+	MeshEntity->AddComponent<MeshComponent>(InMeshHandle, InMaterialHandle);
 	
 	return MeshEntity;
 }

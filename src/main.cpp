@@ -14,7 +14,7 @@ import MeshComponent;
 import TransformComponent;
 import CameraComponent;
 import MeshData;
-import ShaderData;
+import Material;
 import FlyCameraControllerComponent;
 
 int main() {
@@ -26,14 +26,16 @@ int main() {
 	Engine.GetMainScene()->SetActiveCameraEntity(MainCamera);
 
 
-    ResourceHandle<ShaderData> NewShaderData = Engine.GetResourceManager()->Load<ShaderData>("basic_geometry");
+    ResourceHandle<Material> NewMaterial = Engine.GetResourceManager()->Load<Material>("basic_material");
 
     // Triangle mesh (procedural)
     ResourceHandle<MeshData> NewMeshData = Engine.GetResourceManager()->Load<MeshData>("Triangle");
     
-	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewShaderData);
+	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewMaterial);
     
 	TriangleEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(0.0f, 0.0f, -20.0f));
+
+
 
     Engine.Run();
 

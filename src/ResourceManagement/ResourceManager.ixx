@@ -9,6 +9,7 @@ export module ResourceManager;
 
 import ResourceBase;
 import Texture;
+import Material;
 import MeshData;
 import ShaderData;
 
@@ -178,6 +179,7 @@ std::string ResourceManager::GetAssetFolder() const
 	if constexpr (std::is_same_v<T, Texture>) return "textures";
 	else if constexpr (std::is_same_v<T, MeshData>) return "meshes";
 	else if constexpr (std::is_same_v<T, ShaderData>) return "shaders";
+	else if constexpr (std::is_same_v<T, Material>) return "materials";
 	else return "";
 }
 
@@ -187,6 +189,7 @@ std::string ResourceManager::GetFileExtension() const
 	if constexpr (std::is_same_v<T, Texture>) return ".ktx";
 	else if constexpr (std::is_same_v<T, MeshData>) return ".obj";
 	else if constexpr (std::is_same_v<T, ShaderData>) return ".spv";
+	else if constexpr (std::is_same_v<T, Material>) return ".mat";
 	else return "";
 }
 

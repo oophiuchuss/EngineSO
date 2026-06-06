@@ -8,6 +8,7 @@ module GeometryRenderPass;
 import RenderPassBase;
 import Rendergraph;
 import Mesh;
+import Shader;
 import FrameData;
 import PipelineCache;
 import PushConstants;
@@ -16,11 +17,13 @@ GeometryRenderPass::GeometryRenderPass(
 	std::string InName, 
 	std::string InGBufferColorResourceName, 
 	std::string InGBufferDepthResourceName,
+	Shader* InGeometryShader,
 	PipelineCache* InPipelineCache,
 	CameraUniformBuffer* InCameraUBO) :
 	RenderPassBase(InName), 
 	GBufferColorResourceName(InGBufferColorResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
+	GeometryShaderPtr(InGeometryShader),
 	PipelineCachePtr(InPipelineCache),
 	CameraUBOPtr(InCameraUBO)
 {
@@ -71,6 +74,11 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 		throw std::runtime_error("Pipeline cache not set for GeometryRenderPass");
 	}
 	
+	if (!GeometryShaderPtr)
+	{
+		throw std::runtime_error("Geometry shader not set for GeometryRenderPass");
+	}
+
 	// Set dynamic states 
 	Cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, 
 		static_cast<float>(RenderArea.width),
@@ -82,45 +90,42 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	Resource* GBufferColor = Graph.GetResource(GBufferColorResourceName);
 	Resource* GBufferDepth = Graph.GetResource(GBufferDepthResourceName);
 
-	PipelineKey BaseKey;
-	BaseKey.ColorFormats = { GBufferColor->Format };
-	BaseKey.DepthFormat = GBufferDepth->Format;
+	PipelineKey Key;
+	Key.ShaderPtr = GeometryShaderPtr;
+	Key.ColorFormats = { GBufferColor->Format };
+	Key.DepthFormat = GBufferDepth->Format;
+
+	// Optain pipeline and layout from cache based on shader
+	auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);
+
+	// Bind pipeline
+	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
+
+	// Bind camera uniform buffer
+	if (CameraUBOPtr)
+	{
+		CameraUBOPtr->Bind(*Cmd, PipelineLayout);
+	}
 
 	for (const RenderableMesh& Renderable : CurrentFrameData.Renderables)
 	{
-		// TODO: Add full implementation for drawing meshes, including setting model matrix and material properties. For now, just check if mesh exists and draw it.
-		if (!Renderable.GPUMesh || !Renderable.GPUShader)
+		if (!Renderable.GPUMesh)
 		{
 			continue;
 		}
-		
-		// Per-mesh pipeline key differs only by shader
-
-		PipelineKey MeshPipelineKey = BaseKey;
-		MeshPipelineKey.ShaderPtr = Renderable.GPUShader;
-
-		// Optain pipeline and layout from cache based on shader
-		auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(MeshPipelineKey);
-
-		// Bind pipeline
-		Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
-
-		// Bind camera uniform buffer
-		if (CameraUBOPtr)
-		{
-			CameraUBOPtr->Bind(*Cmd, PipelineLayout);
-		}
+	
 
 		// Build and push per-draw constants
 		PushConstantData Push;
 		Push.ModelMatrix = Renderable.Transform;
-		// TODO: Add material properties to push constants as well when implemented
-		Push.Material.AlbedoColor = glm::vec4(1.0f);
-		Push.Material.Metallic = 0.0f;
-		Push.Material.Roughness = 0.5f;
-		Push.Material.EmissiveStrength = 0.0f;
+		Push.Material = Renderable.Mat;
 
-		Cmd.pushConstants<PushConstantData>(PipelineLayout, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, Push);
+		Cmd.pushConstants<PushConstantData>(
+			PipelineLayout, 
+			vk::ShaderStageFlagBits::eVertex |
+			vk::ShaderStageFlagBits::eFragment,
+			0,
+			Push);
 
 		VertexBuffer* VB = Renderable.GPUMesh->GetVertexBuffer();
 		IndexBuffer* IB = Renderable.GPUMesh->GetIndexBuffer();
