@@ -12,6 +12,7 @@ import Texture;
 import Material;
 import MeshData;
 import ShaderData;
+//import GltfSceneData;
 
 // Forward declaration for handle (defined later in same module)
 export template<typename T> class ResourceHandle;
@@ -33,6 +34,9 @@ export class ResourceManager
 public:
 	template<typename T, typename ...Args>
 	ResourceHandle<T> Load(const std::string& ResourceID, Args && ...args);
+	
+	template<typename T, typename ...Args>
+	ResourceHandle<T> LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data);
 
 	void Release(const std::string& ResourceID, const std::type_index& ResourceType);
 
@@ -133,6 +137,31 @@ ResourceHandle<T> ResourceManager::Load(const std::string& ResourceID, Args&&...
 	return ResourceHandle<T>(ResourceID, this);
 }
 
+template<typename T, typename ...Args>
+ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data)
+{
+	static_assert(std::is_base_of_v<ResourceBase, T>, "T must derive from ResourceBase");
+
+	auto& TypeResources = Resources[std::type_index(typeid(T))];
+	auto It = TypeResources.find(ResourceID);
+
+	if (It != TypeResources.end()) {
+		It->second.RefCount++;
+		return ResourceHandle<T>(ResourceID, this);
+	}
+
+	// Create new resource
+	auto Resource = std::make_shared<T>(ResourceID);
+	if (!Resource->LoadFromMemory(Data)) {
+
+		// TODO: Shouldn't be destroyed if load failed?
+		return ResourceHandle<T>();
+	}
+
+	TypeResources[ResourceID] = { Resource, 1 };
+	return ResourceHandle<T>(ResourceID, this);
+}
+
 template<typename T>
 T* ResourceManager::GetResource(const std::string& ResourceID) 
 {
@@ -180,6 +209,7 @@ std::string ResourceManager::GetAssetFolder() const
 	else if constexpr (std::is_same_v<T, MeshData>) return "meshes";
 	else if constexpr (std::is_same_v<T, ShaderData>) return "shaders";
 	else if constexpr (std::is_same_v<T, Material>) return "materials";
+	//else if constexpr (std::is_same_v<T, GltfSceneData>) return "scenes";
 	else return "";
 }
 
@@ -190,6 +220,7 @@ std::string ResourceManager::GetFileExtension() const
 	else if constexpr (std::is_same_v<T, MeshData>) return ".obj";
 	else if constexpr (std::is_same_v<T, ShaderData>) return ".spv";
 	else if constexpr (std::is_same_v<T, Material>) return ".mat";
+	//else if constexpr (std::is_same_v<T, GltfSceneData>) return ""; // extension is part of ID
 	else return "";
 }
 
@@ -199,5 +230,5 @@ std::string ResourceManager::GetResourceFilePath(const std::string& ResourceID) 
 	if constexpr (std::is_same_v<T, ShaderData>)
 		return "shaders/" + ResourceID;   // runtime SPIR‑V, no extension
 	else
-		return "assets/" + GetAssetFolder<T>() + "/" + ResourceID + GetFileExtension<T>();
+		return "assets/" + GetAssetFolder<T>() + "/" + ResourceID + GetFileExtension<T>(); // TODO: this is trying to get assets from build directory not source
 }

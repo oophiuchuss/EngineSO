@@ -55,7 +55,7 @@ ResourceBase* ResourceManager::GetResourceByType(const std::string& ResourceID, 
 		}
 	}
 
-	return nullptr;
+	return FoundResource;
 }
 
 std::type_index ResourceManager::GetAssetType(const std::string& FilePath) const

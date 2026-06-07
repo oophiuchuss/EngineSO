@@ -25,12 +25,6 @@ find_package(Vulkan REQUIRED)
 
 find_package(glfw3 CONFIG REQUIRED)
 
-# Link libraries (modern CMake style)
-target_link_libraries(EngineSO PRIVATE
-    Vulkan::Vulkan
-    glfw
-)
-
 # Source files
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
     src/*.cpp
@@ -66,7 +60,14 @@ FetchContent_Declare(
     URL https://github.com/shader-slang/slang/releases/download/v${SLANG_REQUIRED_VERSION}/slang-${SLANG_REQUIRED_VERSION}-windows-x86_64.zip
 )
 
-FetchContent_MakeAvailable(slang)
+# gltf loader
+FetchContent_Declare(
+    fastgltf
+    GIT_REPOSITORY https://github.com/spnda/fastgltf.git
+    GIT_TAG        v0.9.0
+)
+
+FetchContent_MakeAvailable(slang fastgltf)
 
 file(GLOB_RECURSE SLANGC_CANDIDATES
     "${slang_SOURCE_DIR}/**/slangc.exe"
@@ -80,6 +81,16 @@ endif()
 list(GET SLANGC_CANDIDATES 0 SLANGC)
 
 message(STATUS "Using Slang compiler: ${SLANGC}")
+
+
+# Link libraries (modern CMake style)
+target_link_libraries(EngineSO PRIVATE
+    Vulkan::Vulkan
+    glfw
+    fastgltf
+)
+
+
 
 # Shader compilation pipeline
 set(SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")

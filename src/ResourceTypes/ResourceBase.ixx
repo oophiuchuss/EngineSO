@@ -1,6 +1,7 @@
 module;
 
 #include <string>
+#include <vector>
 
 export module ResourceBase;
 
@@ -23,6 +24,15 @@ public:
 		return bIsLoaded;
 	}
 
+	// Memory path — for embedded resources (e.g. textures packed in .glb)
+	// Returns false by default — override in resource types that support it
+	bool LoadFromMemory(const std::vector<uint8_t>& Data)
+	{
+		if (bIsLoaded) return true;
+		bIsLoaded = LoadResourceFromMemory(Data);
+		return bIsLoaded;
+	}
+
 	void Unload()
 	{
 		if (!bIsLoaded)
@@ -39,6 +49,11 @@ protected:
 
 	virtual bool LoadResource(const std::string& FilePath) = 0;
 	virtual void UnloadResource() = 0;
+
+	virtual bool LoadResourceFromMemory(const std::vector<uint8_t>& Data)
+	{
+		return false;
+	}
 
 private:
 	std::string ResourceID;
