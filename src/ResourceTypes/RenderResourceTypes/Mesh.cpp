@@ -10,6 +10,7 @@ module Mesh;
 
 import Geometry;
 import VulkanUtils;
+import VulkanUploader;
 
 VertexBuffer::VertexBuffer(vk::raii::Buffer&& Buffer,
 						   vk::raii::DeviceMemory&& DeviceMemory,
@@ -25,37 +26,22 @@ VertexBuffer::VertexBuffer(vk::raii::Buffer&& Buffer,
 std::unique_ptr<VertexBuffer> VertexBuffer::Create(
 	const vk::raii::Device& Device, 
 	const vk::raii::PhysicalDevice& PhysicalDevice, 
+	VulkanUploader* Uploader,
 	const std::vector<uint8_t>& Data, 
 	uint8_t Stride)
 {
-	vk::BufferCreateInfo BufferInfo({}, Data.size(),
-		vk::BufferUsageFlagBits::eVertexBuffer,
-		vk::SharingMode::eExclusive);
-
-	vk::raii::Buffer Buffer = Device.createBuffer(BufferInfo);
-
-	auto MemReqs = Buffer.getMemoryRequirements();
-
-	// Find a suitable memory type index for the buffer
-	uint32_t MemoryTypeIndex = VulkanUtils::FindMemoryType(
-															PhysicalDevice,
-															MemReqs.memoryTypeBits,
-															vk::MemoryPropertyFlagBits::eHostVisible | 
-															vk::MemoryPropertyFlagBits::eHostCoherent);
-
-	vk::MemoryAllocateInfo AllocInfo(MemReqs.size, MemoryTypeIndex);
-	vk::raii::DeviceMemory Memory = Device.allocateMemory(AllocInfo);
-
-	// Bind buffer to memory and map it for updates
-	Buffer.bindMemory(*Memory, 0);
-
-	void* MappedMemory = Memory.mapMemory(0, Data.size(), {});
-	std::memcpy(MappedMemory, Data.data(), Data.size());
-	Memory.unmapMemory();
+	// Upload directly to device-local memory via staging buffer
+	auto Result = Uploader->Upload(
+		Data.data(),
+		Data.size(),
+		vk::BufferUsageFlagBits::eVertexBuffer);
 
 	return std::unique_ptr<VertexBuffer>(
-		new VertexBuffer(std::move(Buffer), std::move(Memory),
-			static_cast<uint32_t>(Data.size() / Stride), Stride));
+		new VertexBuffer(
+			std::move(Result.Buffer),
+			std::move(Result.Memory),
+			static_cast<uint32_t>(Data.size() / Stride), 
+			Stride));
 }
 
 void VertexBuffer::Bind(const vk::raii::CommandBuffer& CommandBuffer, uint32_t binding) const
@@ -73,37 +59,23 @@ IndexBuffer::IndexBuffer(vk::raii::Buffer&& Buffer,
 {
 }
 
-std::unique_ptr<IndexBuffer> IndexBuffer::Create(const vk::raii::Device& Device, const vk::raii::PhysicalDevice& PhysicalDevice, const std::vector<uint32_t>& Indices)
+std::unique_ptr<IndexBuffer> IndexBuffer::Create(
+	const vk::raii::Device& Device, 
+	const vk::raii::PhysicalDevice& PhysicalDevice, 
+	VulkanUploader* Uploader, 
+	const std::vector<uint32_t>& Indices)
 {
 	vk::DeviceSize DataSize = sizeof(uint32_t) * Indices.size();
 
-	vk::BufferCreateInfo BufferInfo({}, DataSize,
-		vk::BufferUsageFlagBits::eIndexBuffer,
-		vk::SharingMode::eExclusive);
-
-	vk::raii::Buffer Buffer = Device.createBuffer(BufferInfo);
-
-	auto MemReqs = Buffer.getMemoryRequirements();
-
-	// Find a suitable memory type index for the buffer
-	uint32_t MemoryTypeIndex = VulkanUtils::FindMemoryType(
-		PhysicalDevice,
-		MemReqs.memoryTypeBits,
-		vk::MemoryPropertyFlagBits::eHostVisible |
-		vk::MemoryPropertyFlagBits::eHostCoherent);
-
-	vk::MemoryAllocateInfo AllocInfo(MemReqs.size, MemoryTypeIndex);
-	vk::raii::DeviceMemory Memory = Device.allocateMemory(AllocInfo);
-
-	// Bind buffer to memory and map it for updates
-	Buffer.bindMemory(*Memory, 0);
-
-	void* MappedMemory = Memory.mapMemory(0, DataSize, {});
-	std::memcpy(MappedMemory, Indices.data(), DataSize);
-	Memory.unmapMemory();
+	auto Result = Uploader->Upload(
+		Indices.data(),
+		DataSize,
+		vk::BufferUsageFlagBits::eIndexBuffer);
 
 	return std::unique_ptr<IndexBuffer>(
-		new IndexBuffer(std::move(Buffer), std::move(Memory),
+		new IndexBuffer(
+			std::move(Result.Buffer),
+			std::move(Result.Memory),
 			static_cast<uint32_t>(Indices.size())));
 }
 
@@ -122,14 +94,15 @@ Mesh::Mesh(	std::unique_ptr<VertexBuffer> VertexBuffer,
 std::unique_ptr<Mesh> Mesh::CreateFromMeshData(
 	const vk::raii::Device& Device, 
 	const vk::raii::PhysicalDevice& PhysicalDevice, 
+	VulkanUploader* Uploader,
 	const MeshData& MeshData)
 {
 	// Convert vertex array to raw bytes
 	std::vector<uint8_t> RawVertexData(MeshData.GetVertices().size() * sizeof(Vertex));
 	std::memcpy(RawVertexData.data(), MeshData.GetVertices().data(), RawVertexData.size());
 
-	auto VB = VertexBuffer::Create(Device, PhysicalDevice, RawVertexData, sizeof(Vertex));
-	auto IB = IndexBuffer::Create(Device, PhysicalDevice, MeshData.GetIndices());
+	auto VB = VertexBuffer::Create(Device, PhysicalDevice, Uploader, RawVertexData, sizeof(Vertex));
+	auto IB = IndexBuffer::Create(Device, PhysicalDevice, Uploader, MeshData.GetIndices());
 
 	if (!VB || !IB) return nullptr;
 

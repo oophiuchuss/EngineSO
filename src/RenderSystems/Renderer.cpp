@@ -18,6 +18,7 @@ import PostProcessPass;
 import CameraUniform;
 import Scene;
 import ResourceManager;
+import VulkanUploader;
 import RenderResourceCache;
 import FrameData;
 import EventDispatcher;
@@ -42,11 +43,33 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 	// Create synchronization primitives
 	CreateSyncObjects();
 
-	RendergraphPtr = std::make_unique<Rendergraph>(Device, PhysicalDevice);
-	CullingSystemPtr = std::make_unique<CullingSystem>();   // no camera 
-	CameraUBO = std::make_unique<CameraUniformBuffer>(Device, PhysicalDevice);
-	RenderCache = std::make_unique<RenderResourceCache>(Device, PhysicalDevice);
-	PipelineCachePtr = std::make_unique<PipelineCache>(Device, PhysicalDevice, *CameraUBO->GetDescriptorSetLayout(), "PipelineCache.bin"); // TODO: path should be provided by something else, and not hardcoded in the renderer
+	RendergraphInstance = std::make_unique<Rendergraph>(
+		Device, 
+		PhysicalDevice);
+
+	CullingSystemInstance = std::make_unique<CullingSystem>();
+
+	CameraUBO = std::make_unique<CameraUniformBuffer>(
+		Device, 
+		PhysicalDevice);
+
+	UploaderInstance = std::make_unique<VulkanUploader>(
+		Device,
+		PhysicalDevice,
+		TransferQueueFamilyIndex,
+		GraphicsQueueFamilyIndex,
+		TransferQueue);
+	
+	RenderCacheInstance = std::make_unique<RenderResourceCache>(
+		Device, 
+		PhysicalDevice,
+		UploaderInstance.get());
+
+	PipelineCacheInstance = std::make_unique<PipelineCache>(
+		Device, 
+		PhysicalDevice, 
+		*CameraUBO->GetDescriptorSetLayout(),
+		"PipelineCache.bin"); // TODO: path should be provided by something else, and not hardcoded in the renderer
 
 	// Create command pool and buffers
 	vk::CommandPoolCreateInfo PoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, 
@@ -60,7 +83,7 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 
 	// Set up render passes and framebuffers in the rendergraph
 	SetupRenderPasses();
-	RendergraphPtr->Compile();
+	RendergraphInstance->Compile();
 }
 
 Renderer::~Renderer()
@@ -143,10 +166,10 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	}
 
 	// Cull scene and update per-frame data
-	CullingSystemPtr->CullScene(SceneToRender->GetRenderableEntities());
+	CullingSystemInstance->CullScene(SceneToRender->GetRenderableEntities());
 
 	// Build FrameData
-	const auto& VisibleEntities = CullingSystemPtr->GetAllVisibleEntities();
+	const auto& VisibleEntities = CullingSystemInstance->GetAllVisibleEntities();
 
 	FrameData CurrentFrameData;
 	CurrentFrameData.Camera = CameraUBO->GetLastData();
@@ -162,7 +185,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		if (!MD) continue;
 
 		// Get GPU objects from cache (upload if necessary)
-		Mesh* GPUMesh = RenderCache->GetOrUploadMesh(MD->GetResourceID(), *MD);
+		Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
 		if (!GPUMesh) continue;
 		
 		// Compute world-space bounds
@@ -178,17 +201,17 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	}
 
 	// TODO: make better handling of this
-	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphPtr->GetRenderPass("GeometryPass"));
+	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphInstance->GetRenderPass("GeometryPass"));
 	if (GPass)
 	{
 		GPass->SetRenderArea(SwapchainExtent);
 	}
 
 	// Record rendering commands into command buffer using rendergraph
-	RendergraphPtr->Execute(Cmd, GraphicsQueue, CurrentFrameData);
+	RendergraphInstance->Execute(Cmd, GraphicsQueue, CurrentFrameData);
 
 	// Copy "Main_Color" to swapchain image (transition layouts accordingly)
-	Resource* MainColorResource = RendergraphPtr->GetResource("Main_Color");
+	Resource* MainColorResource = RendergraphInstance->GetResource("Main_Color");
 
 	if (!MainColorResource || MainColorResource->Image == nullptr)
 	{
@@ -319,15 +342,15 @@ void Renderer::RecreateSwapchain()
 	CreateSwapchain();
 
 	// Recreate framebuffers and render passes that depend on swapchain images 
-	RendergraphPtr->Reset(); // Clear existing rendergraph resources and passes
+	RendergraphInstance->Reset(); // Clear existing rendergraph resources and passes
 	SetupRenderPasses();
-	RendergraphPtr->Compile();
+	RendergraphInstance->Compile();
 	CreateSyncObjects(); // Recreate synchronization objects if they depend on swapchain (e.g. semaphores for each swapchain image)
 }
 
 void Renderer::SetActiveCamera(CameraComponent* Camera)
 {
-	CullingSystemPtr->SetActiveCamera(Camera);
+	CullingSystemInstance->SetActiveCamera(Camera);
 
 	// Update camera component aspect ratio to match swapchain extent
 	if (Camera)
@@ -640,7 +663,7 @@ void Renderer::CreateSyncObjects()
 
 void Renderer::SetupRenderPasses()
 {
-	RendergraphPtr->AddResource(
+	RendergraphInstance->AddResource(
 		"Main_Color",
 		vk::Format::eB8G8R8A8Unorm,					// Format – swapchain compatible
 		SwapchainExtent,							// Extent – screen size
@@ -652,7 +675,7 @@ void Renderer::SetupRenderPasses()
 		vk::ImageLayout::eTransferSrcOptimal		// Final layout – ready for copy to swapchain
 	);
 
-	RendergraphPtr->AddResource(
+	RendergraphInstance->AddResource(
 		"Main_Depth",
 		vk::Format::eD32Sfloat,						// Format – 32‑bit float depth
 		SwapchainExtent,							// Same extent as color
@@ -673,18 +696,18 @@ void Renderer::SetupRenderPasses()
 		GeometryShaderData = Handle.Get();
 	}
 
-	Shader* GeometryShader = RenderCache->GetOrCompileShader(GeometryShaderData->GetResourceID(), *GeometryShaderData);
+	Shader* GeometryShader = RenderCacheInstance->GetOrCompileShader(GeometryShaderData->GetResourceID(), *GeometryShaderData);
 
-	auto GeomtryPass = RendergraphPtr->AddRenderPass<GeometryRenderPass>(
+	auto GeomtryPass = RendergraphInstance->AddRenderPass<GeometryRenderPass>(
 		"GeometryPass",
 		"Main_Color", 
 		"Main_Depth",
 		GeometryShader,
-		PipelineCachePtr.get(),
+		PipelineCacheInstance.get(),
 		CameraUBO.get());
 
-	//auto LightPass = RendergraphPtr->AddRenderPass<LightingPass>("LightPass", "Main_Color");
-	//auto PostProcess = RendergraphPtr->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");
+	//auto LightPass = RendergraphInstance->AddRenderPass<LightingPass>("LightPass", "Main_Color");
+	//auto PostProcess = RendergraphInstance->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");
 }
 
 int Renderer::ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk::raii::SurfaceKHR& Surface)

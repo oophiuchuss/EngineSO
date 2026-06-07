@@ -7,6 +7,7 @@ module;
 export module Mesh;
 
 import MeshData;
+import VulkanUploader;
 
 // TODO: maybe move the vertex buffer and index buffer management into a separate class or utility to keep the Mesh class focused on higher-level mesh management and resource loading logic
 export class VertexBuffer
@@ -25,6 +26,7 @@ public:
 	static std::unique_ptr<VertexBuffer> Create(
 		const vk::raii::Device& Device,
 		const vk::raii::PhysicalDevice& PhysicalDevice,
+		VulkanUploader* Uploader,
 		const std::vector<uint8_t>& Data,
 		uint8_t Stride);
 
@@ -64,6 +66,7 @@ public:
 	static std::unique_ptr<IndexBuffer> Create(
 		const vk::raii::Device& Device,
 		const vk::raii::PhysicalDevice& PhysicalDevice,
+		VulkanUploader* Uploader,
 		const std::vector<uint32_t>& Indices);
 
 	// Method to bind the index buffer to a command buffer for rendering, specifying the binding point (default is 0)
@@ -98,6 +101,7 @@ public:
 	static std::unique_ptr<Mesh> CreateFromMeshData(
 		const vk::raii::Device& Device,
 		const vk::raii::PhysicalDevice& PhysicalDevice,
+		VulkanUploader* Uploader,
 		const MeshData& MeshData);
 	
 	static std::unique_ptr<Mesh> Create(

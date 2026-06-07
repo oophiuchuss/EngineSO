@@ -17,7 +17,7 @@ Mesh* RenderResourceCache::GetOrUploadMesh(const std::string& ID, const MeshData
     if (it != MeshCache.end())
         return it->second.get();
 
-    auto NewMesh = Mesh::CreateFromMeshData(Device, PhysicalDevice, Data);
+    auto NewMesh = Mesh::CreateFromMeshData(Device, PhysicalDevice, UploaderPtr, Data);
     if (!NewMesh) return nullptr;
 
     Mesh* Ptr = NewMesh.get();

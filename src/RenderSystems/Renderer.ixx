@@ -17,6 +17,7 @@ import ResourceManager;
 import RenderResourceCache;
 import PipelineCache;
 import EventListener;
+import VulkanUploader;
 
 export class Renderer : public EventListener
 {
@@ -77,9 +78,10 @@ private:
 	vk::raii::CommandPool CommandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer>  CommandBuffers;
 
-	std::unique_ptr<Rendergraph>			RendergraphPtr;
-	std::unique_ptr<CullingSystem>			CullingSystemPtr;
+	std::unique_ptr<Rendergraph>			RendergraphInstance;
+	std::unique_ptr<CullingSystem>			CullingSystemInstance;
 	std::unique_ptr<CameraUniformBuffer>	CameraUBO;
-	std::unique_ptr<RenderResourceCache>	RenderCache;
-	std::unique_ptr<PipelineCache>			PipelineCachePtr;
+	std::unique_ptr<VulkanUploader>			UploaderInstance;
+	std::unique_ptr<RenderResourceCache>	RenderCacheInstance;
+	std::unique_ptr<PipelineCache>			PipelineCacheInstance;
 };

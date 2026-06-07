@@ -11,15 +11,18 @@ import Mesh;
 import Shader;
 import MeshData;
 import ShaderData;
+import VulkanUploader;
 
 export class RenderResourceCache
 {
 public:
     RenderResourceCache(
         const vk::raii::Device& Device,
-        const vk::raii::PhysicalDevice& PhysicalDevice)
+        const vk::raii::PhysicalDevice& PhysicalDevice,
+        VulkanUploader* Uploader)
 		: Device(Device), 
-        PhysicalDevice(PhysicalDevice) 
+        PhysicalDevice(PhysicalDevice),
+        UploaderPtr(Uploader)
     {}
 
     Mesh* GetOrUploadMesh(const std::string& ID, const MeshData& Data);
@@ -31,6 +34,7 @@ public:
 private:
     const vk::raii::Device& Device;
     const vk::raii::PhysicalDevice& PhysicalDevice;
+    VulkanUploader* UploaderPtr;
 
     std::unordered_map<std::string, std::unique_ptr<Mesh>>   MeshCache;
     std::unordered_map<std::string, std::unique_ptr<Shader>> ShaderCache;
