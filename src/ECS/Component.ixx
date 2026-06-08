@@ -63,8 +63,6 @@ protected:
 	inline void SetOwner(Entity* InOwner) { Owner = InOwner; }
 	
 	virtual void Update(float DeltaTime) {}
-	virtual void Render() {}
-
 	virtual void OnInitialize() {}
 	virtual void OnDestroy() {}
 

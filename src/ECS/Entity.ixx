@@ -21,9 +21,17 @@ public:
 	bool IsActive() const { return bIsActive; }
 	void SetActive(bool bInActive) { bIsActive = bInActive; }
 
+	// Parent-child heirarchy
+	void SetParent(Entity* InParent);
+	inline Entity* GetParent() const { return Parent; }
+
+	void AddChild(Entity* InChild);
+	void RemoveChild(Entity* InChild);
+	inline const std::vector<Entity*>& GetChildren() const { return Children; }
+	inline bool HasChildren() const { return Children.empty(); }
+
 	virtual void Initialize();
 	virtual void Update(float DeltaTime);
-	virtual void Render();
 
 	template<typename T, typename ...Args>
 	T* AddComponent(Args && ...args)
@@ -105,4 +113,6 @@ private:
 	// Private constructor to enforce creation through the Scene class, which manages entity lifetimes and ensures proper initialization
 	explicit Entity(const std::string& InName) : Name(InName) {}
 
+	Entity* Parent = nullptr;
+	std::vector<Entity*> Children;
 };

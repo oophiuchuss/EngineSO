@@ -190,12 +190,12 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		
 		// Compute world-space bounds
 		BoundingBox WorldBounds = MD->GetBoundingBox();
-		WorldBounds.Transform(TC->GetTransformMatrix());
+		WorldBounds.Transform(TC->GetWorldTransformMatrix());
 
 		CurrentFrameData.Renderables.push_back({
 			GPUMesh,
 			MC->GetEffectiveMaterialPushData(),
-			TC->GetTransformMatrix(),
+			TC->GetWorldTransformMatrix(),
 			WorldBounds
 			});
 	}

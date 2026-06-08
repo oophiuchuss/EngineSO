@@ -19,15 +19,16 @@ public:
 	const glm::quat& GetRotation() const { return Rotation; }
 	const glm::vec3& GetScale() const { return Scale; }
 
-	const glm::mat4& GetTransformMatrix() const;
+	const glm::mat4& GetLocalTransformMatrix() const;
+	glm::mat4 GetWorldTransformMatrix() const;
 
 private:
 	// TODO: consider using Transform struct to store these values instead of separate variables
 	glm::vec3 Position = glm::vec3(0.0f);
-	glm::quat Rotation = glm::vec3(0.0f);
+	glm::quat Rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);   // identity
 	glm::vec3 Scale = glm::vec3(1.0f);
 
 	mutable glm::mat4 CachedTransformMatrix = glm::mat4(1.0f);
-	mutable bool bIsTransformDirty = true;
+	mutable bool bLocalDirty = true;
 
 };

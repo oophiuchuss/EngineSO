@@ -18,7 +18,11 @@ void Scene::Update(float DeltaTime)
 {
 	for (Entity* CurEntity : EntityList)
 	{
-		CurEntity->Update(DeltaTime);
+		// Update only parent-less entities
+		if (CurEntity->GetParent() == nullptr)
+		{
+			CurEntity->Update(DeltaTime);
+		}
 	}
 }
 
@@ -52,6 +56,18 @@ Entity* Scene::CreateMeshEntity(const std::string& Name, ResourceHandle<MeshData
 	MeshEntity->AddComponent<MeshComponent>(InMeshHandle, InMaterialHandle);
 	
 	return MeshEntity;
+}
+
+Entity* Scene::CreateChildEntity(const std::string& Name, Entity* Parent)
+{
+	if (!Parent)
+	{
+		return nullptr;
+	}
+
+	Entity* Child = CreateEntity(Name);
+	Parent->AddChild(Child);   // sets both parent and child links
+	return Child;
 }
 
 void Scene::SetActiveCameraEntity(Entity* CameraEntity)
@@ -125,6 +141,25 @@ void Scene::DestroyEntity(Entity* EntityToDestroy)
 	}
 
 	// Clear active camera reference if it's the one being destroyed
+	if (EntityToDestroy == ActiveCameraEntity)
+	{
+		ActiveCameraEntity = nullptr;
+	}
+
+	// Destroy children recursively
+	auto ChildrenCopy = EntityToDestroy->GetChildren();
+	for (Entity* Child : ChildrenCopy)
+	{
+		DestroyEntity(Child);
+	}
+
+	// Remove from parent's child list if this entity is a child
+	if (EntityToDestroy->GetParent())
+	{
+		EntityToDestroy->GetParent()->RemoveChild(EntityToDestroy);
+	}
+
+	// Remove from active camera if this entity held it
 	if (EntityToDestroy == ActiveCameraEntity)
 	{
 		ActiveCameraEntity = nullptr;

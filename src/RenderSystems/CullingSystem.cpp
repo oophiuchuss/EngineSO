@@ -29,7 +29,7 @@ void CullingSystem::CullScene(const std::vector<Entity*>& AllEntities)
         if (Mesh && Transform)
         {
             BoundingBox WorldBox = Mesh->GetMeshData()->GetBoundingBox();
-            WorldBox.Transform(Transform->GetTransformMatrix());
+            WorldBox.Transform(Transform->GetWorldTransformMatrix());
 
             if(CurFrustum.Intersects(WorldBox))
             {
