@@ -5,7 +5,6 @@
 
 import VulkanEngine;
 import HotReloadResourceManager;
-import Texture;
 
 import Shader;
 import Entity;
@@ -34,8 +33,6 @@ int main() {
 	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewMaterial);
     
 	TriangleEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(0.0f, 0.0f, -20.0f));
-
-
 
     Engine.Run();
 

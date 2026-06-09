@@ -69,6 +69,13 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(slang fastgltf)
 
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+)
+FetchContent_MakeAvailable(stb)
+
 file(GLOB_RECURSE SLANGC_CANDIDATES
     "${slang_SOURCE_DIR}/**/slangc.exe"
 )
@@ -90,6 +97,7 @@ target_link_libraries(EngineSO PRIVATE
     fastgltf
 )
 
+target_include_directories(EngineSO PRIVATE ${stb_SOURCE_DIR})
 
 
 # Shader compilation pipeline

@@ -8,7 +8,7 @@ module;
 export module ResourceManager;
 
 import ResourceBase;
-import Texture;
+import TextureData;
 import Material;
 import MeshData;
 import ShaderData;
@@ -205,7 +205,7 @@ bool ResourceManager::HasResourceType() const
 template<typename T>
 std::string ResourceManager::GetAssetFolder() const
 {
-	if constexpr (std::is_same_v<T, Texture>) return "textures";
+	if constexpr (std::is_same_v<T, TextureData>) return "textures";
 	else if constexpr (std::is_same_v<T, MeshData>) return "meshes";
 	else if constexpr (std::is_same_v<T, ShaderData>) return "shaders";
 	else if constexpr (std::is_same_v<T, Material>) return "materials";
@@ -216,8 +216,8 @@ std::string ResourceManager::GetAssetFolder() const
 template<typename T>
 std::string ResourceManager::GetFileExtension() const
 {
-	if constexpr (std::is_same_v<T, Texture>) return ".ktx";
-	else if constexpr (std::is_same_v<T, MeshData>) return ".obj";
+	//if constexpr (std::is_same_v<T, TextureData>) return ""; // extension is part of ID
+	if constexpr (std::is_same_v<T, MeshData>) return ".obj";
 	else if constexpr (std::is_same_v<T, ShaderData>) return ".spv";
 	else if constexpr (std::is_same_v<T, Material>) return ".mat";
 	//else if constexpr (std::is_same_v<T, GltfSceneData>) return ""; // extension is part of ID

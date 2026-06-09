@@ -6,7 +6,7 @@ module;
 module ResourceManager;
 
 import ResourceBase;
-import Texture;
+import TextureData;
 import MeshData;
 import ShaderData;
 
@@ -65,7 +65,7 @@ std::type_index ResourceManager::GetAssetType(const std::string& FilePath) const
 
 	if (ParentFolder == "textures")
 	{
-		return std::type_index(typeid(Texture));
+		return std::type_index(typeid(TextureData));
 	}
 	else if (ParentFolder == "meshes")
 	{
