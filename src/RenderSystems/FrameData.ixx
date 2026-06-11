@@ -7,14 +7,13 @@ export module FrameData;
 
 import Geometry;
 import Mesh;
-import Material;
 import CameraUniform;
-import PushConstants;
+import MaterialProperties;
 
 export struct RenderableMesh
 {
     Mesh* GPUMesh = nullptr;
-    MaterialPushData Mat;
+    MaterialProperties Mat;
     glm::mat4   Transform = glm::mat4(1.0f);
     BoundingBox WorldBounds;
 };

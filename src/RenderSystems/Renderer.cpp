@@ -18,6 +18,7 @@ import PostProcessPass;
 import CameraUniform;
 import Scene;
 import ResourceManager;
+import ResourceHandle;
 import VulkanUploader;
 import RenderResourceCache;
 import FrameData;
@@ -194,7 +195,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 		CurrentFrameData.Renderables.push_back({
 			GPUMesh,
-			MC->GetEffectiveMaterialPushData(),
+			MC->GetEffectiveMaterialProperties(),
 			TC->GetWorldTransformMatrix(),
 			WorldBounds
 			});

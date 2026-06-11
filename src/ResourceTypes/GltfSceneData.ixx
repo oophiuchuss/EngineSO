@@ -39,7 +39,7 @@ private:
 		std::vector<glm::vec3> Positions;
 		std::vector<glm::vec2> UVs;
 		std::vector<glm::vec3> Normals;
-		std::vector<uint32_t> Indicies;
+		std::vector<uint32_t> Indices;
 		int MaterialIndex = -1; // -1 if no material
 
 	};
@@ -85,7 +85,7 @@ private:
 		glm::mat4 LocalTransform = glm::mat4(1.0f);
 		int MeshIndex = -1; // -1 if no mesh
 		std::optional<int> ParentIndex;
-		std::vector<int> ChildIndecies;
+		std::vector<int> ChildIndices;
 	};
 
 	// Helper methods

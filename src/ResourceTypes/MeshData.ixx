@@ -14,6 +14,18 @@ export class MeshData : public ResourceBase
 public:
 	explicit MeshData(const std::string& id) : ResourceBase(id) {}
 
+	// Programmatic constructor — data provided directly, no file needed
+	MeshData(
+		const std::string& ID,
+		std::vector<Vertex>   InVertices,
+		std::vector<uint32_t> InIndices)
+		: ResourceBase(ID)
+		, Vertices(std::move(InVertices))
+		, Indices(std::move(InIndices))
+	{
+		MeshBoundingBox = ComputeBoundingBox(Vertices);
+	}
+
 	const std::vector<Vertex>& GetVertices() const { return Vertices; }
 	const std::vector<uint32_t>& GetIndices() const { return Indices; }
 	const BoundingBox& GetBoundingBox() const { return MeshBoundingBox; }

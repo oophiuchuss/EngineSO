@@ -15,6 +15,7 @@ import CameraComponent;
 import MeshData;
 import Material;
 import FlyCameraControllerComponent;
+import ResourceHandle;
 
 int main() {
     VulkanEngine Engine;

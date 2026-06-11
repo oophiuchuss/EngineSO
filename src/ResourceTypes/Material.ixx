@@ -6,7 +6,12 @@ module;
 export module Material;
 
 import ResourceBase;
-import PushConstants;
+import MaterialProperties;
+import TextureData;
+import ResourceHandle;
+
+// Forward declaration
+export template<typename T> class ResourceHandle;
 
 export enum MaterialType
 {
@@ -20,16 +25,37 @@ export class Material : public ResourceBase
 public:
 	explicit Material(const std::string& InResourceID) : ResourceBase(InResourceID) {}
 
+	// Programmatic constructor — fully immutable after construction
+	Material(
+		const std::string& ID,
+		MaterialType                InType,
+		const MaterialProperties&	InProperties,
+		ResourceHandle<TextureData> InAlbedo = {},
+		ResourceHandle<TextureData> InNormal = {},
+		ResourceHandle<TextureData> InMetallicRoughness = {},
+		ResourceHandle<TextureData> InOcclusion = {},
+		ResourceHandle<TextureData> InEmissive = {})
+		: ResourceBase(ID)
+		, Type(InType)
+		, Properties(InProperties)
+		, AlbedoTexture(std::move(InAlbedo))
+		, NormalTexture(std::move(InNormal))
+		, MetallicRoughnessTexture(std::move(InMetallicRoughness))
+		, OcclusionTexture(std::move(InOcclusion))
+		, EmissiveTexture(std::move(InEmissive))
+	{
+	}
+
+	// Getters only
 	inline MaterialType GetType() const { return Type; }
-	inline const MaterialPushData& GetPushData() const { return PushData; }
+	inline const MaterialProperties& GetMaterialProperties() const { return Properties; }
 
-	inline void SetType(const MaterialType InType) { Type = InType; }
-	inline void SetPushData(const MaterialPushData& InPushData) { PushData = InPushData; }
-
-	inline void SetAlbedo(const glm::vec4& Albedo) { PushData.AlbedoColor = Albedo; }
-	inline void SetMetallic(float Metallic) { PushData.Metallic = Metallic; }
-	inline void SetRoughness(float Roughness) { PushData.Roughness = Roughness; }
-	inline void SetEmissiveStrength(float EmissiveStrength) { PushData.EmissiveStrength = EmissiveStrength; }
+	// Texture handles — public read access
+	inline const ResourceHandle<TextureData>& GetAlbedoTexture() const { return AlbedoTexture; }
+	inline const ResourceHandle<TextureData>& GetNormalTexture() const { return NormalTexture; }
+	inline const ResourceHandle<TextureData>& GetMetallicRoughnessTexture() const { return MetallicRoughnessTexture; }
+	inline const ResourceHandle<TextureData>& GetOcclusionTexture() const { return OcclusionTexture; }
+	inline const ResourceHandle<TextureData>& GetEmissiveTexture() const { return EmissiveTexture; }
 
 protected:
 	virtual bool LoadResource(const std::string& FilePath);
@@ -37,5 +63,11 @@ protected:
 
 private:
 	MaterialType Type = MaterialType::PBR;
-	MaterialPushData PushData;
+	MaterialProperties Properties;
+
+	ResourceHandle<TextureData> AlbedoTexture;
+	ResourceHandle<TextureData> NormalTexture;
+	ResourceHandle<TextureData> MetallicRoughnessTexture;
+	ResourceHandle<TextureData> OcclusionTexture;
+	ResourceHandle<TextureData> EmissiveTexture;
 };

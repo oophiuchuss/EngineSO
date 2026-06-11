@@ -10,7 +10,7 @@ import Entity;
 import MeshData;
 import Material;
 import CameraComponent;
-import ResourceManager;
+import ResourceHandle;
 import EventSystem;
 
 export class Ray

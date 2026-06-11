@@ -7,15 +7,12 @@ module;
 
 export module ResourceManager;
 
+import ResourceHandle;
 import ResourceBase;
 import TextureData;
 import Material;
 import MeshData;
 import ShaderData;
-//import GltfSceneData;
-
-// Forward declaration for handle (defined later in same module)
-export template<typename T> class ResourceHandle;
 
 // ------------------------------------------------------------------
 // ResourceData (internal)
@@ -44,6 +41,9 @@ public:
 
 	template<typename T>
 	T* GetResource(const std::string& ResourceID);
+
+	template<typename T>
+	ResourceHandle<T> GetHandle(const std::string& ResourceID);
 
 	ResourceBase* GetResourceByType(const std::string& ResourceID, const std::type_index& ResourceType);
 
@@ -84,32 +84,6 @@ protected:
 // Missing copy / move control for manager
 
 // ------------------------------------------------------------------
-// ResourceHandle (exported, defined after ResourceManager)
-export template<typename T>
-class ResourceHandle {
-public:
-	ResourceHandle() : ResourceManagerPtr(nullptr) {}
-	ResourceHandle(const std::string& InResourceID, ResourceManager* InResourceManager)
-		: ResourceID(InResourceID), ResourceManagerPtr(InResourceManager) {
-	}
-
-	T* Get() const {
-		if (!ResourceManagerPtr) return nullptr;
-		return ResourceManagerPtr->GetResource<T>(ResourceID);
-	}
-
-	bool IsValid() const { return Get() != nullptr; }
-	const std::string& GetResourceID() const { return ResourceID; }
-	T* operator->() const { return Get(); }
-	T& operator*() const { return *Get(); }
-	operator bool() const { return IsValid(); }
-
-private:
-	std::string ResourceID;
-	ResourceManager* ResourceManagerPtr = nullptr;
-};
-
-// ------------------------------------------------------------------
 // ResourceManager method implementations (must be in the same module unit)
 template<typename T, typename... Args>
 ResourceHandle<T> ResourceManager::Load(const std::string& ResourceID, Args&&... args)
@@ -121,7 +95,7 @@ ResourceHandle<T> ResourceManager::Load(const std::string& ResourceID, Args&&...
 
 	if (It != TypeResources.end()) {
 		It->second.RefCount++;
-		return ResourceHandle<T>(ResourceID, this);
+		return ResourceHandle<T>(std::static_pointer_cast<T>(It->second.Resource));
 	}
 
 	// Create new resource
@@ -134,7 +108,7 @@ ResourceHandle<T> ResourceManager::Load(const std::string& ResourceID, Args&&...
 	}
 
 	TypeResources[ResourceID] = { Resource, 1 };
-	return ResourceHandle<T>(ResourceID, this);
+	return ResourceHandle<T>(Resource);
 }
 
 template<typename T, typename ...Args>
@@ -145,21 +119,23 @@ ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID,
 	auto& TypeResources = Resources[std::type_index(typeid(T))];
 	auto It = TypeResources.find(ResourceID);
 
-	if (It != TypeResources.end()) {
+	if (It != TypeResources.end()) 
+	{
 		It->second.RefCount++;
-		return ResourceHandle<T>(ResourceID, this);
+		return ResourceHandle<T>(std::static_pointer_cast<T>(It->second.Resource));
 	}
 
 	// Create new resource
 	auto Resource = std::make_shared<T>(ResourceID);
-	if (!Resource->LoadFromMemory(Data)) {
+	if (!Resource->LoadFromMemory(Data)) 
+	{
 
 		// TODO: Shouldn't be destroyed if load failed?
 		return ResourceHandle<T>();
 	}
 
 	TypeResources[ResourceID] = { Resource, 1 };
-	return ResourceHandle<T>(ResourceID, this);
+	return ResourceHandle<T>(Resource);
 }
 
 template<typename T>
@@ -177,6 +153,22 @@ T* ResourceManager::GetResource(const std::string& ResourceID)
 
 	// Resource not found or invalid
 	return nullptr;
+}
+
+template<typename T>
+ResourceHandle<T> ResourceManager::GetHandle(const std::string& ResourceID)
+{
+	static_assert(std::is_base_of_v<ResourceBase, T>, "T must derive from ResourceBase");
+
+	auto& TypeResources = Resources[std::type_index(typeid(T))];
+	auto It = TypeResources.find(ResourceID);
+
+	if (It != TypeResources.end())
+	{
+		return ResourceHandle<T>(std::static_pointer_cast<T>(It->second.Resource));
+	}
+
+	return ResourceHandle<T>(); // not found
 }
 
 template<typename T>

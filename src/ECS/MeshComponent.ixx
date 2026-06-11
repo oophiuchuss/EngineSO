@@ -7,10 +7,11 @@ module;
 export module MeshComponent;
 
 import Component;
-import ResourceManager;
+import ResourceHandle;
 import MeshData;
 import Material;
-import PushConstants; // TODO: potentially should be having special place for MaterialPushData struct so to not import whole push constants header module
+import MaterialProperties; 
+
 
 export class MeshComponent : public ComponentBase
 {
@@ -23,7 +24,7 @@ public:
 	{
 		if (const Material* Mat = MaterialHandle.Get())
 		{
-			MaterialInstanceData = Mat->GetPushData();
+			MaterialInstanceData = Mat->GetMaterialProperties();
 		}
 	}
 
@@ -37,10 +38,10 @@ public:
 	void SetEmissiveStrength(float Value) { MaterialInstanceData.EmissiveStrength = Value; }
 
 	// Returns per-instance data — initialized from material, overridable per entity
-	const MaterialPushData& GetEffectiveMaterialPushData() const { return MaterialInstanceData; }
+	const MaterialProperties& GetEffectiveMaterialProperties() const { return MaterialInstanceData; }
 
 private:
 	ResourceHandle<MeshData> MeshHandle;
 	ResourceHandle<Material> MaterialHandle;
-	MaterialPushData         MaterialInstanceData;  // per-entity copy, starts from material defaults
+	MaterialProperties MaterialInstanceData;  // per-entity copy, starts from material defaults
 };

@@ -44,3 +44,18 @@ export struct Vertex
 	glm::vec2 UV = glm::vec2(0.0f);
 	glm::vec3 Normal = glm::vec3(0.0f, 0.0f, 0.0f);
 };
+
+export BoundingBox ComputeBoundingBox(const std::vector<Vertex>& Vertices)
+{
+    BoundingBox Bounds;
+    Bounds.Min = glm::vec3(FLT_MAX);
+    Bounds.Max = glm::vec3(-FLT_MAX);
+
+    for (const auto& V : Vertices)
+    {
+        Bounds.Min = glm::min(Bounds.Min, V.Position);
+        Bounds.Max = glm::max(Bounds.Max, V.Position);
+    }
+
+    return Bounds;
+}

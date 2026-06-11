@@ -10,6 +10,9 @@ import Geometry;
 
 bool MeshData::LoadResource(const std::string& FilePath)
 {
+	// Already populated via programmatic constructor
+	if (!Vertices.empty()) return true;
+
 	// TODO: implement actual mesh loading from file (e.g. using tinyobjloader for .obj files, or a custom binary format for better performance)
 	// For now, we will just create a simple triangle mesh for testing purposes
 	Vertices = {
@@ -19,9 +22,7 @@ bool MeshData::LoadResource(const std::string& FilePath)
 	};
 	Indices = { 0, 1, 2 };
 
-	MeshBoundingBox = BoundingBox();
-	MeshBoundingBox.Min = glm::vec3(-0.5f, -0.5f, 0.0f);
-	MeshBoundingBox.Max = glm::vec3(0.5f, 0.5f, 0.0f);
+	MeshBoundingBox = ComputeBoundingBox(Vertices);
 	
 	return true;
 }

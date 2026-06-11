@@ -7,6 +7,11 @@ module Material;
 
 bool Material::LoadResource(const std::string& FilePath)
 {
+    // Already populated via programmatic constructor
+    if (Type != MaterialType::PBR || Properties.AlbedoColor != glm::vec4(0.0f))
+        return true;
+
+
     // TODO: implement proper .mat file parsing
     // For now just succeeds with default values so materials
     // can be created programmatically without a file
@@ -16,5 +21,10 @@ bool Material::LoadResource(const std::string& FilePath)
 void Material::UnloadResource()
 {
     Type = MaterialType::PBR;
-    PushData = MaterialPushData{};
+    Properties = MaterialProperties{};
+    AlbedoTexture = {};
+    NormalTexture = {};
+    MetallicRoughnessTexture = {};
+    OcclusionTexture = {};
+    EmissiveTexture = {};
 }

@@ -8,6 +8,7 @@ module;
 export module AsyncResourceLoader;
 
 import ResourceManager;
+import ResourceHandle;
 
 export class AsyncResourceLoader
 {

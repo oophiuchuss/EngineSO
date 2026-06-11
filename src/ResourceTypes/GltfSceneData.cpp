@@ -17,10 +17,16 @@ module;
 
 module GltfSceneData;
 
+
+import Geometry;
+import Material;
+import TextureData;
+import MeshData;
+import MaterialProperties;
+
 bool GltfSceneData::LoadResource(const std::string& FilePath)
 {
 	// fastgltf handles both .gltf and .glb  transparently
-	// TODO: add figuring out extensions
 	fastgltf::Parser Parser;
 	
 	fastgltf::GltfFileStream FileStream(FilePath.c_str());
@@ -282,16 +288,175 @@ void GltfSceneData::Instantiate()
 
 std::vector<std::string> GltfSceneData::RegisterAllTextures()
 {
-	return std::vector<std::string>();
+	std::vector<std::string> TextureIDs;
+	TextureIDs.reserve(RawTextures.size());
+
+	for (size_t i = 0; i < RawTextures.size(); ++i)
+	{
+		auto& Raw = RawTextures[i];
+
+		if (Raw.bIsEmbedded)
+		{
+			// Embedded — load from memory, ID is scene-scoped
+			std::string TexID = GetResourceID() + "_tex_" + std::to_string(i);
+			ResourceManagerRef.LoadFromMemory<TextureData>(TexID, Raw.EmbeddedData);
+			TextureIDs.push_back(TexID);
+		}
+		else
+		{
+			// External — use file path as ID, consistent with direct loads
+			ResourceManagerRef.Load<TextureData>(Raw.FilePath);
+			TextureIDs.push_back(Raw.FilePath);
+		}
+	}
+
+	return TextureIDs;
 }
 
 std::vector<std::string> GltfSceneData::RegisterAllMaterials(const std::vector<std::string>& TextureIDs)
 {
-	return std::vector<std::string>();
+	std::vector<std::string> MaterialIDs;
+	MaterialIDs.reserve(RawMaterials.size());
+
+	auto GetTexHandle = [&](int Idx) -> ResourceHandle<TextureData>
+		{
+			if (Idx >= 0 && Idx < static_cast<int>(TextureIDs.size()))
+			{
+				return ResourceManagerRef.GetHandle<TextureData>(TextureIDs[Idx]);
+			}
+			
+			return {};
+		};
+
+	for (size_t i = 0; i < RawMaterials.size(); ++i)
+	{
+		auto& Raw = RawMaterials[i];
+		std::string MatID = GetResourceID() + "_mat_" + std::to_string(i);
+
+		MaterialProperties MatProperties;
+		MatProperties.AlbedoColor = Raw.AlbedoFactor;
+		MatProperties.Metallic = Raw.MetallicFactor;
+		MatProperties.Roughness = Raw.RoughnessFactor;
+		MatProperties.EmissiveStrength = glm::length(Raw.EmissiveFactor);
+
+		// All data including textures passed to constructor — immutable after
+		ResourceManagerRef.Load<Material>(
+			MatID,
+			MaterialType::PBR,
+			MatProperties,
+			GetTexHandle(Raw.AlbedoTextureIndex),
+			GetTexHandle(Raw.NormalTextureIndex),
+			GetTexHandle(Raw.MetallicRoughnessTextureIndex),
+			GetTexHandle(Raw.OcclusionTextureIndex),
+			GetTexHandle(Raw.EmissiveTextureIndex));
+
+		MaterialIDs.push_back(MatID);
+	}
+
+	return MaterialIDs;
 }
 
 void GltfSceneData::RegisterAllMeshes(const std::vector<std::string>& MaterialIDs)
 {
+	// Maps node index -> list of MeshEntry indices it produced
+	// Needed to wire parent/child relationships after all entries are built
+	std::vector<std::vector<int>> NodeToEntriesIndices(RawNodes.size());
+
+	// Create MeshData and MeshEntries for every node with a mesh
+	for (size_t NodeIdx = 0; NodeIdx < RawNodes.size(); NodeIdx++)
+	{
+		auto& Node = RawNodes[NodeIdx];
+		if (Node.MeshIndex < 0)
+		{
+			continue; // Skip nodes without meshes
+		}
+
+		auto& RawMesh = RawMeshes[Node.MeshIndex];
+
+		for (size_t PrimIdx = 0; PrimIdx < RawMesh.Primitives.size(); PrimIdx++)
+		{
+			auto& Prim = RawMesh.Primitives[PrimIdx];
+
+			// Unique ID per primitive
+			std::string MeshID = GetResourceID() + "_mesh_" + std::to_string(Node.MeshIndex) + "_prim_" + std::to_string(PrimIdx);
+
+			// Interleave positions/UVs/normals into Vertex array
+			std::vector<Vertex> Vertices(Prim.Positions.size());
+			for (size_t v = 0; v < Prim.Positions.size(); v++)
+			{
+				Vertices[v].Position = Prim.Positions[v];
+
+				if (v < Prim.UVs.size())
+				{
+					Vertices[v].UV = Prim.UVs[v];
+				}
+
+				if (v < Prim.Normals.size())
+				{
+					Vertices[v].Normal = Prim.Normals[v];
+				}
+			}
+
+			// Register MeshData — bounding box computed in constructor
+			ResourceManagerRef.Load<MeshData>(
+				MeshID,
+				std::move(Vertices),
+				Prim.Indices);
+
+			// Resolve material — fall back to "default" if none assigned
+			std::string MatID = "default";
+
+			if (Prim.MaterialIndex >= 0 && Prim.MaterialIndex < static_cast<int>(MaterialIDs.size()))
+			{
+				MatID = MaterialIDs[Prim.MaterialIndex];
+			}
+					
+			// Build entry, hierarchy resolved later
+
+			SceneMeshEntry Entry;
+			Entry.MeshID = MeshID;
+			Entry.MaterialID = MatID;
+			Entry.LocalTransform = Node.LocalTransform;
+			Entry.Name = RawMesh.Name;
+
+			if (RawMesh.Primitives.size() > 1)
+			{
+				Entry.Name = RawMesh.Name + "_prim_" + std::to_string(PrimIdx);
+			}
+
+			int EntryIndex = static_cast<int>(MeshEntries.size());
+			NodeToEntriesIndices[NodeIdx].push_back(EntryIndex);
+			MeshEntries.push_back(std::move(Entry));
+		}
+	}
+
+	// Resolve parent / child links between MeshEntries
+	for (size_t NodeIdx = 0; NodeIdx < RawNodes.size(); NodeIdx++)
+	{
+		auto& Node = RawNodes[NodeIdx];
+
+		for (int EntryIdx : NodeToEntriesIndices[NodeIdx])
+		{
+			// Parent — find closest ancestor node that produced entries
+			if (Node.ParentIndex.has_value())
+			{
+				int ParentNodeIdx = Node.ParentIndex.value();
+				if (!NodeToEntriesIndices[ParentNodeIdx].empty())
+				{
+					MeshEntries[EntryIdx].ParentIndex = NodeToEntriesIndices[ParentNodeIdx].front();
+				}
+			}
+
+			// Children
+			for (int ChildNodeIdx : Node.ChildIndices)
+			{
+				for (int ChildEntryIdx : NodeToEntriesIndices[ChildNodeIdx])
+				{
+					MeshEntries[EntryIdx].ChildIndices.push_back(ChildEntryIdx);
+				}
+			}
+		}
+	}
 }
 
 void GltfSceneData::UnloadResource()
