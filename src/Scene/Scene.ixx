@@ -6,12 +6,14 @@ module;
 
 export module Scene;
 
+import SceneData;
 import Entity;
 import MeshData;
 import Material;
 import CameraComponent;
 import ResourceHandle;
 import EventSystem;
+import ResourceManager;
 
 export class Ray
 {
@@ -34,6 +36,8 @@ public:
 	Scene(EventSystem* InEventSystem) : EventSystemPtr(InEventSystem) {}
 
 	void Update(float DeltaTime);
+
+	void InstantiateSceneFromData(SceneData& Data, ResourceManager& RM, const glm::mat4& RootTransform = glm::mat4(1.0f));
 
 	// Entity factories
 	Entity* CreateEntity(const std::string& Name);

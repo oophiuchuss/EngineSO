@@ -2,11 +2,30 @@ module;
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include<glm/gtc/quaternion.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
 module TransformComponent;
 
 import Entity;
+
+void TransformComponent::SetTransformFromMatrix(const glm::mat4& Transform)
+{
+	glm::vec3 SkewUnused;
+	glm::vec4 PerspectiveUnused;
+
+	glm::decompose(
+		Transform,
+		Scale,
+		Rotation,
+		Position,
+		SkewUnused,
+		PerspectiveUnused);
+
+	// glm::decompose returns conjugate quaternion
+	Rotation = glm::conjugate(Rotation);
+	bLocalDirty = true;
+}
 
 void TransformComponent::SetPosition(const glm::vec3& InPosition)
 {

@@ -11,10 +11,12 @@ export class TransformComponent : public ComponentBase
 {
 
 public:
+	void SetTransformFromMatrix(const glm::mat4& Transform);
+
 	void SetPosition(const glm::vec3& InPosition);
 	void SetRotation(const glm::quat& InRotation);
 	void SetScale(const glm::vec3& InScale);
-	
+
 	const glm::vec3& GetPosition() const { return Position; }
 	const glm::quat& GetRotation() const { return Rotation; }
 	const glm::vec3& GetScale() const { return Scale; }

@@ -26,6 +26,69 @@ void Scene::Update(float DeltaTime)
 	}
 }
 
+void Scene::InstantiateSceneFromData(SceneData& Data, ResourceManager& RM, const glm::mat4& RootTransform)
+{
+	if (!Data.IsInstantiated())
+	{
+		Data.Instantiate();
+	}
+
+	const auto& Entries = Data.GetMeshEntries();
+	if (Entries.empty())
+	{
+		return;
+	}
+
+	// Create all entities flat, store entry index -> entity mapping
+	std::vector<Entity*> EntryToEntity(Entries.size(), nullptr);
+
+	for (size_t i = 0; i < Entries.size(); ++i)
+	{
+		const SceneMeshEntry& Entry = Entries[i];
+
+		Entity* E = CreateEntity(Entry.Name);
+
+		// Apply root transform to root entries — children inherit via hierarchy
+		glm::mat4 FinalLocalTransform = RootTransform * Entry.LocalTransform;
+		if (Entry.ParentIndex.has_value())
+		{
+			FinalLocalTransform = Entry.LocalTransform;
+		}
+
+		// Add transform component with local transform
+		auto* TC = E->AddComponent<TransformComponent>();
+		TC->SetTransformFromMatrix(FinalLocalTransform);
+
+		// Get handles directly from ResourceManager via Scene's reference
+		ResourceHandle<MeshData> MH = RM.GetHandle<MeshData>(Entry.MeshID);
+		ResourceHandle<Material> MatH = RM.GetHandle<Material>(Entry.MaterialID);
+
+		E->AddComponent<MeshComponent>(MH, MatH);
+
+		EntryToEntity[i] = E;
+	}
+
+	// Wire parent/child relationships
+	for (size_t i = 0; i < Entries.size(); ++i)
+	{
+		const SceneMeshEntry& Entry = Entries[i];
+		Entity* E = EntryToEntity[i];
+
+		if (Entry.ParentIndex.has_value())
+		{
+			int ParentIdx = Entry.ParentIndex.value();
+			if (ParentIdx >= 0 && ParentIdx < static_cast<int>(EntryToEntity.size()))
+			{
+				Entity* Parent = EntryToEntity[ParentIdx];
+				if (Parent)
+				{
+					Parent->AddChild(E);
+				}
+			}
+		}
+	}
+}
+
 Entity* Scene::CreateEntity(const std::string& Name)
 {
 	std::string UniqueName = GenerateUniqueEntityName(Name);

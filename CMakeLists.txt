@@ -18,6 +18,7 @@ target_compile_definitions(EngineSO PRIVATE
 
     GLM_FORCE_DEPTH_ZERO_TO_ONE
     GLM_FORCE_RIGHT_HANDED
+    GLM_ENABLE_EXPERIMENTAL 
 )
 
 # Dependencies
