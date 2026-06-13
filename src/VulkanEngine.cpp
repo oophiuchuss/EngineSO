@@ -7,6 +7,7 @@ module;
 
 module VulkanEngine;
 
+import Paths;
 import Renderer;
 
 import EventSystem;
@@ -18,10 +19,14 @@ import ResourceManager;
 
 VulkanEngine::VulkanEngine()
 {
+    // Set paths first
+    Paths::SetAssetsRoot(std::string(SOURCE_DIR) + "/assets/");
+    Paths::SetShadersRoot(std::string(BUILD_DIR) + "/shaders/");
+    Paths::SetCacheRoot(std::string(BUILD_DIR) + "/cache/");
+
 	EventSystemInstance = std::make_unique<EventSystem>();
 
-    WindowSystemInstance = std::make_unique<WindowSystem>(
-        EventSystemInstance.get(), 1280, 720, "EngineSO");
+    WindowSystemInstance = std::make_unique<WindowSystem>(EventSystemInstance.get(), 1280, 720, "EngineSO");
 
     ResourceManagerInstance = std::make_unique<ResourceManager>();
 

@@ -31,6 +31,9 @@ public:
 	inline const std::vector<SceneMeshEntry>& GetMeshEntries() const { return MeshEntries; }
 	inline bool IsInstantiated() const { return bIsInstantiated; }
 
+	static std::string_view AssetFolder() { return "scenes"; }
+	static std::string_view FileExtension() { return ""; }
+
 protected:
 	// Pure virtual — subclass knows the format, not SceneData
 	bool LoadResource(const std::string& FilePath) override = 0;

@@ -4,6 +4,7 @@ module;
 #include <vector>
 #include <optional>
 #include <stdexcept>
+#include <iostream>
 #include <filesystem>
 #include <cstring>
 #include <glm/glm.hpp>
@@ -17,7 +18,7 @@ module;
 
 module GltfSceneData;
 
-
+import ResourceHandle;
 import Geometry;
 import Material;
 import TextureData;
@@ -26,6 +27,8 @@ import MaterialProperties;
 
 bool GltfSceneData::LoadResource(const std::string& FilePath)
 {
+	std::cout << "[GltfSceneData] Loading: " << FilePath << "\n";
+
 	// fastgltf handles both .gltf and .glb  transparently
 	fastgltf::Parser Parser;
 	
@@ -54,45 +57,96 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 	fastgltf::Asset& Asset = LoadResult.get();
 
 	// Parse textures/images
-
 	RawTextures.reserve(Asset.images.size());
 
-	for (auto& Image : Asset.images)
+	for (size_t i = 0; i < Asset.images.size(); ++i)
 	{
+		auto& Image = Asset.images[i];
 		RawTexture Raw;
-		Raw.Name = std::string(Image.name);
+
+		// Use index as fallback name if image has no name
+		Raw.Name = Image.name.empty() ? "texture_" + std::to_string(i) : std::string(Image.name);
 
 		std::visit(fastgltf::visitor
 			{
+				// External file referenced by URI
 				[&](fastgltf::sources::URI& URI)
 				{
-					// External file - store path relative to glTF directory
 					Raw.FilePath = std::filesystem::path(FilePath)
 						.parent_path()
 						.append(URI.uri.path())
 						.string();
-
 					Raw.bIsEmbedded = false;
 				},
-				[&](fastgltf::sources::BufferView& BV)
-				{
-					// Embedded in buffer - copy bytes out
-					auto& BufferView = Asset.bufferViews[BV.bufferViewIndex];
-					auto& Buffer = Asset.buffers[BufferView.bufferIndex];
 
-					std::visit(fastgltf::visitor
-						{
-							[&](fastgltf::sources::Array& Arr)
-							{
-								const uint8_t* Start = reinterpret_cast<uint8_t*>(Arr.bytes.data() + BufferView.byteOffset);
-								Raw.EmbeddedData.assign(Start, Start + BufferView.byteLength);
-								Raw.bIsEmbedded = true;
-							},
-							[&](auto& Arr) {} // other buffer sources — ignore for now
-						}, Buffer.data);
-				},
-				[&](auto&) {} // other image sources — ignore for now
-			},Image.data);
+			// Embedded via buffer view
+			[&](fastgltf::sources::BufferView& BV)
+			{
+				auto& BufferView = Asset.bufferViews[BV.bufferViewIndex];
+				auto& Buffer = Asset.buffers[BufferView.bufferIndex];
+
+				std::visit(fastgltf::visitor
+				{
+					[&](fastgltf::sources::Array& Arr)
+					{
+						const uint8_t* Start = reinterpret_cast<const uint8_t*>(
+							Arr.bytes.data()) + BufferView.byteOffset;
+						Raw.EmbeddedData.assign(Start, Start + BufferView.byteLength);
+						Raw.bIsEmbedded = true;
+					},
+					[&](fastgltf::sources::Vector& Vec)
+					{
+						const uint8_t* Start = reinterpret_cast<const uint8_t*>(
+							Vec.bytes.data()) + BufferView.byteOffset;
+						Raw.EmbeddedData.assign(Start, Start + BufferView.byteLength);
+						Raw.bIsEmbedded = true;
+					},
+					[&](fastgltf::sources::ByteView& BView)
+					{
+						const uint8_t* Start = reinterpret_cast<const uint8_t*>(
+							BView.bytes.data()) + BufferView.byteOffset;
+						Raw.EmbeddedData.assign(Start, Start + BufferView.byteLength);
+						Raw.bIsEmbedded = true;
+					},
+					[&](auto& Unknown)
+					{
+						std::cerr << "[GltfSceneData] Unhandled buffer source type for image: "
+								  << Raw.Name << "\n";
+					}
+				}, Buffer.data);
+			},
+
+			// Image data directly in array
+			[&](fastgltf::sources::Array& Arr)
+			{
+				const uint8_t* Start = reinterpret_cast<const uint8_t*>(Arr.bytes.data());
+				Raw.EmbeddedData.assign(Start, Start + Arr.bytes.size());
+				Raw.bIsEmbedded = true;
+			},
+
+			// Image data in vector
+			[&](fastgltf::sources::Vector& Vec)
+			{
+				const uint8_t* Start = reinterpret_cast<const uint8_t*>(Vec.bytes.data());
+				Raw.EmbeddedData.assign(Start, Start + Vec.bytes.size());
+				Raw.bIsEmbedded = true;
+			},
+
+			// ByteView — slice into existing memory
+			[&](fastgltf::sources::ByteView& BView)
+			{
+				const uint8_t* Start = reinterpret_cast<const uint8_t*>(BView.bytes.data());
+				Raw.EmbeddedData.assign(Start, Start + BView.bytes.size());
+				Raw.bIsEmbedded = true;
+			},
+
+			// Fallback — log so we know what we're missing
+			[&](auto& Unknown)
+			{
+				std::cerr << "[GltfSceneData] Unhandled image source type for image: "
+						  << Raw.Name << " — texture will be missing\n";
+			}
+			}, Image.data);
 
 		RawTextures.push_back(std::move(Raw));
 	}
@@ -253,6 +307,13 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 	}
 
 	// TODO: parse light
+	
+	std::cout << "[GltfSceneData] Parsed: "
+		<< RawMeshes.size() << " meshes, "
+		<< RawMaterials.size() << " materials, "
+		<< RawTextures.size() << " textures, "
+		<< RawNodes.size() << " nodes\n";
+
 	return true;
 }
 
@@ -280,19 +341,29 @@ glm::mat4 GltfSceneData::ResolveNodeTransform(const fastgltf::Node& Node) const
 
 void GltfSceneData::Instantiate()
 {
+	std::cout << "[GltfSceneData] Instantiating: " << GetResourceID() << "\n";
+
 	auto TexutreIDs = RegisterAllTextures();
 	auto MaterialIDs = RegisterAllMaterials(TexutreIDs);
 	RegisterAllMeshes(MaterialIDs);
+
+	std::cout << "[GltfSceneData] Instantiation complete\n";
 	bIsInstantiated = true;
 }
 
 std::vector<std::string> GltfSceneData::RegisterAllTextures()
 {
+	std::cout << "[GltfSceneData] Registering " << RawTextures.size() << " textures...\n";
+
 	std::vector<std::string> TextureIDs;
 	TextureIDs.reserve(RawTextures.size());
 
 	for (size_t i = 0; i < RawTextures.size(); ++i)
 	{
+		std::cout << "[GltfSceneData] Texture " << (i + 1)
+			<< "/" << RawTextures.size()
+			<< ": " << RawTextures[i].Name << "\n";
+
 		auto& Raw = RawTextures[i];
 
 		if (Raw.bIsEmbedded)
@@ -310,11 +381,15 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 		}
 	}
 
+	std::cout << "[GltfSceneData] Textures done\n";
+
 	return TextureIDs;
 }
 
 std::vector<std::string> GltfSceneData::RegisterAllMaterials(const std::vector<std::string>& TextureIDs)
 {
+	std::cout << "[GltfSceneData] Registering " << RawMaterials.size() << " materials...\n";
+
 	std::vector<std::string> MaterialIDs;
 	MaterialIDs.reserve(RawMaterials.size());
 
@@ -353,11 +428,16 @@ std::vector<std::string> GltfSceneData::RegisterAllMaterials(const std::vector<s
 		MaterialIDs.push_back(MatID);
 	}
 
+	std::cout << "[GltfSceneData] Materials done\n";
+
 	return MaterialIDs;
 }
 
 void GltfSceneData::RegisterAllMeshes(const std::vector<std::string>& MaterialIDs)
 {
+	std::cout << "[GltfSceneData] Registering meshes from "
+		<< RawNodes.size() << " nodes...\n";
+
 	// Maps node index -> list of MeshEntry indices it produced
 	// Needed to wire parent/child relationships after all entries are built
 	std::vector<std::vector<int>> NodeToEntriesIndices(RawNodes.size());
@@ -457,6 +537,9 @@ void GltfSceneData::RegisterAllMeshes(const std::vector<std::string>& MaterialID
 			}
 		}
 	}
+
+	std::cout << "[GltfSceneData] Meshes done: "
+		<< MeshEntries.size() << " renderable entries\n";
 }
 
 void GltfSceneData::UnloadResource()

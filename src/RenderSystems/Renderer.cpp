@@ -9,6 +9,7 @@ module;
 
 module Renderer;
 
+import Paths;
 import Rendergraph;
 import CullingSystem;
 import Entity;
@@ -70,7 +71,7 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 		Device, 
 		PhysicalDevice, 
 		*CameraUBO->GetDescriptorSetLayout(),
-		"PipelineCache.bin"); // TODO: path should be provided by something else, and not hardcoded in the renderer
+		Paths::GetCacheRoot() + "pipeline.bin");
 
 	// Create command pool and buffers
 	vk::CommandPoolCreateInfo PoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, 
@@ -161,7 +162,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 		CameraUniformData Data;
 		Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
-		Data.CameraPos = glm::vec4(CamTrans->GetPosition(), 1.0f);
+		Data.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
 
 		CameraUBO->Update(Data);
 	}

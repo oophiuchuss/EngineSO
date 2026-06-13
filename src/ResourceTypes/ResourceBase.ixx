@@ -5,6 +5,8 @@ module;
 
 export module ResourceBase;
 
+import Paths;
+
 export class ResourceBase
 {
 public:
@@ -43,6 +45,12 @@ public:
 		UnloadResource();
 		bIsLoaded = false;
 	}
+
+	// Subclasses override to declare where they live
+	// Non-virtual intentional — called via T:: in ResourceManager template
+	static std::string_view AssetFolder() { return ""; }
+	static std::string_view FileExtension() { return ""; }
+	static std::string GetRootPath() { return Paths::GetAssetsRoot(); }
 
 protected:
 	virtual ~ResourceBase() = default; // Ensure proper cleanup in derived classes

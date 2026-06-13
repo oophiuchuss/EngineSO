@@ -16,6 +16,7 @@ import MeshData;
 import Material;
 import FlyCameraControllerComponent;
 import ResourceHandle;
+import GltfSceneData;
 
 int main() {
     VulkanEngine Engine;
@@ -26,14 +27,21 @@ int main() {
 	Engine.GetMainScene()->SetActiveCameraEntity(MainCamera);
 
 
-    ResourceHandle<Material> NewMaterial = Engine.GetResourceManager()->Load<Material>("basic_material");
+/*    ResourceHandle<Material> NewMaterial = Engine.GetResourceManager()->Load<Material>("basic_material");
 
     // Triangle mesh (procedural)
     ResourceHandle<MeshData> NewMeshData = Engine.GetResourceManager()->Load<MeshData>("Triangle");
     
 	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewMaterial);
     
-	TriangleEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(0.0f, 0.0f, -20.0f));
+	TriangleEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(0.0f, 0.0f, -20.0f));*/
+
+    auto SceneDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("main_sponza/NewSponza_Main_glTF_003.gltf", *Engine.GetResourceManager());
+
+    if (SceneDataHandle.Get())
+    {
+        Engine.GetMainScene()->InstantiateSceneFromData(*(SceneDataHandle.Get()), *Engine.GetResourceManager());
+    }
 
     Engine.Run();
 

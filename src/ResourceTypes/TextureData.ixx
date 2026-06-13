@@ -34,6 +34,10 @@ public:
 	inline uint32_t GetChannels() const { return Info.Channels; }
 	inline TextureColorSpace GetColorSpace() const { return Info.ColorSpace; }
 
+	// Extension empty — ID includes extension e.g. "albedo.png"
+	static std::string_view AssetFolder() { return "textures"; }
+	static std::string_view FileExtension() { return ""; }
+
 protected:
 	bool LoadResource(const std::string& FilePath) override;
 	bool LoadResourceFromMemory(const std::vector<uint8_t>& Data) override;

@@ -17,9 +17,14 @@ public:
 	void SetRotation(const glm::quat& InRotation);
 	void SetScale(const glm::vec3& InScale);
 
-	const glm::vec3& GetPosition() const { return Position; }
-	const glm::quat& GetRotation() const { return Rotation; }
-	const glm::vec3& GetScale() const { return Scale; }
+	const glm::vec3& GetLocalPosition() const { return Position; }
+	const glm::quat& GetLocalRotation() const { return Rotation; }
+	const glm::vec3& GetLocalScale() const { return Scale; }
+
+	// World space — accounts for full parent chain
+	glm::vec3 GetWorldPosition() const;
+	glm::quat GetWorldRotation() const;
+	glm::vec3 GetWorldScale() const;
 
 	const glm::mat4& GetLocalTransformMatrix() const;
 	glm::mat4 GetWorldTransformMatrix() const;

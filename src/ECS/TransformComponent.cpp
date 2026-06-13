@@ -45,6 +45,36 @@ void TransformComponent::SetScale(const glm::vec3& InScale)
 	bLocalDirty = true;
 }
 
+glm::vec3 TransformComponent::GetWorldPosition() const
+{
+	// Column 3 of world matrix is the translation
+	return glm::vec3(GetWorldTransformMatrix()[3]);
+}
+
+glm::vec3 TransformComponent::GetWorldScale() const
+{
+	glm::mat4 World = GetWorldTransformMatrix();
+
+	// Length of each column vector gives the scale on that axis
+	return glm::vec3(
+		glm::length(glm::vec3(World[0])),
+		glm::length(glm::vec3(World[1])),
+		glm::length(glm::vec3(World[2])));
+}
+
+glm::quat TransformComponent::GetWorldRotation() const
+{
+	glm::mat4 World = GetWorldTransformMatrix();
+	glm::vec3 S = GetWorldScale();
+
+	// Remove scale from rotation columns to get pure rotation matrix
+	glm::mat3 RotMat(
+		glm::vec3(World[0]) / S.x,
+		glm::vec3(World[1]) / S.y,
+		glm::vec3(World[2]) / S.z);
+
+	return glm::quat_cast(RotMat);
+}
 const glm::mat4& TransformComponent::GetLocalTransformMatrix() const
 {
 	if (bLocalDirty)

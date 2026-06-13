@@ -30,6 +30,9 @@ public:
 	const std::vector<uint32_t>& GetIndices() const { return Indices; }
 	const BoundingBox& GetBoundingBox() const { return MeshBoundingBox; }
 
+	static std::string_view AssetFolder() { return "meshes"; }
+	static std::string_view FileExtension() { return ".obj"; }
+
 protected:
 	bool LoadResource(const std::string& FilePath) override;
 	void UnloadResource() override;

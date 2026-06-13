@@ -45,8 +45,8 @@ glm::mat4 CameraComponent::GetViewMatrix() const
 	auto TransformComp = GetOwner()->GetComponent<TransformComponent>();
 	if (TransformComp)
 	{
-		glm::vec3 Position = TransformComp->GetPosition();
-		glm::quat Rotation = TransformComp->GetRotation();
+		glm::vec3 Position = TransformComp->GetWorldPosition();
+		glm::quat Rotation = TransformComp->GetWorldRotation();
 
 		glm::vec3 Forward = Rotation * glm::vec3(0.0f, 0.0f, -1.0f);
 		glm::vec3 Up = Rotation * glm::vec3(0.0f, 1.0f, 0.0f);

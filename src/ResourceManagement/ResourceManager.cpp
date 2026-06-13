@@ -60,6 +60,7 @@ ResourceBase* ResourceManager::GetResourceByType(const std::string& ResourceID, 
 
 std::type_index ResourceManager::GetAssetType(const std::string& FilePath) const
 {
+	// TODO: rework using Paths module
 	std::filesystem::path Path(FilePath);
 	std::string ParentFolder = Path.parent_path().filename().string(); 
 

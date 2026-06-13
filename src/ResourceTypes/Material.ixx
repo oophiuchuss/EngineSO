@@ -57,6 +57,9 @@ public:
 	inline const ResourceHandle<TextureData>& GetOcclusionTexture() const { return OcclusionTexture; }
 	inline const ResourceHandle<TextureData>& GetEmissiveTexture() const { return EmissiveTexture; }
 
+	static std::string_view AssetFolder() { return "materials"; }
+	static std::string_view FileExtension() { return ".mat"; }
+
 protected:
 	virtual bool LoadResource(const std::string& FilePath);
 	virtual void UnloadResource();

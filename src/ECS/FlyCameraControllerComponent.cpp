@@ -25,7 +25,7 @@ void FlyCameraControllerComponent::OnInitialize()
 	// Seed yaw/pitch from the current Transform rotation so the camera doesn't jump
 	if (auto* Transform = GetOwner()->GetComponent<TransformComponent>())
 	{
-		glm::quat R = Transform->GetRotation();
+		glm::quat R = Transform->GetWorldRotation();
 		// Convert quaternion to Euler angles (yaw around world Y, pitch around local X)
 		glm::vec3 Euler = glm::eulerAngles(R);
 		Yaw = glm::degrees(Euler.y);   // GLM's eulerAngles returns radians; Y is yaw, X is pitch, Z is roll
@@ -54,7 +54,7 @@ void FlyCameraControllerComponent::Update(float DeltaTime)
 	if (bMouseHold)
 	{
 		glm::vec3 Velocity(0.0f);
-		glm::quat Rotation = Transform->GetRotation();
+		glm::quat Rotation = Transform->GetWorldRotation();
 		glm::vec3 Forward = Rotation * glm::vec3(0.0f, 0.0f, -1.0f);
 		glm::vec3 Right = Rotation * glm::vec3(1.0f, 0.0f, 0.0f);
 		glm::vec3 Up = Rotation * glm::vec3(0.0f, 1.0f, 0.0f);
@@ -78,7 +78,7 @@ void FlyCameraControllerComponent::Update(float DeltaTime)
 			Velocity = glm::normalize(Velocity) * MovementSpeed * DeltaTime;
 		}
 
-		Transform->SetPosition(Transform->GetPosition() + Velocity);
+		Transform->SetPosition(Transform->GetWorldPosition() + Velocity);
 	}
 
 	if (bMouseHold)

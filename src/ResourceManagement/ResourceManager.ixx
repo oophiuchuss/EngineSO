@@ -13,6 +13,7 @@ import TextureData;
 import Material;
 import MeshData;
 import ShaderData;
+import SceneData;
 
 // ------------------------------------------------------------------
 // ResourceData (internal)
@@ -56,13 +57,6 @@ public:
 protected:
 	// Convert type to folder name and file extension
 	std::type_index GetAssetType(const std::string& FilePath) const;
-
-	// Convert type to folder name and file extension
-	template<typename T>
-	std::string GetAssetFolder() const;
-
-	template<typename T>
-	std::string GetFileExtension() const;
 
 	// Build full file path from resource ID and type
 	template<typename T>
@@ -195,32 +189,16 @@ bool ResourceManager::HasResourceType() const
 }
 
 template<typename T>
-std::string ResourceManager::GetAssetFolder() const
-{
-	if constexpr (std::is_same_v<T, TextureData>) return "textures";
-	else if constexpr (std::is_same_v<T, MeshData>) return "meshes";
-	else if constexpr (std::is_same_v<T, ShaderData>) return "shaders";
-	else if constexpr (std::is_same_v<T, Material>) return "materials";
-	//else if constexpr (std::is_same_v<T, GltfSceneData>) return "scenes";
-	else return "";
-}
-
-template<typename T>
-std::string ResourceManager::GetFileExtension() const
-{
-	//if constexpr (std::is_same_v<T, TextureData>) return ""; // extension is part of ID
-	if constexpr (std::is_same_v<T, MeshData>) return ".obj";
-	else if constexpr (std::is_same_v<T, ShaderData>) return ".spv";
-	else if constexpr (std::is_same_v<T, Material>) return ".mat";
-	//else if constexpr (std::is_same_v<T, GltfSceneData>) return ""; // extension is part of ID
-	else return "";
-}
-
-template<typename T>
 std::string ResourceManager::GetResourceFilePath(const std::string& ResourceID) const
 {
-	if constexpr (std::is_same_v<T, ShaderData>)
-		return "shaders/" + ResourceID;   // runtime SPIR‑V, no extension
-	else
-		return "assets/" + GetAssetFolder<T>() + "/" + ResourceID + GetFileExtension<T>(); // TODO: this is trying to get assets from build directory not source
+	std::string Root = T::GetRootPath();
+	std::string Folder = std::string(T::AssetFolder());
+	std::string Extension = std::string(T::FileExtension());
+
+	if (Folder.empty())
+	{
+		return Root + ResourceID;
+	}
+
+	return Root + Folder + "/" + ResourceID + Extension;
 }
