@@ -323,13 +323,17 @@ glm::mat4 GltfSceneData::ResolveNodeTransform(const fastgltf::Node& Node) const
 		{
 			[](const fastgltf::TRS& TRS) -> glm::mat4
 			{
-				glm::vec3 T(TRS.translation[0], TRS.translation[1], TRS.translation[2]);
-				glm::quat R(
-					TRS.rotation[0], TRS.rotation[1],
-					TRS.rotation[2], TRS.rotation[3]);
-				glm::vec3 S(TRS.scale[0], TRS.scale[1], TRS.scale[2]);
+				 glm::vec3 T(TRS.translation[0], TRS.translation[1], TRS.translation[2]);
+				 // fastgltf quaternion: (x, y, z, w)
+				 // GLM quaternion:      (w, x, y, z)
+				 glm::quat R(
+					 TRS.rotation[3], TRS.rotation[0],
+					 TRS.rotation[1], TRS.rotation[2]);
+				 glm::vec3 S(TRS.scale[0], TRS.scale[1], TRS.scale[2]);
 
-				return glm::translate(glm::mat4(1.0f), T) * glm::mat4_cast(R) * glm::scale(glm::mat4(1.0f), S);
+				 return glm::translate(glm::mat4(1.0f), T) *
+						glm::mat4_cast(R) *
+						glm::scale(glm::mat4(1.0f), S);
 			},
 			[](const fastgltf::math::fmat4x4& M) -> glm::mat4
 			{
