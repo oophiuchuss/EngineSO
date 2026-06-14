@@ -646,7 +646,8 @@ void Renderer::CreateSyncObjects()
 	InFlightFences.clear();
 	
 	// Per‑frame semaphores for acquisition
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
 		ImageAvailableSemaphores.emplace_back(Device, vk::SemaphoreCreateInfo());
 	}
 

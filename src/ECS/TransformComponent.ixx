@@ -11,7 +11,7 @@ export class TransformComponent : public ComponentBase
 {
 
 public:
-	void SetTransformFromMatrix(const glm::mat4& Transform);
+	void SetTransformFromMatrix(const glm::mat4& Matrix);
 
 	void SetPosition(const glm::vec3& InPosition);
 	void SetRotation(const glm::quat& InRotation);

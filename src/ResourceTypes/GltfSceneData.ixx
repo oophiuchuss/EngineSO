@@ -92,7 +92,7 @@ private:
 	glm::mat4 ResolveNodeTransform(const fastgltf::Node& Node) const;
 	std::vector<std::string> RegisterAllTextures();
 	std::vector<std::string> RegisterAllMaterials(const std::vector<std::string>& TextureIDs);
-	void RegisterAllMeshes(const std::vector<std::string>& MaterialIDs);
+	void RegisterAllNodes(const std::vector<std::string>& MaterialIDs);
 
 	std::vector<RawMesh> RawMeshes;
 	std::vector<RawMaterial> RawMaterials;

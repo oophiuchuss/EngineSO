@@ -9,14 +9,17 @@ export module SceneData;
 
 import ResourceBase;
 
-export struct SceneMeshEntry
+export struct SceneNodeEntry
 {
+	std::string        Name;
+	glm::mat4          LocalTransform = glm::mat4(1.0f);
+	std::optional<int> ParentIndex;
+	std::vector<int>   ChildIndices;
+
+	// Mesh data — empty if this is a transform-only node
+	bool        bHasMesh = false;
 	std::string MeshID;
 	std::string MaterialID;
-	glm::mat4 LocalTransform = glm::mat4(1.0f);
-	std::string Name;
-	std::optional<int> ParentIndex; // index into MeshEntries - none if root
-	std::vector<int> ChildIndices;
 };
 
 export class SceneData : public ResourceBase
@@ -24,11 +27,11 @@ export class SceneData : public ResourceBase
 public:
 	explicit SceneData(const std::string& ID) : ResourceBase(ID) {}
 
-	// Populates MeshEntries, registers sub-resources
+	// Populates NodeEntries, registers sub-resources
 	// Implementation decides how to access ResourceManager
 	virtual void Instantiate() = 0;
 
-	inline const std::vector<SceneMeshEntry>& GetMeshEntries() const { return MeshEntries; }
+	inline const std::vector<SceneNodeEntry>& GetMeshEntries() const { return NodeEntries; }
 	inline bool IsInstantiated() const { return bIsInstantiated; }
 
 	static std::string_view AssetFolder() { return "scenes"; }
@@ -40,10 +43,10 @@ protected:
 
 	void UnloadResource() override
 	{
-		MeshEntries.clear();
+		NodeEntries.clear();
 		bIsInstantiated = false;
 	}
 
-	std::vector<SceneMeshEntry> MeshEntries;
+	std::vector<SceneNodeEntry> NodeEntries;
 	bool bIsInstantiated = false;
 };

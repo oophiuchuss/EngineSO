@@ -3,27 +3,29 @@ module;
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
 
 module TransformComponent;
 
 import Entity;
 
-void TransformComponent::SetTransformFromMatrix(const glm::mat4& Transform)
+void TransformComponent::SetTransformFromMatrix(const glm::mat4& Matrix)
 {
-	glm::vec3 SkewUnused;
-	glm::vec4 PerspectiveUnused;
+	// Extract translation directly from column 3 — exact, no precision issues
+	Position = glm::vec3(Matrix[3]);
 
-	glm::decompose(
-		Transform,
-		Scale,
-		Rotation,
-		Position,
-		SkewUnused,
-		PerspectiveUnused);
+	// Extract scale from column lengths — exact
+	Scale.x = glm::length(glm::vec3(Matrix[0]));
+	Scale.y = glm::length(glm::vec3(Matrix[1]));
+	Scale.z = glm::length(glm::vec3(Matrix[2]));
 
-	// glm::decompose returns conjugate quaternion
-	Rotation = glm::conjugate(Rotation);
+	// Remove scale from rotation columns to get pure rotation matrix
+	glm::mat3 RotMat(
+		glm::vec3(Matrix[0]) / Scale.x,
+		glm::vec3(Matrix[1]) / Scale.y,
+		glm::vec3(Matrix[2]) / Scale.z);
+
+	// Convert rotation matrix to quaternion — numerically stable
+	Rotation = glm::quat_cast(RotMat);
 	bLocalDirty = true;
 }
 

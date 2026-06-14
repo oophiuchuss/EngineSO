@@ -89,7 +89,7 @@ public:
 			ComponentMap.erase(it);
 
 			// Asuming that each component type is unique, we can break and return after finding the first match
-			for (auto CompIt = Components.begin(); CompIt != Components.end(); ++CompIt)
+			for (auto CompIt = Components.begin(); CompIt != Components.end(); CompIt++)
 			{
 				if (CompIt->get() == ComponentToRemove)
 				{

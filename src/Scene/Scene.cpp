@@ -3,6 +3,7 @@ module;
 #include <glm/glm.hpp>
 #include <string>
 #include <memory>
+#include <iostream>
 
 module Scene;
 
@@ -42,36 +43,36 @@ void Scene::InstantiateSceneFromData(SceneData& Data, ResourceManager& RM, const
 	// Create all entities flat, store entry index -> entity mapping
 	std::vector<Entity*> EntryToEntity(Entries.size(), nullptr);
 
-	for (size_t i = 0; i < Entries.size(); ++i)
+	for (size_t i = 0; i < Entries.size(); i++)
 	{
-		const SceneMeshEntry& Entry = Entries[i];
+		const SceneNodeEntry& Entry = Entries[i];
 
 		Entity* E = CreateEntity(Entry.Name);
 
 		// Apply root transform to root entries — children inherit via hierarchy
-		glm::mat4 FinalLocalTransform = RootTransform * Entry.LocalTransform;
-		if (Entry.ParentIndex.has_value())
-		{
-			FinalLocalTransform = Entry.LocalTransform;
-		}
+		glm::mat4 FinalLocalTransform = Entry.ParentIndex.has_value()
+			? Entry.LocalTransform
+			: RootTransform * Entry.LocalTransform;
 
 		// Add transform component with local transform
 		auto* TC = E->AddComponent<TransformComponent>();
 		TC->SetTransformFromMatrix(FinalLocalTransform);
 
-		// Get handles directly from ResourceManager via Scene's reference
-		ResourceHandle<MeshData> MH = RM.GetHandle<MeshData>(Entry.MeshID);
-		ResourceHandle<Material> MatH = RM.GetHandle<Material>(Entry.MaterialID);
-
-		E->AddComponent<MeshComponent>(MH, MatH);
+		// Only add MeshComponent if this node has geometry
+		if (Entry.bHasMesh)
+		{
+			auto MeshHandle = RM.GetHandle<MeshData>(Entry.MeshID);
+			auto MatHandle = RM.GetHandle<Material>(Entry.MaterialID);
+			E->AddComponent<MeshComponent>(MeshHandle, MatHandle);
+		}
 
 		EntryToEntity[i] = E;
 	}
 
 	// Wire parent/child relationships
-	for (size_t i = 0; i < Entries.size(); ++i)
+	for (size_t i = 0; i < Entries.size(); i++)
 	{
-		const SceneMeshEntry& Entry = Entries[i];
+		const SceneNodeEntry& Entry = Entries[i];
 		Entity* E = EntryToEntity[i];
 
 		if (Entry.ParentIndex.has_value())
