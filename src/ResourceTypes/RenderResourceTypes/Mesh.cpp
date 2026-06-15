@@ -31,7 +31,7 @@ std::unique_ptr<VertexBuffer> VertexBuffer::Create(
 	uint8_t Stride)
 {
 	// Upload directly to device-local memory via staging buffer
-	auto Result = Uploader->Upload(
+	auto Result = Uploader->UploadBuffer(
 		Data.data(),
 		Data.size(),
 		vk::BufferUsageFlagBits::eVertexBuffer);
@@ -67,7 +67,7 @@ std::unique_ptr<IndexBuffer> IndexBuffer::Create(
 {
 	vk::DeviceSize DataSize = sizeof(uint32_t) * Indices.size();
 
-	auto Result = Uploader->Upload(
+	auto Result = Uploader->UploadBuffer(
 		Indices.data(),
 		DataSize,
 		vk::BufferUsageFlagBits::eIndexBuffer);

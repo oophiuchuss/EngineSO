@@ -2,6 +2,7 @@ module;
 
 #include <vulkan/vulkan_raii.hpp>
 #include <vector>
+#include <functional>
 
 export module VulkanUploader;
 
@@ -21,16 +22,29 @@ public:
 	// Upload raw bytes to a device-local GPU buffer
 	// Returns the final device-local buffer ready for rendering
 	// Handles staging, copy, and queue family ownership transfer internally
-	struct UploadResult
+	struct UploadBufferResult
 	{
 		vk::raii::Buffer Buffer;
 		vk::raii::DeviceMemory Memory;
 	};
 
-	UploadResult Upload(
+	// Upload raw pixels to a device‑local image (shader‑ready)
+	struct UploadImageResult
+	{
+		vk::raii::Image        Image;
+		vk::raii::DeviceMemory Memory;
+	};
+
+	UploadBufferResult UploadBuffer(
 		const void* Data,
 		vk::DeviceSize Size,
 		vk::BufferUsageFlags TargetUsage);
+
+	UploadImageResult UploadImage(
+		const void* PixelData, 
+		uint32_t Width, 
+		uint32_t Height, 
+		vk::Format Format);
 
 private:
 	struct StagingBuffer
@@ -41,10 +55,14 @@ private:
 
 	StagingBuffer CreateStagingBuffer(const void* Data, vk::DeviceSize Size);
 
-	UploadResult CreateDeviceLocalBuffer(vk::DeviceSize Size, vk::BufferUsageFlags Usage);
+	UploadBufferResult CreateDeviceLocalBuffer(vk::DeviceSize Size, vk::BufferUsageFlags Usage);
 
-	void SubmitCopy(vk::Buffer Src, vk::Buffer Dst, vk::DeviceSize Size);
+	// Image helpers
+	UploadImageResult CreateDeviceLocalImage(uint32_t Width, uint32_t Height, vk::Format Format);
 
+	// Submit a one‑time command buffer and wait for completion
+	void SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> RecordCommands);
+	
 	const vk::raii::Device& Device;
 	const vk::raii::PhysicalDevice& PhysicalDevice;
 	const vk::raii::Queue& TransferQueue;

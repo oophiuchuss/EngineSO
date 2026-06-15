@@ -125,13 +125,6 @@ public:
 	}
 
 private:
-	void TransitionImageLayout(
-		vk::raii::CommandBuffer& CommandBuffer,
-		vk::Image Image,
-		vk::ImageAspectFlags Aspect,
-		vk::ImageLayout OldLayout,
-		vk::ImageLayout NewLayout);
-
 	void SortPasses();
 
 	void TopologicalSort(

@@ -7,7 +7,6 @@ module VulkanUploader;
 
 import VulkanUtils;
 
-
 VulkanUploader::VulkanUploader(
 	const vk::raii::Device& Device, 
 	const vk::raii::PhysicalDevice& PhysicalDevice, 
@@ -33,19 +32,63 @@ VulkanUploader::VulkanUploader(
 	UploadFence = Device.createFence(vk::FenceCreateFlags{});
 }
 
-VulkanUploader::UploadResult VulkanUploader::Upload(const void* Data, vk::DeviceSize Size, vk::BufferUsageFlags TargetUsage)
+VulkanUploader::UploadBufferResult VulkanUploader::UploadBuffer(const void* Data, vk::DeviceSize Size, vk::BufferUsageFlags TargetUsage)
 {
 	// Create staging buffer in host-visible memory and copy data to it
 	StagingBuffer Staging = CreateStagingBuffer(Data, Size);
 
 	// Create destination buffer in device-local memory
 	// eTransferDst allows it to be the destination of a transfer operation
-	UploadResult Result = CreateDeviceLocalBuffer(Size, TargetUsage | vk::BufferUsageFlagBits::eTransferDst);
+	UploadBufferResult Result = CreateDeviceLocalBuffer(Size, TargetUsage | vk::BufferUsageFlagBits::eTransferDst);
+
 
 	// Record and submit copy from staging to device-local buffer
-	SubmitCopy(*Staging.Buffer, *Result.Buffer, Size);
+	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
+		{
+			vk::BufferCopy CopyRegion(0, 0, Size);
+			Cmd.copyBuffer(*Staging.Buffer, *Result.Buffer, CopyRegion);
+		}
+	);
 
 	// Stating buffer destroyed - RAII cleans up automatically
+	return Result;
+}
+
+VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelData, uint32_t Width, uint32_t Height, vk::Format Format)
+{
+	// Stage the raw pixel data
+	vk::DeviceSize DataSize = Width * Height * 4;   // TODO: RGBA for now. Should be changed in the future
+	StagingBuffer Staging = CreateStagingBuffer(PixelData, DataSize);
+
+	// Create the target device‑local image
+	UploadImageResult Result = CreateDeviceLocalImage(Width, Height, Format);
+
+	// Record and submit the copy + layout transitions
+	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
+		{
+			VulkanUtils::TransitionImageLayout(
+				Cmd, *Result.Image,
+				vk::ImageAspectFlagBits::eColor,
+				vk::ImageLayout::eUndefined,
+				vk::ImageLayout::eTransferDstOptimal);
+
+			vk::BufferImageCopy Region(
+				0, 0, 0,
+				{ vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
+				{ 0, 0, 0 },
+				{ Width, Height, 1 });
+
+			Cmd.copyBufferToImage(
+				*Staging.Buffer, *Result.Image,
+				vk::ImageLayout::eTransferDstOptimal, Region);
+
+			VulkanUtils::TransitionImageLayout(
+				Cmd, *Result.Image,
+				vk::ImageAspectFlagBits::eColor,
+				vk::ImageLayout::eTransferDstOptimal,
+				vk::ImageLayout::eShaderReadOnlyOptimal);
+		});
+
 	return Result;
 }
 
@@ -80,7 +123,7 @@ VulkanUploader::StagingBuffer VulkanUploader::CreateStagingBuffer(const void* Da
 	return {std::move(Buffer), std::move(Memory)};
 }
 
-VulkanUploader::UploadResult VulkanUploader::CreateDeviceLocalBuffer(vk::DeviceSize Size, vk::BufferUsageFlags Usage)
+VulkanUploader::UploadBufferResult VulkanUploader::CreateDeviceLocalBuffer(vk::DeviceSize Size, vk::BufferUsageFlags Usage)
 {
 	// If different queue families the buffer needs to be accessible by both
 	std::vector<uint32_t> QueueFamilies;
@@ -116,7 +159,35 @@ VulkanUploader::UploadResult VulkanUploader::CreateDeviceLocalBuffer(vk::DeviceS
 	return { std::move(Buffer), std::move(Memory) };
 }
 
-void VulkanUploader::SubmitCopy(vk::Buffer Src, vk::Buffer Dst, vk::DeviceSize Size)
+VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(uint32_t Width, uint32_t Height, vk::Format Format)
+{
+	vk::ImageCreateInfo ImageInfo(
+		{}, vk::ImageType::e2D, Format,
+		vk::Extent3D(Width, Height, 1),
+		1, 1,
+		vk::SampleCountFlagBits::e1,
+		vk::ImageTiling::eOptimal,
+		vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+		vk::SharingMode::eExclusive);
+
+	vk::raii::Image Image = Device.createImage(ImageInfo);
+	auto MemReqs = Image.getMemoryRequirements();
+
+	uint32_t MemTypeIdx = VulkanUtils::FindMemoryType(
+		PhysicalDevice,
+		MemReqs.memoryTypeBits,
+		vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+	vk::raii::DeviceMemory Memory = Device.allocateMemory(
+		vk::MemoryAllocateInfo(MemReqs.size, MemTypeIdx));
+
+	Image.bindMemory(*Memory, 0);
+
+	return { std::move(Image), std::move(Memory) };
+}
+
+
+void VulkanUploader::SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> RecordCommands)
 {
 	// Allocate temporary command buffer for this upload
 	vk::CommandBufferAllocateInfo AllocInfo(
@@ -130,8 +201,7 @@ void VulkanUploader::SubmitCopy(vk::Buffer Src, vk::Buffer Dst, vk::DeviceSize S
 	// Record copy command
 	Cmd.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
-	vk::BufferCopy CopyRegion(0, 0, Size);
-	Cmd.copyBuffer(Src, Dst, CopyRegion);
+	RecordCommands(Cmd);
 
 	// If different families — release ownership from transfer queue
 	// Graphics queue will implicitly acquire since we used eConcurrent sharing
