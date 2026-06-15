@@ -21,11 +21,9 @@ public:
 	// Call once per frame to update the uniform buffer with the latest camera data
 	void Update(const CameraUniformData& Data);
 
-	// Bind the uniform buffer to the command buffer before drawing
-	void Bind(vk::CommandBuffer Cmd, vk::PipelineLayout PipelineLayout, vk::PipelineBindPoint BindPoint = vk::PipelineBindPoint::eGraphics);
-
 	// Get the descriptor set layout - needed for creating pipeline layouts
 	const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }
+	const vk::raii::DescriptorSet& GetDescriptorSet() const { return DescriptorSet; }
 	
 	// Get the last updated camera data
 	const CameraUniformData& GetLastData() const { return LastData; }

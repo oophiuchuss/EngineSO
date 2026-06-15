@@ -35,13 +35,6 @@ public:
 		const vk::raii::Device& Device,
 		const std::vector<uint32_t>& VertexBytecode,
 		const std::vector<uint32_t>& FragmentBytecode);
-
-
-	// Create a graphics shader from vertex and fragment shader file paths
-	static std::unique_ptr<Shader> CreateGraphicsShader(
-		const vk::raii::Device& Device, 
-		const std::string& VertexShaderPath, 
-		const std::string& FragmentShaderPath);
 	
 	Shader(const Shader&) = delete;					// Disable copy constructor
 	Shader& operator=(const Shader&) = delete;		// Disable copy assignment

@@ -7,6 +7,8 @@ export module TextureData;
 
 import ResourceBase;
 
+import SamplerDesc;
+
 export enum class TextureColorSpace
 {
 	Linear,	// Normal maps, metallic, roughness, AO - data textures
@@ -19,6 +21,7 @@ export struct TextureInfo
 	uint32_t Height = 0;
 	uint32_t Channels = 0;
 	TextureColorSpace ColorSpace = TextureColorSpace::SRGB;
+	SamplerDesc Sampler = PresetSamplerDesc::SamplerLinearRepeat; // TODO: actually get this info from load resource
 };
 
 export class TextureData : public ResourceBase
@@ -33,6 +36,7 @@ public:
 	inline uint32_t GetHeight() const { return Info.Height; }
 	inline uint32_t GetChannels() const { return Info.Channels; }
 	inline TextureColorSpace GetColorSpace() const { return Info.ColorSpace; }
+	const SamplerDesc& GetSamplerDesc() const { return Info.Sampler; }
 
 	// Extension empty — ID includes extension e.g. "albedo.png"
 	static std::string_view AssetFolder() { return "textures"; }

@@ -8,6 +8,7 @@ export module GeometryRenderPass;
 import RenderPassBase;
 import CullingSystem;
 import CameraUniform;
+import DescriptorHeap;
 import FrameData;
 import PipelineCache;
 import Shader;
@@ -21,7 +22,8 @@ public:
 		std::string InGBufferDepthResourceName,
 		Shader* InGeometryShader,
 		PipelineCache* InPipelineCache,
-		CameraUniformBuffer* InCameraUBO);
+		CameraUniformBuffer* InCameraUBO,
+		DescriptorHeap* InDescriptorHeap);
 
 	void SetRenderArea(vk::Extent2D InRenderArea) { RenderArea = InRenderArea; }
 
@@ -39,6 +41,7 @@ private:
 	Shader* GeometryShaderPtr = nullptr;
 	PipelineCache* PipelineCachePtr = nullptr;
 	CameraUniformBuffer* CameraUBOPtr = nullptr;
+	DescriptorHeap* DescriptorHeapPtr = nullptr;
 
 	vk::Extent2D RenderArea = { 1280, 720 }; // Default render area, updated by Renderer
 };

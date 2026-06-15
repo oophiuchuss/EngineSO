@@ -17,10 +17,12 @@ PipelineCache::PipelineCache(
 	const vk::raii::Device& Device,
 	const vk::raii::PhysicalDevice& PhysicalDevice,
 	vk::DescriptorSetLayout CameraUBOLayout, 
+	vk::DescriptorSetLayout DescriptorHeapLayout,
 	const std::string& CacheFilePath)
 	: Device(Device),
 	PhysicalDevice(PhysicalDevice),
 	CameraUBOLayout(CameraUBOLayout),
+	DescriptorHeapLayout(DescriptorHeapLayout),
 	CacheFilePath(CacheFilePath)
 {
 	auto Props = PhysicalDevice.getProperties();
@@ -118,7 +120,13 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 		vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 		0, sizeof(PushConstantData)
 	);
-	vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, { CameraUBOLayout }, PushRange);
+
+	std::array<vk::DescriptorSetLayout, 2> Layouts = {
+		CameraUBOLayout,
+		DescriptorHeapLayout
+	};
+
+	vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, Layouts, PushRange);
 	vk::raii::PipelineLayout PipelineLayout = vk::raii::PipelineLayout(Device, PipelineLayoutInfo);
 
 	auto Stages = Key.ShaderPtr->GetShaderStageInfos();

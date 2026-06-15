@@ -104,10 +104,6 @@ public:
 		VulkanUploader* Uploader,
 		const MeshData& MeshData);
 	
-	static std::unique_ptr<Mesh> Create(
-		std::unique_ptr<VertexBuffer> VB,
-		std::unique_ptr<IndexBuffer> IB);
-	
 	inline VertexBuffer* GetVertexBuffer() const { return VertexBufferPtr.get(); }
 	inline IndexBuffer* GetIndexBuffer() const { return IndexBufferPtr.get(); }
 

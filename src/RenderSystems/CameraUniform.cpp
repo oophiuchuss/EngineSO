@@ -24,11 +24,6 @@ void CameraUniformBuffer::Update(const CameraUniformData& Data)
 	LastData = Data;
 }
 
-void CameraUniformBuffer::Bind(vk::CommandBuffer Cmd, vk::PipelineLayout PipelineLayout, vk::PipelineBindPoint BindPoint)
-{
-	Cmd.bindDescriptorSets(BindPoint, PipelineLayout, 0, { *DescriptorSet }, nullptr);
-}
-
 void CameraUniformBuffer::CreateBuffer()
 {
     // Map memory and copy data

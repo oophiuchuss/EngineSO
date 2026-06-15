@@ -63,6 +63,7 @@ public:
     PipelineCache(const vk::raii::Device& Device,
         const vk::raii::PhysicalDevice& PhysicalDevice,
         vk::DescriptorSetLayout CameraUBOLayout,
+        vk::DescriptorSetLayout DescriptorHeapLayout,
         const std::string& CacheFilePath = "");
 
 	~PipelineCache();
@@ -92,7 +93,8 @@ private:
     const vk::raii::Device& Device;
     const vk::raii::PhysicalDevice& PhysicalDevice;
     vk::DescriptorSetLayout CameraUBOLayout;
-    std::string             CacheFilePath;
+    vk::DescriptorSetLayout DescriptorHeapLayout;
+    std::string CacheFilePath;
 
     vk::raii::PipelineCache VkPipelineCache = nullptr;
 

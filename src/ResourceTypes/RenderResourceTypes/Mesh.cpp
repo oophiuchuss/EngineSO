@@ -108,9 +108,3 @@ std::unique_ptr<Mesh> Mesh::CreateFromMeshData(
 
 	return std::unique_ptr<Mesh>(new Mesh(std::move(VB), std::move(IB)));
 }
-
-std::unique_ptr<Mesh> Mesh::Create(std::unique_ptr<VertexBuffer> VB,
-								   std::unique_ptr<IndexBuffer> IB)
-{
-	return std::unique_ptr<Mesh>(new Mesh(std::move(VB), std::move(IB)));
-}

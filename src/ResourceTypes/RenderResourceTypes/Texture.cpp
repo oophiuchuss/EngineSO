@@ -1,46 +1,38 @@
 module;
 
-#include <optional>
-#include <string>
 #include <vulkan/vulkan_raii.hpp>
-#include <vulkan/vulkan.hpp>
 
 module Texture;
 
-bool Texture::LoadResource(const std::string& FilePath)
+import TextureData;
+import VulkanUploader;
+
+Texture::Texture(vk::raii::Image&& InImage,
+    vk::raii::DeviceMemory&& InMemory,
+    vk::raii::ImageView&& InView) :
+    Image(std::move(InImage)) ,
+    ImageMemory(std::move(InMemory)) ,
+    ImageView(std::move(InView))
 {
-	// Load raw image data from the file
-	int Width_Tmp = 0;
-	int Height_Tmp = 0;
-	int Channels_Tmp = 0;
-	unsigned char* Data = LoadImageData(FilePath, &Width_Tmp, &Height_Tmp, &Channels_Tmp);
-	if (!Data)
-	{
-		return false; // Failed to load image data
-	}
-
-	// Store the loaded texture metadata for later use
-	Width = Width_Tmp;
-	Height = Height_Tmp;
-	Channels = Channels_Tmp;
-
-	// Create a Vulkan image resource using the loaded data and texture metadata
-	CreateVulkanImage(Data, Width, Height, Channels);
-
-	// Free the raw image data after creating the Vulkan image, as it's now stored in GPU memory
-	FreeImageData(Data);
-
-	return true; // Result will mark the resource as loaded
 }
 
-void Texture::UnloadResource()
+std::unique_ptr<Texture> Texture::CreateFromTextureData(const vk::raii::Device& Device, const vk::raii::PhysicalDevice& PhysicalDevice, VulkanUploader& Uploader, const TextureData& Data)
 {
-	Sampler.reset();
-	ImageView.reset();
-	Image.reset();
-	ImageMemory.reset();
-	Width = 0;
-	Height = 0;
-	Channels = 0;
-	ImageOffset = 0;
+    auto Result = Uploader.UploadImage(
+        Data.GetPixels().data(),
+        Data.GetWidth(),
+        Data.GetHeight(),
+        vk::Format::eR8G8B8A8Unorm);
+
+    vk::ImageViewCreateInfo ViewInfo(
+        {},
+        *Result.Image,
+        vk::ImageViewType::e2D,
+        vk::Format::eR8G8B8A8Unorm,
+        {},
+        { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
+
+    vk::raii::ImageView View = Device.createImageView(ViewInfo);
+
+    return std::unique_ptr<Texture>(new Texture(std::move(Result.Image), std::move(Result.Memory), std::move(View)));
 }

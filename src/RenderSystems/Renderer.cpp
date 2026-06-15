@@ -21,6 +21,7 @@ import Scene;
 import ResourceManager;
 import ResourceHandle;
 import VulkanUploader;
+import DescriptorHeap;
 import RenderResourceCache;
 import FrameData;
 import EventDispatcher;
@@ -30,8 +31,12 @@ import MeshComponent;
 import TransformComponent;
 import MeshData;
 import ShaderData;
+import TextureData;
 import Shader;
 import Mesh;
+import Texture;
+import TextureSlots;
+import Material;
 import Geometry;
 
 Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface, ResourceManager* InResourceManagerPtr) : Instance(Instance), Surface(std::move(Surface)), ResourceManagerPtr(InResourceManagerPtr)
@@ -62,15 +67,21 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 		GraphicsQueueFamilyIndex,
 		TransferQueue);
 	
+	DescriptorHeapInstance = std::make_unique<DescriptorHeap>(
+		Device,
+		1024);	// Max textures hard-coded for now
+
 	RenderCacheInstance = std::make_unique<RenderResourceCache>(
 		Device, 
 		PhysicalDevice,
-		UploaderInstance.get());
+		UploaderInstance.get(),
+		DescriptorHeapInstance.get());
 
 	PipelineCacheInstance = std::make_unique<PipelineCache>(
 		Device, 
 		PhysicalDevice, 
 		*CameraUBO->GetDescriptorSetLayout(),
+		DescriptorHeapInstance->GetDescriptorSetLayout(),
 		Paths::GetCacheRoot() + "pipeline.bin");
 
 	// Create command pool and buffers
@@ -190,6 +201,28 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
 		if (!GPUMesh) continue;
 		
+		MaterialProperties Props; // start with defaults
+
+		// If this entity has a material, resolve its textures
+		if (const Material* Mat = MC->GetMaterial())
+		{
+			auto ResolveTexture = [&](const ResourceHandle<TextureData>& Handle,
+				int DefaultIndex) -> int
+				{
+					if (const TextureData* TexData = Handle.Get())
+					{
+						return RenderCacheInstance->GetOrUploadTexture(TexData->GetResourceID(), *TexData);
+					}
+					return DefaultIndex;
+				};
+
+			Props.AlbedoIndex = ResolveTexture(Mat->GetAlbedoTexture(), TextureSlots::DefaultWhite);
+			Props.NormalIndex = ResolveTexture(Mat->GetNormalTexture(), TextureSlots::DefaultNormal);
+			Props.MetallicRoughnessIndex = ResolveTexture(Mat->GetMetallicRoughnessTexture(), TextureSlots::DefaultWhite);
+			Props.OcclusionIndex = ResolveTexture(Mat->GetOcclusionTexture(), TextureSlots::DefaultWhite);
+			Props.EmissiveIndex = ResolveTexture(Mat->GetEmissiveTexture(), TextureSlots::DefaultBlack);
+		}
+
 		// Compute world-space bounds
 		BoundingBox WorldBounds = MD->GetBoundingBox();
 		WorldBounds.Transform(TC->GetWorldTransformMatrix());
@@ -426,7 +459,7 @@ void Renderer::CreateLogicalDevice()
 	// Find queue family indices (graphics and present)
 
 	auto QueueFamilies = PhysicalDevice.getQueueFamilyProperties();
-	
+		
 	auto FindGraphicsAndPresent = [&]() -> std::optional<uint32_t>
 	{
 		for (uint32_t i = 0; i < QueueFamilies.size(); i++)
@@ -490,11 +523,21 @@ void Renderer::CreateLogicalDevice()
 	vk::DeviceCreateInfo DeviceCreateInfo({}, QueueCreateInfos, {}, DeviceExtensions);
 
 	// Enable dynamic rendering feature
-	vk::PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature;
-	dynamicRenderingFeature.setDynamicRendering(VK_TRUE);
+	vk::PhysicalDeviceDynamicRenderingFeatures DynamicRenderingFeature;
+	DynamicRenderingFeature.setDynamicRendering(VK_TRUE);
 
-	// Chain it into the device create info
-	DeviceCreateInfo.setPNext(&dynamicRenderingFeature);
+	// Enable descriptor indexing features 
+	vk::PhysicalDeviceDescriptorIndexingFeatures DescriptorIndexingFeature;
+	DescriptorIndexingFeature.setShaderSampledImageArrayNonUniformIndexing(VK_TRUE)		// nonuniformEXT() in shader (for indexing using push constants)
+							 .setDescriptorBindingSampledImageUpdateAfterBind(VK_TRUE)	// update heap after bind
+							 .setDescriptorBindingPartiallyBound(VK_TRUE)				// partially filled array
+							 .setRuntimeDescriptorArray(VK_TRUE);						// variable array size
+
+	// Chain DescriptorIndexingFeature to DynamicRendering
+	DynamicRenderingFeature.setPNext(&DescriptorIndexingFeature);
+
+	// Chain DynamicRendering into the device create info
+	DeviceCreateInfo.setPNext(&DynamicRenderingFeature);
 
 	Device = vk::raii::Device(PhysicalDevice, DeviceCreateInfo);
 
@@ -707,7 +750,8 @@ void Renderer::SetupRenderPasses()
 		"Main_Depth",
 		GeometryShader,
 		PipelineCacheInstance.get(),
-		CameraUBO.get());
+		CameraUBO.get(),
+		DescriptorHeapInstance.get());
 
 	//auto LightPass = RendergraphInstance->AddRenderPass<LightingPass>("LightPass", "Main_Color");
 	//auto PostProcess = RendergraphInstance->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");

@@ -11,6 +11,7 @@ import Mesh;
 import Shader;
 import FrameData;
 import PipelineCache;
+import DescriptorHeap;
 import PushConstants;
 
 GeometryRenderPass::GeometryRenderPass(
@@ -19,13 +20,15 @@ GeometryRenderPass::GeometryRenderPass(
 	std::string InGBufferDepthResourceName,
 	Shader* InGeometryShader,
 	PipelineCache* InPipelineCache,
-	CameraUniformBuffer* InCameraUBO) :
+	CameraUniformBuffer* InCameraUBO,
+	DescriptorHeap* InDescriptorHeap) :
 	RenderPassBase(InName), 
 	GBufferColorResourceName(InGBufferColorResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
 	GeometryShaderPtr(InGeometryShader),
 	PipelineCachePtr(InPipelineCache),
-	CameraUBOPtr(InCameraUBO)
+	CameraUBOPtr(InCameraUBO),
+	DescriptorHeapPtr(InDescriptorHeap)
 {
 	AddOutput(GBufferColorResourceName);
 	AddOutput(GBufferDepthResourceName);
@@ -101,11 +104,19 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	// Bind pipeline
 	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 
-	// Bind camera uniform buffer
-	if (CameraUBOPtr)
-	{
-		CameraUBOPtr->Bind(*Cmd, PipelineLayout);
-	}
+	// Bind descriptor sets (set 0 = camera UBO, set 1 = texture heap)
+	std::array<vk::DescriptorSet, 2> DescriptorSets = {
+		CameraUBOPtr ? CameraUBOPtr->GetDescriptorSet() : vk::DescriptorSet{},
+		DescriptorHeapPtr ? DescriptorHeapPtr->GetDescriptorSet() : vk::DescriptorSet{}
+	};
+
+	Cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		PipelineLayout,
+		0,                    // First set
+		DescriptorSets,
+		{});
+
 
 	for (const RenderableMesh& Renderable : CurrentFrameData.Renderables)
 	{
