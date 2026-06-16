@@ -23,6 +23,10 @@ public:
     vk::DescriptorSet GetDescriptorSet() const { return *DescriptorSet; }
     vk::DescriptorSetLayout GetDescriptorSetLayout() const { return *Layout; }
 
+    static vk::Filter ToVkFilter(FilterMode Mode);
+    static vk::SamplerMipmapMode ToVkMipmapMode(MipmapMode Mode);
+    static vk::SamplerAddressMode ToVkAddressMode(WrapMode Mode);
+
 private:
     void CreateDescriptorLayout();
     void CreateDescriptorPool();

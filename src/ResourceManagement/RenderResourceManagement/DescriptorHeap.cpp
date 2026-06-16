@@ -115,26 +115,56 @@ void DescriptorHeap::WriteSlot(int Slot, vk::ImageView View, const SamplerDesc& 
 	Device.updateDescriptorSets(Write, {});
 }
 
+vk::Filter DescriptorHeap::ToVkFilter(FilterMode Mode)
+{
+	switch (Mode)
+	{
+	case FilterMode::Nearest: return vk::Filter::eNearest;
+	case FilterMode::Linear:  return vk::Filter::eLinear;
+	default:                  return vk::Filter::eLinear;
+	}
+}
+
+vk::SamplerMipmapMode DescriptorHeap::ToVkMipmapMode(MipmapMode Mode)
+{
+	switch (Mode)
+	{
+	case MipmapMode::Nearest: return vk::SamplerMipmapMode::eNearest;
+	case MipmapMode::Linear: return vk::SamplerMipmapMode::eLinear;
+	default: return vk::SamplerMipmapMode::eLinear;
+	}
+}
+
+vk::SamplerAddressMode DescriptorHeap::ToVkAddressMode(WrapMode Mode)
+{
+	switch (Mode)
+	{
+	case WrapMode::Repeat: return vk::SamplerAddressMode::eRepeat;
+	case WrapMode::Clamp: return vk::SamplerAddressMode::eClampToEdge;
+	case WrapMode::Mirror: return vk::SamplerAddressMode::eMirroredRepeat;
+	default: return vk::SamplerAddressMode::eRepeat;
+	}
+}
+
 vk::raii::Sampler& DescriptorHeap::GetOrCreateSampler(const SamplerDesc& Desc)
 {
 	for (auto& [Key, Sampler] : SamplerCache)
 	{
 		if (Key == Desc)
-		{
 			return Sampler;
-		}
 	}
 
 	vk::SamplerCreateInfo SamplerInfo;
-	SamplerInfo.setMagFilter(Desc.MagFilter)
-		.setMinFilter(Desc.MinFilter)
-		.setMipmapMode(Desc.MipmapMode)
-		.setAddressModeU(Desc.AddressModeU)
-		.setAddressModeV(Desc.AddressModeV)
-		.setAddressModeW(Desc.AddressModeW)
+	SamplerInfo
+		.setMagFilter(ToVkFilter(Desc.MagFilter))
+		.setMinFilter(ToVkFilter(Desc.MinFilter))
+		.setMipmapMode(ToVkMipmapMode(Desc.MipMode))
+		.setAddressModeU(ToVkAddressMode(Desc.AddressU))
+		.setAddressModeV(ToVkAddressMode(Desc.AddressV))
+		.setAddressModeW(ToVkAddressMode(Desc.AddressW))
 		.setMipLodBias(Desc.MipLodBias)
-		.setAnisotropyEnable(Desc.AnisotropyEnable)
-		.setMaxAnisotropy(Desc.MaxAnisotropy)
+		.setAnisotropyEnable(Desc.Anisotropy)
+		.setMaxAnisotropy(Desc.MaxAniso)
 		.setMinLod(Desc.MinLod)
 		.setMaxLod(Desc.MaxLod)
 		.setBorderColor(vk::BorderColor::eIntOpaqueBlack)

@@ -1,51 +1,45 @@
 module;
 
-#include <vulkan/vulkan.hpp>
-
 export module SamplerDesc;
 
-// Describes a complete sampler state
+export enum class FilterMode { Nearest, Linear };
+export enum class WrapMode { Repeat, Clamp, Mirror };
+export enum class MipmapMode { Nearest, Linear };
+
 export struct SamplerDesc
 {
-    vk::Filter             MagFilter = vk::Filter::eLinear;
-    vk::Filter             MinFilter = vk::Filter::eLinear;
-    vk::SamplerMipmapMode  MipmapMode = vk::SamplerMipmapMode::eLinear;
-    vk::SamplerAddressMode AddressModeU = vk::SamplerAddressMode::eRepeat;
-    vk::SamplerAddressMode AddressModeV = vk::SamplerAddressMode::eRepeat;
-    vk::SamplerAddressMode AddressModeW = vk::SamplerAddressMode::eRepeat;
-    float                  MipLodBias = 0.0f;
-    bool                   AnisotropyEnable = false;
-    float                  MaxAnisotropy = 1.0f;
-    float                  MinLod = 0.0f;
-    float                  MaxLod = 0.0f;
+    FilterMode MagFilter = FilterMode::Linear;
+    FilterMode MinFilter = FilterMode::Linear;
+    MipmapMode MipMode = MipmapMode::Linear;
+    WrapMode AddressU = WrapMode::Repeat;
+    WrapMode AddressV = WrapMode::Repeat;
+    WrapMode AddressW = WrapMode::Repeat;
+    float MipLodBias = 0.0f;
+    bool Anisotropy = false;
+    float MaxAniso = 1.0f;
+    float MinLod = 0.0f;
+    float MaxLod = 1000.0f; // unclamped — ready for mipmaps
 
-    bool operator==(const SamplerDesc& Other) const = default;
+    bool operator==(const SamplerDesc&) const = default;
 };
 
 export namespace PresetSamplerDesc
 {
     constexpr SamplerDesc SamplerLinearRepeat = {
-       vk::Filter::eLinear, vk::Filter::eLinear,
-       vk::SamplerMipmapMode::eLinear,
-       vk::SamplerAddressMode::eRepeat,
-       vk::SamplerAddressMode::eRepeat,
-       vk::SamplerAddressMode::eRepeat
+        FilterMode::Linear, FilterMode::Linear, MipmapMode::Linear,
+        WrapMode::Repeat, WrapMode::Repeat, WrapMode::Repeat,
+        0.0f, false, 1.0f, 0.0f, 1000.0f
     };
 
     constexpr SamplerDesc SamplerLinearClamp = {
-        vk::Filter::eLinear, vk::Filter::eLinear,
-        vk::SamplerMipmapMode::eLinear,
-        vk::SamplerAddressMode::eClampToEdge,
-        vk::SamplerAddressMode::eClampToEdge,
-        vk::SamplerAddressMode::eClampToEdge
+        FilterMode::Linear, FilterMode::Linear, MipmapMode::Linear,
+        WrapMode::Clamp, WrapMode::Clamp, WrapMode::Clamp,
+        0.0f, false, 1.0f, 0.0f, 1000.0f
     };
 
     constexpr SamplerDesc SamplerNearestRepeat = {
-        vk::Filter::eNearest, vk::Filter::eNearest,
-        vk::SamplerMipmapMode::eNearest,
-        vk::SamplerAddressMode::eRepeat,
-        vk::SamplerAddressMode::eRepeat,
-        vk::SamplerAddressMode::eRepeat
+        FilterMode::Nearest, FilterMode::Nearest, MipmapMode::Nearest,
+        WrapMode::Repeat, WrapMode::Repeat, WrapMode::Repeat,
+        0.0f, false, 1.0f, 0.0f, 1000.0f
     };
 }
-
