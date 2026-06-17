@@ -9,6 +9,7 @@ import RenderPassBase;
 import CullingSystem;
 import CameraUniform;
 import DescriptorHeap;
+import GPUSceneBuffer;
 import FrameData;
 import PipelineCache;
 import Shader;
@@ -23,7 +24,8 @@ public:
 		Shader* InGeometryShader,
 		PipelineCache* InPipelineCache,
 		CameraUniformBuffer* InCameraUBO,
-		DescriptorHeap* InDescriptorHeap);
+		DescriptorHeap* InDescriptorHeap,
+		GPUSceneBuffer* InGPUScene);
 
 	void SetRenderArea(vk::Extent2D InRenderArea) { RenderArea = InRenderArea; }
 
@@ -42,6 +44,7 @@ private:
 	PipelineCache* PipelineCachePtr = nullptr;
 	CameraUniformBuffer* CameraUBOPtr = nullptr;
 	DescriptorHeap* DescriptorHeapPtr = nullptr;
+	GPUSceneBuffer* GPUScenePtr = nullptr;
 
 	vk::Extent2D RenderArea = { 1280, 720 }; // Default render area, updated by Renderer
 };

@@ -596,7 +596,7 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 	int MeshEntriesCount = std::count_if(NodeEntries.begin(), NodeEntries.end(),
 		[](const SceneNodeEntry& E) { return E.bHasMesh; });
 
-	std::cout << "[GltfSceneData] Nodes done — "
+	std::cout << "[GltfSceneData] Nodes done: "
 		<< NodeEntries.size() << " entries ("
 		<< MeshEntriesCount
 		<< " with meshes)\n";

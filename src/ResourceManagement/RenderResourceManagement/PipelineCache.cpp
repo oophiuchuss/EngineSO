@@ -18,11 +18,13 @@ PipelineCache::PipelineCache(
 	const vk::raii::PhysicalDevice& PhysicalDevice,
 	vk::DescriptorSetLayout CameraUBOLayout, 
 	vk::DescriptorSetLayout DescriptorHeapLayout,
+	vk::DescriptorSetLayout GPUSceneLayout,
 	const std::string& CacheFilePath)
 	: Device(Device),
 	PhysicalDevice(PhysicalDevice),
 	CameraUBOLayout(CameraUBOLayout),
 	DescriptorHeapLayout(DescriptorHeapLayout),
+	GPUSceneLayout(GPUSceneLayout),
 	CacheFilePath(CacheFilePath)
 {
 	auto Props = PhysicalDevice.getProperties();
@@ -121,9 +123,10 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 		0, sizeof(PushConstantData)
 	);
 
-	std::array<vk::DescriptorSetLayout, 2> Layouts = {
+	std::array<vk::DescriptorSetLayout, 3> Layouts = {
 		CameraUBOLayout,
-		DescriptorHeapLayout
+		DescriptorHeapLayout,
+		GPUSceneLayout
 	};
 
 	vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, Layouts, PushRange);

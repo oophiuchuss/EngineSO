@@ -12,6 +12,7 @@ import Shader;
 import FrameData;
 import PipelineCache;
 import DescriptorHeap;
+import GPUSceneBuffer;
 import PushConstants;
 
 GeometryRenderPass::GeometryRenderPass(
@@ -21,14 +22,16 @@ GeometryRenderPass::GeometryRenderPass(
 	Shader* InGeometryShader,
 	PipelineCache* InPipelineCache,
 	CameraUniformBuffer* InCameraUBO,
-	DescriptorHeap* InDescriptorHeap) :
+	DescriptorHeap* InDescriptorHeap,
+	GPUSceneBuffer* InGPUScene) :
 	RenderPassBase(InName), 
 	GBufferColorResourceName(InGBufferColorResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
 	GeometryShaderPtr(InGeometryShader),
 	PipelineCachePtr(InPipelineCache),
 	CameraUBOPtr(InCameraUBO),
-	DescriptorHeapPtr(InDescriptorHeap)
+	DescriptorHeapPtr(InDescriptorHeap),
+	GPUScenePtr(InGPUScene)
 {
 	AddOutput(GBufferColorResourceName);
 	AddOutput(GBufferDepthResourceName);
@@ -72,7 +75,7 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 
 void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
-	if (PipelineCachePtr == nullptr)
+	if (!PipelineCachePtr)
 	{
 		throw std::runtime_error("Pipeline cache not set for GeometryRenderPass");
 	}
@@ -80,6 +83,16 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	if (!GeometryShaderPtr)
 	{
 		throw std::runtime_error("Geometry shader not set for GeometryRenderPass");
+	}
+
+	if (!DescriptorHeapPtr)
+	{
+		throw std::runtime_error("Texture heap not set");
+	}
+
+	if (!GPUScenePtr)
+	{
+		throw std::runtime_error("GPU scene buffer not set");
 	}
 
 	// Set dynamic states 
@@ -104,10 +117,11 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	// Bind pipeline
 	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 
-	// Bind descriptor sets (set 0 = camera UBO, set 1 = texture heap)
-	std::array<vk::DescriptorSet, 2> DescriptorSets = {
-		CameraUBOPtr ? CameraUBOPtr->GetDescriptorSet() : vk::DescriptorSet{},
-		DescriptorHeapPtr ? DescriptorHeapPtr->GetDescriptorSet() : vk::DescriptorSet{}
+	// Bind descriptor sets (set 0 = camera UBO, set 1 = texture heap, set 2 = GPU scene buffer)
+	std::array<vk::DescriptorSet, 3> DescriptorSets = {
+		CameraUBOPtr ? *CameraUBOPtr->GetDescriptorSet() : vk::DescriptorSet{},
+		DescriptorHeapPtr ? *DescriptorHeapPtr->GetDescriptorSet() : vk::DescriptorSet{},
+		GPUScenePtr ? *GPUScenePtr->GetDescriptorSet() : vk::DescriptorSet{}
 	};
 
 	Cmd.bindDescriptorSets(
@@ -117,19 +131,16 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 		DescriptorSets,
 		{});
 
-
 	for (const RenderableMesh& Renderable : CurrentFrameData.Renderables)
 	{
 		if (!Renderable.GPUMesh)
 		{
 			continue;
 		}
-	
 
 		// Build and push per-draw constants
 		PushConstantData Push;
-		Push.ModelMatrix = Renderable.Transform;
-		Push.Material = Renderable.Mat;
+		Push.ObjectIndex = Renderable.ObjectIndex;
 
 		Cmd.pushConstants<PushConstantData>(
 			PipelineLayout, 
@@ -142,21 +153,19 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 		IndexBuffer* IB = Renderable.GPUMesh->GetIndexBuffer();
 
 		// Check if only vertex buffer exists (e.g., for drawing non-indexed geometry)
-		if (!VB)
+		if (VB)
 		{
-			continue;
-		}
+			VB->Bind(Cmd);
 
-		VB->Bind(Cmd);
-
-		if (IB)
-		{
-			IB->Bind(Cmd);
-			Cmd.drawIndexed(IB->GetIndexCount(), 1, 0, 0, 0);
-		}
-		else
-		{
-			Cmd.draw(VB->GetVertexCount(), 1, 0, 0);
+			if (IB)
+			{
+				IB->Bind(Cmd);
+				Cmd.drawIndexed(IB->GetIndexCount(), 1, 0, 0, 0);
+			}
+			else
+			{
+				Cmd.draw(VB->GetVertexCount(), 1, 0, 0);
+			}
 		}
 	}
 }

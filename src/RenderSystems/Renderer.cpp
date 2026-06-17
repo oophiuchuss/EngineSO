@@ -22,6 +22,8 @@ import ResourceManager;
 import ResourceHandle;
 import VulkanUploader;
 import DescriptorHeap;
+import GPUSceneBuffer;
+import GPUSceneData;
 import RenderResourceCache;
 import FrameData;
 import EventDispatcher;
@@ -39,7 +41,13 @@ import TextureSlots;
 import Material;
 import Geometry;
 
-Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface, ResourceManager* InResourceManagerPtr) : Instance(Instance), Surface(std::move(Surface)), ResourceManagerPtr(InResourceManagerPtr)
+Renderer::Renderer(
+	vk::raii::Instance& Instance, 
+	vk::raii::SurfaceKHR&& Surface, 
+	ResourceManager* InResourceManagerPtr) :
+	Instance(Instance), 
+	Surface(std::move(Surface)), 
+	ResourceManagerPtr(InResourceManagerPtr)
 {
 	// Pick physical device
 	PickPhysicalDevice();
@@ -69,7 +77,13 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 	
 	DescriptorHeapInstance = std::make_unique<DescriptorHeap>(
 		Device,
-		1024);	// Max textures hard-coded for now
+		1024);	// TODO: Max textures hard-coded for now
+
+	GPUSceneInstance = std::make_unique<GPUSceneBuffer>(
+		Device,
+		PhysicalDevice,
+		4096,   // TODO: MaxObjects — hardcoded for now, matches DescriptorHeap's pattern
+		512);   // TODO: MaxMaterials — hardcoded for now
 
 	RenderCacheInstance = std::make_unique<RenderResourceCache>(
 		Device, 
@@ -81,7 +95,8 @@ Renderer::Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface,
 		Device, 
 		PhysicalDevice, 
 		*CameraUBO->GetDescriptorSetLayout(),
-		DescriptorHeapInstance->GetDescriptorSetLayout(),
+		*DescriptorHeapInstance->GetDescriptorSetLayout(),
+		*GPUSceneInstance->GetDescriptorSetLayout(),
 		Paths::GetCacheRoot() + "pipeline.bin");
 
 	// Create command pool and buffers
@@ -187,6 +202,11 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	FrameData CurrentFrameData;
 	CurrentFrameData.Camera = CameraUBO->GetLastData();
 
+	std::vector<ObjectData> FrameObjects;
+	std::vector<MaterialData> FrameMaterials;
+	FrameObjects.reserve(VisibleEntities.size());
+	FrameMaterials.reserve(VisibleEntities.size());
+
 	for (Entity* E : VisibleEntities)
 	{
 		MeshComponent* MC = E->GetComponent<MeshComponent>();
@@ -201,7 +221,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
 		if (!GPUMesh) continue;
 		
-		MaterialProperties Props; // start with defaults
+		MaterialProperties Props = MC->GetEffectiveMaterialProperties();
 
 		// If this entity has a material, resolve its textures
 		if (const Material* Mat = MC->GetMaterial())
@@ -223,17 +243,51 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			Props.EmissiveIndex = ResolveTexture(Mat->GetEmissiveTexture(), TextureSlots::DefaultBlack);
 		}
 
-		// Compute world-space bounds
-		BoundingBox WorldBounds = MD->GetBoundingBox();
-		WorldBounds.Transform(TC->GetWorldTransformMatrix());
+		// Build material data for this renderable
+		// TODO: make so there is no duplicates
+		MaterialData MatData;
+		MatData.AlbedoColor = Props.AlbedoColor;
+		MatData.Metallic = Props.Metallic;
+		MatData.Roughness = Props.Roughness;
+		MatData.EmissiveStrength = Props.EmissiveStrength;
+		MatData.AlbedoIndex = static_cast<uint32_t>(Props.AlbedoIndex);
+		MatData.NormalIndex = static_cast<uint32_t>(Props.NormalIndex);
+		MatData.MetallicRoughnessIndex = static_cast<uint32_t>(Props.MetallicRoughnessIndex);
+		MatData.OcclusionIndex = static_cast<uint32_t>(Props.OcclusionIndex);
+		MatData.EmissiveIndex = static_cast<uint32_t>(Props.EmissiveIndex);
 
+		uint32_t MaterialIndex = static_cast<uint32_t>(FrameMaterials.size());
+		FrameMaterials.push_back(MatData);
+
+		// Build ObjectData for this renderable 
+		glm::mat4 WorldTransform = TC->GetWorldTransformMatrix();
+
+		// Normal matrix computed once on CPU — inverse transpose of upper-left 3x3
+		// Stored as mat4 to avoid GLM/GPU std430 mat3 alignment mismatch
+		glm::mat3 NormalMat3 = glm::transpose(glm::inverse(glm::mat3(WorldTransform)));
+
+		ObjectData Obj;
+		Obj.ModelMatrix = WorldTransform;
+		Obj.NormalMatrix = glm::mat4(NormalMat3); // upper-left 3x3 used by shader, rest is identity padding
+		Obj.MaterialIndex = MaterialIndex;
+
+		uint32_t ObjectIndex = static_cast<uint32_t>(FrameObjects.size());
+		FrameObjects.push_back(Obj);
+
+		// ---- World-space bounds for culling ----
+		BoundingBox WorldBounds = MD->GetBoundingBox();
+		WorldBounds.Transform(WorldTransform);
+
+		// RenderableMesh no longer needs PushData — GeometryRenderPass only needs GPUMesh now,
+		// since transform/material live in the SSBOs indexed by ObjectIndex
 		CurrentFrameData.Renderables.push_back({
 			GPUMesh,
-			MC->GetEffectiveMaterialProperties(),
-			TC->GetWorldTransformMatrix(),
-			WorldBounds
+			WorldBounds,
+			ObjectIndex
 			});
 	}
+
+	GPUSceneInstance->Update(FrameObjects, FrameMaterials);
 
 	// TODO: make better handling of this
 	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphInstance->GetRenderPass("GeometryPass"));
@@ -751,7 +805,8 @@ void Renderer::SetupRenderPasses()
 		GeometryShader,
 		PipelineCacheInstance.get(),
 		CameraUBO.get(),
-		DescriptorHeapInstance.get());
+		DescriptorHeapInstance.get(),
+		GPUSceneInstance.get());
 
 	//auto LightPass = RendergraphInstance->AddRenderPass<LightingPass>("LightPass", "Main_Color");
 	//auto PostProcess = RendergraphInstance->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");

@@ -1,18 +1,11 @@
 module;
 
-#include <glm/glm.hpp>
+#include <cstdint>
 
 export module PushConstants;
 
-import MaterialProperties;
-
-// Must match PushConstants.slang exactly — same field order, same sizes
-// Total size: 64 + 16 + 4 + 4 + 4 + 4 = 96 bytes
-// Vulkan guarantees minimum 128 bytes for push constants
-
+// All actual data (transform, material) lives in ObjectData/MaterialData SSBOs
 export struct PushConstantData
 {
-	glm::mat4 ModelMatrix = glm::mat4(1.0f);
-	MaterialProperties Material;
-	float _Padding = 0.0f; // explicit padding — keeps GPU alignment correct
+    uint32_t ObjectIndex = 0;
 };

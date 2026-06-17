@@ -19,6 +19,7 @@ import PipelineCache;
 import EventListener;
 import VulkanUploader;
 import DescriptorHeap;
+import GPUSceneBuffer;
 
 export class Renderer : public EventListener
 {
@@ -84,6 +85,7 @@ private:
 	std::unique_ptr<CameraUniformBuffer>	CameraUBO;
 	std::unique_ptr<VulkanUploader>			UploaderInstance;
 	std::unique_ptr<DescriptorHeap>			DescriptorHeapInstance;
+	std::unique_ptr<GPUSceneBuffer>			GPUSceneInstance;
 	std::unique_ptr<RenderResourceCache>	RenderCacheInstance;
 	std::unique_ptr<PipelineCache>			PipelineCacheInstance;
 };
