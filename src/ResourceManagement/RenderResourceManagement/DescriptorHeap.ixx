@@ -7,11 +7,12 @@ module;
 export module DescriptorHeap;
 
 import SamplerDesc;
+import VulkanUploader;
 
 export class DescriptorHeap
 {
 public:
-    DescriptorHeap(const vk::raii::Device& InDevice, uint32_t InMaxTextures);
+    DescriptorHeap(const vk::raii::Device& InDevice, uint32_t InMaxTextures, VulkanUploader& InUploader);
     ~DescriptorHeap() = default;
 
     int AllocateSlot();
@@ -34,6 +35,16 @@ private:
 
     vk::raii::Sampler& GetOrCreateSampler(const SamplerDesc& Desc);
 
+    void CreateDefaultTextures();
+    
+    // Default texture storage — kept alive for heap lifetime
+    struct DefaultTexture
+    {
+        vk::raii::DeviceMemory Memory = nullptr;
+        vk::raii::Image Image = nullptr;
+        vk::raii::ImageView View = nullptr;
+    };
+
     const vk::raii::Device& Device;
     uint32_t MaxTextures;
 
@@ -41,7 +52,9 @@ private:
     vk::raii::DescriptorSetLayout Layout = nullptr;
     vk::raii::DescriptorPool Pool = nullptr;
     vk::raii::DescriptorSet DescriptorSet = nullptr;
+    VulkanUploader& Uploader;
 
+    std::array<DefaultTexture, 3> DefaultTextures;
     std::vector<int> FreeSlots; // internal index allocator
 
     // Sampler cache 

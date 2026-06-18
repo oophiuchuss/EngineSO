@@ -25,7 +25,7 @@ export class Material : public ResourceBase
 public:
 	explicit Material(const std::string& InResourceID) : ResourceBase(InResourceID) {}
 
-	// Programmatic constructor — fully immutable after construction
+	// Programmatic constructor - fully immutable after construction
 	Material(
 		const std::string& ID,
 		MaterialType                InType,

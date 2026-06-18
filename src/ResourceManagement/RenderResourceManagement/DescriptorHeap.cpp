@@ -4,11 +4,15 @@ module;
 
 module DescriptorHeap;
 
+import VulkanUploader;
+
 DescriptorHeap::DescriptorHeap(
 	const vk::raii::Device& InDevice,
-	uint32_t InMaxTextures) :
+	uint32_t InMaxTextures,
+	VulkanUploader& InUploader) :
 	Device(InDevice),
-	MaxTextures(InMaxTextures)
+	MaxTextures(InMaxTextures),
+	Uploader(InUploader)
 {
 	FreeSlots.reserve(MaxTextures);
 	for (int i = static_cast<int>(MaxTextures) - 1; i >= 0; --i)
@@ -25,6 +29,7 @@ DescriptorHeap::DescriptorHeap(
 	CreateDescriptorLayout();
 	CreateDescriptorPool();
 	CreateDescriptorSet();
+	CreateDefaultTextures();
 }
 
 void DescriptorHeap::CreateDescriptorLayout()
@@ -172,4 +177,42 @@ vk::raii::Sampler& DescriptorHeap::GetOrCreateSampler(const SamplerDesc& Desc)
 
 	SamplerCache.emplace_back(Desc, Device.createSampler(SamplerInfo));
 	return SamplerCache.back().second;
+}
+
+void DescriptorHeap::CreateDefaultTextures()
+{
+	auto UploadDefault = [&](std::array<uint8_t, 4> Pixels, int Slot) -> DefaultTexture
+		{
+			auto Result = Uploader.UploadImage(
+				Pixels.data(), 1, 1,
+				vk::Format::eR8G8B8A8Unorm);
+
+			vk::ImageViewCreateInfo ViewInfo(
+				{},
+				*Result.Image,
+				vk::ImageViewType::e2D,
+				vk::Format::eR8G8B8A8Unorm,
+				{},
+				{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
+
+			vk::raii::ImageView View = Device.createImageView(ViewInfo);
+
+			// Write into the reserved slot
+			WriteSlot(Slot, *View, PresetSamplerDesc::SamplerLinearRepeat);
+
+			DefaultTexture Tex;
+			Tex.Memory = std::move(Result.Memory);
+			Tex.Image = std::move(Result.Image);
+			Tex.View = std::move(View);
+			return Tex;
+		};
+
+	// Slot 0 — white (albedo/metallic/roughness/occlusion fallback)
+	DefaultTextures[0] = UploadDefault({ 255, 255, 255, 255 }, 0);
+
+	// Slot 1 — flat normal (0.5, 0.5, 1.0) = (128, 128, 255)
+	DefaultTextures[1] = UploadDefault({ 128, 128, 255, 255 }, 1);
+
+	// Slot 2 — black (emissive fallback)
+	DefaultTextures[2] = UploadDefault({ 0, 0, 0, 255 }, 2);
 }

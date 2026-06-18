@@ -20,4 +20,16 @@ export namespace VulkanUtils
 		vk::ImageAspectFlags Aspect,
 		vk::ImageLayout OldLayout,
 		vk::ImageLayout NewLayout);
+
+	// Explicit — caller provides all sync parameters
+	void TransitionImageLayout(
+		vk::raii::CommandBuffer& CommandBuffer,
+		vk::Image Image,
+		vk::ImageAspectFlags Aspect,
+		vk::ImageLayout OldLayout,
+		vk::ImageLayout NewLayout,
+		vk::PipelineStageFlags SrcStage,
+		vk::PipelineStageFlags DstStage,
+		vk::AccessFlags SrcAccess,
+		vk::AccessFlags DstAccess);
 }

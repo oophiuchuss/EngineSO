@@ -27,18 +27,13 @@ uint32_t VulkanUtils::FindMemoryType(const vk::raii::PhysicalDevice& PhysDev, ui
     throw std::runtime_error("Failed to find suitable memory type");
 }
 
-void VulkanUtils::TransitionImageLayout(vk::raii::CommandBuffer& CommandBuffer, vk::Image Image, vk::ImageAspectFlags Aspect, vk::ImageLayout OldLayout, vk::ImageLayout NewLayout)
+void VulkanUtils::TransitionImageLayout(
+    vk::raii::CommandBuffer& CommandBuffer,
+    vk::Image Image,
+    vk::ImageAspectFlags Aspect,
+    vk::ImageLayout OldLayout,
+    vk::ImageLayout NewLayout)
 {
-    // Configure image barrier strcture to coordinate memory access
-
-    vk::ImageMemoryBarrier Barrier;
-    Barrier.setOldLayout(OldLayout)                         // Current resource layuout
-        .setNewLayout(NewLayout)                            // Final resource layuout
-        .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)    // No queue family transfer
-        .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-        .setImage(Image)                                    // Target Image
-        .setSubresourceRange({ Aspect, 0, 1, 0, 1 });  // Full Image range
-
     // Initialize pipeline stage tracking for syncronization
     vk::PipelineStageFlags SrcStage;    // When previous operations must finish
     vk::PipelineStageFlags DstStage;    // When subsequent operation can start
@@ -163,8 +158,35 @@ void VulkanUtils::TransitionImageLayout(vk::raii::CommandBuffer& CommandBuffer, 
         throw std::invalid_argument("Unsupported layout transition!");
     }
 
-    // Apply the access masks
-    Barrier.setSrcAccessMask(SrcAccess).setDstAccessMask(DstAccess);
+    // Delegate to explicit overload
+    TransitionImageLayout(
+        CommandBuffer, Image, Aspect,
+        OldLayout, NewLayout,
+        SrcStage, DstStage, SrcAccess, DstAccess);
+}
+
+void VulkanUtils::TransitionImageLayout(
+    vk::raii::CommandBuffer& CommandBuffer,
+    vk::Image Image,
+    vk::ImageAspectFlags Aspect,
+    vk::ImageLayout OldLayout,
+    vk::ImageLayout NewLayout,
+    vk::PipelineStageFlags SrcStage,
+    vk::PipelineStageFlags DstStage,
+    vk::AccessFlags SrcAccess,
+    vk::AccessFlags DstAccess)
+{
+    // Configure image barrier strcture to coordinate memory access
+
+    vk::ImageMemoryBarrier Barrier;
+    Barrier.setOldLayout(OldLayout)                         // Current resource layuout
+        .setNewLayout(NewLayout)                            // Final resource layuout
+        .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)    // No queue family transfer
+        .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+        .setImage(Image)                                    // Target Image
+        .setSubresourceRange({ Aspect, 0, 1, 0, 1 })        // Full Image range
+        .setSrcAccessMask(SrcAccess)
+        .setDstAccessMask(DstAccess);
 
     CommandBuffer.pipelineBarrier(
         SrcStage,                           // Wait for this operations to complete

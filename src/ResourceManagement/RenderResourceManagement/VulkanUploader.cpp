@@ -66,6 +66,7 @@ VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelD
 	// Record and submit the copy + layout transitions
 	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
 		{
+			// First transition - from undefined to transfer dst (transfer queue compatible)
 			VulkanUtils::TransitionImageLayout(
 				Cmd, *Result.Image,
 				vk::ImageAspectFlagBits::eColor,
@@ -82,11 +83,16 @@ VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelD
 				*Staging.Buffer, *Result.Image,
 				vk::ImageLayout::eTransferDstOptimal, Region);
 
+			// Second transition - explicit, transfer queue doesn't support eFragmentShader
 			VulkanUtils::TransitionImageLayout(
 				Cmd, *Result.Image,
 				vk::ImageAspectFlagBits::eColor,
 				vk::ImageLayout::eTransferDstOptimal,
-				vk::ImageLayout::eShaderReadOnlyOptimal);
+				vk::ImageLayout::eShaderReadOnlyOptimal,
+				vk::PipelineStageFlagBits::eTransfer,
+				vk::PipelineStageFlagBits::eBottomOfPipe,
+				vk::AccessFlagBits::eTransferWrite,
+				vk::AccessFlagBits::eNone);
 		});
 
 	return Result;

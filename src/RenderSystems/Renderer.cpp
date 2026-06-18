@@ -77,7 +77,8 @@ Renderer::Renderer(
 	
 	DescriptorHeapInstance = std::make_unique<DescriptorHeap>(
 		Device,
-		1024);	// TODO: Max textures hard-coded for now
+		1024,						// TODO: Max textures hard-coded for now
+		*UploaderInstance);	
 
 	GPUSceneInstance = std::make_unique<GPUSceneBuffer>(
 		Device,
