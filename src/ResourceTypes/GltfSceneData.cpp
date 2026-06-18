@@ -446,6 +446,39 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 	// Every node gets an entry regardless of whether it has a mesh
 	std::vector<int> NodeToEntryIndex(RawNodes.size(), -1);
 
+	// Helper: create MeshData for a single primitive, returns its MeshID
+	auto CreateMeshDataForPrimitive = [&](const RawPrimitive& Prim, int MeshIndex, int PrimIdx) -> std::string
+		{
+			std::string MeshID = GetResourceID() + "_mesh_" + std::to_string(MeshIndex) + "_prim_" + std::to_string(PrimIdx);
+
+			std::vector<Vertex> Vertices(Prim.Positions.size());
+			for (size_t v = 0; v < Prim.Positions.size(); ++v)
+			{
+				Vertices[v].Position = Prim.Positions[v];
+				if (v < Prim.UVs.size())
+				{
+					Vertices[v].UV = Prim.UVs[v];
+				}
+				if (v < Prim.Normals.size())
+				{
+					Vertices[v].Normal = Prim.Normals[v];
+				}
+			}
+
+			ResourceManagerRef.Load<MeshData>(MeshID, std::move(Vertices), Prim.Indices);
+			return MeshID;
+		};
+
+	// Helper: resolve the material ID for a primitive
+	auto ResolveMaterial = [&](const RawPrimitive& Prim) -> std::string
+		{
+			if (Prim.MaterialIndex >= 0 && Prim.MaterialIndex < static_cast<int>(MaterialIDs.size()))
+			{
+				return MaterialIDs[Prim.MaterialIndex];
+			}
+			return "default";
+		};
+
 	// Create MeshData and NodeEntries for every node with a mesh
 	for (size_t NodeIdx = 0; NodeIdx < RawNodes.size(); NodeIdx++)
 	{
@@ -457,113 +490,51 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 		Entry.ParentIndex = std::nullopt; // resolved later
 		Entry.bHasMesh = Node.MeshIndex >= 0;
 
+		int FirstPrimEntryIndex = -1;   // index of the first primitive entry (if any)
+
 		if (Entry.bHasMesh)
 		{
 			auto& RawMesh = RawMeshes[Node.MeshIndex];
 
-			// For nodes with multiple primitives we create one entry per primitive
-			// but only the first primitive goes into this entry —
-			// additional primitives get their own entries added below
-
+			// First primitive – uses the node's local transform
 			if (!RawMesh.Primitives.empty())
 			{
-				auto& Prim = RawMesh.Primitives[0];
-
-				// Unique ID per primitive
-				std::string MeshID = GetResourceID() + "_mesh_" + std::to_string(Node.MeshIndex) + "_prim_0";
-
-				// Interleave positions/UVs/normals into Vertex array
-				std::vector<Vertex> Vertices(Prim.Positions.size());
-				for (size_t v = 0; v < Prim.Positions.size(); v++)
-				{
-					Vertices[v].Position = Prim.Positions[v];
-
-					if (v < Prim.UVs.size())
-					{
-						Vertices[v].UV = Prim.UVs[v];
-					}
-
-					if (v < Prim.Normals.size())
-					{
-						Vertices[v].Normal = Prim.Normals[v];
-					}
-				}
-
-				// Register MeshData — bounding box computed in constructor
-				ResourceManagerRef.Load<MeshData>(
-					MeshID,
-					std::move(Vertices),
-					Prim.Indices);
-
-				Entry.MeshID = MeshID;
-
-				// Resolve material — fall back to "default" if none assigned
-				std::string MatID = "default";
-
-				if (Prim.MaterialIndex >= 0 && Prim.MaterialIndex < static_cast<int>(MaterialIDs.size()))
-				{
-					MatID = MaterialIDs[Prim.MaterialIndex];
-				}
-
+				const auto& Prim = RawMesh.Primitives[0];
+				Entry.MeshID = CreateMeshDataForPrimitive(Prim, Node.MeshIndex, 0);
+				Entry.MaterialID = ResolveMaterial(Prim);
 				Entry.Name = RawMesh.Name;
 
+				// Keep a simple name for multi‑primitive meshes
 				if (RawMesh.Primitives.size() > 1)
 				{
-					Entry.Name = RawMesh.Name + "_prim_0";
+					Entry.Name += "_prim_0";
 				}
 			}
 		}
 
 		int EntryIndex = static_cast<int>(NodeEntries.size());
 		NodeToEntryIndex[NodeIdx] = EntryIndex;
+		FirstPrimEntryIndex = EntryIndex;
 		NodeEntries.push_back(std::move(Entry));
 
 		// Additional primitives — each gets its own entry as a child of this entry
 		if (Node.MeshIndex >= 0)
 		{
 			auto& RawMesh = RawMeshes[Node.MeshIndex];
-			for (size_t PrimIdx = 1; PrimIdx < RawMesh.Primitives.size(); PrimIdx++)
+			for (size_t PrimIdx = 1; PrimIdx < RawMesh.Primitives.size(); ++PrimIdx)
 			{
-				auto& Prim = RawMesh.Primitives[PrimIdx];
+				const auto& Prim = RawMesh.Primitives[PrimIdx];
 
-				std::string MeshID = GetResourceID() + "_mesh_" + std::to_string(Node.MeshIndex) + "_prim_" + std::to_string(PrimIdx);
-
-				std::vector<Vertex> Vertices(Prim.Positions.size());
-				for (size_t v = 0; v < Prim.Positions.size(); v++)
-				{
-					Vertices[v].Position = Prim.Positions[v];
-
-					if (v < Prim.UVs.size())
-					{
-						Vertices[v].UV = Prim.UVs[v];
-					}
-
-					if (v < Prim.Normals.size())
-					{
-						Vertices[v].Normal = Prim.Normals[v];
-					}
-				}
-
-				ResourceManagerRef.Load<MeshData>(MeshID, std::move(Vertices), Prim.Indices);
-
-				std::string MatID = "default";
-
-				if (Prim.MaterialIndex >= 0 && Prim.MaterialIndex < static_cast<int>(MaterialIDs.size()))
-				{
-					MatID = MaterialIDs[Prim.MaterialIndex];
-				}
-
-				// Extra primitive entry — identity local transform,
 				SceneNodeEntry PrimEntry;
 				PrimEntry.Name = RawMesh.Name + "_prim_" + std::to_string(PrimIdx);
-				PrimEntry.LocalTransform = glm::mat4(1.0f); // transform inherited from parent
+				PrimEntry.LocalTransform = glm::mat4(1.0f);          // inherited from parent
 				PrimEntry.bHasMesh = true;
-				PrimEntry.MeshID = MeshID;
-				PrimEntry.MaterialID = MatID;
-				PrimEntry.ParentIndex = EntryIndex; // parent is the first primitive entry
+				PrimEntry.MeshID = CreateMeshDataForPrimitive(Prim, Node.MeshIndex, PrimIdx);
+				PrimEntry.MaterialID = ResolveMaterial(Prim);
+				PrimEntry.ParentIndex = FirstPrimEntryIndex;
 
 				int PrimEntryIndex = static_cast<int>(NodeEntries.size());
-				NodeEntries[EntryIndex].ChildIndices.push_back(PrimEntryIndex);
+				NodeEntries[FirstPrimEntryIndex].ChildIndices.push_back(PrimEntryIndex);
 				NodeEntries.push_back(std::move(PrimEntry));
 			}
 		}
