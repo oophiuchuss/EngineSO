@@ -98,6 +98,65 @@ VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelD
 	return Result;
 }
 
+std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
+	std::span<const ImageUploadInfo> Images)
+{
+	std::vector<UploadImageResult> Results;
+	if (Images.empty())
+		return Results;
+
+	// Create staging buffers and device‑local images for every entry.
+	std::vector<StagingBuffer> Stagings;
+	Stagings.reserve(Images.size());
+	Results.reserve(Images.size());
+
+	for (const auto& Info : Images)
+	{
+		vk::DeviceSize DataSize = Info.Width * Info.Height * 4;   // TODO: for now always RGBA
+		Stagings.push_back(CreateStagingBuffer(Info.PixelData, DataSize));
+		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format));
+	}
+
+	// Record everything into one command buffer.
+	   // 2. Record all copies into one command buffer, submit once, wait once.
+	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
+		{
+			for (size_t i = 0; i < Images.size(); ++i)
+			{
+				VulkanUtils::TransitionImageLayout(
+					Cmd, *Results[i].Image,
+					vk::ImageAspectFlagBits::eColor,
+					vk::ImageLayout::eUndefined,
+					vk::ImageLayout::eTransferDstOptimal);
+
+				vk::BufferImageCopy Region(
+					0, 0, 0,
+					{ vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
+					{ 0, 0, 0 },
+					{ Images[i].Width, Images[i].Height, 1 });
+
+				Cmd.copyBufferToImage(
+					*Stagings[i].Buffer,
+					*Results[i].Image,
+					vk::ImageLayout::eTransferDstOptimal,
+					Region);
+
+				VulkanUtils::TransitionImageLayout(
+					Cmd, *Results[i].Image,
+					vk::ImageAspectFlagBits::eColor,
+					vk::ImageLayout::eTransferDstOptimal,
+					vk::ImageLayout::eShaderReadOnlyOptimal,
+					vk::PipelineStageFlagBits::eTransfer,
+					vk::PipelineStageFlagBits::eBottomOfPipe,
+					vk::AccessFlagBits::eTransferWrite,
+					vk::AccessFlagBits::eNone);
+			}
+		});
+
+	// Staging buffers go out of scope and are freed.
+	// The created device‑local images are returned to the caller.
+	return Results;
+}
 VulkanUploader::StagingBuffer VulkanUploader::CreateStagingBuffer(const void* Data, vk::DeviceSize Size)
 {
 	vk::BufferCreateInfo BufferInfo(

@@ -3,6 +3,7 @@ module;
 #include <vulkan/vulkan_raii.hpp>
 #include <vector>
 #include <functional>
+#include <span>
 
 export module VulkanUploader;
 
@@ -35,6 +36,15 @@ public:
 		vk::raii::DeviceMemory Memory;
 	};
 
+	// Descriptor for a single image in a batch upload
+	struct ImageUploadInfo
+	{
+		const void* PixelData = nullptr;
+		uint32_t    Width = 0;
+		uint32_t    Height = 0;
+		vk::Format  Format = vk::Format::eR8G8B8A8Unorm;
+	};
+
 	UploadBufferResult UploadBuffer(
 		const void* Data,
 		vk::DeviceSize Size,
@@ -45,6 +55,9 @@ public:
 		uint32_t Width, 
 		uint32_t Height, 
 		vk::Format Format);
+
+	// Upload many images in a single command buffer — one submit, one fence wait.
+	std::vector<UploadImageResult> UploadImageBatch(std::span<const ImageUploadInfo> Images);
 
 private:
 	struct StagingBuffer

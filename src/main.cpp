@@ -8,7 +8,7 @@ import HotReloadResourceManager;
 
 import Shader;
 import Entity;
-import AsyncResourceLoader;
+import TaskScheduler;
 import MeshComponent;
 import TransformComponent;
 import CameraComponent;
@@ -67,7 +67,7 @@ int main() {
         
     //resourceManager.Release(TextureResource.GetResourceID());
 
-	AsyncResourceLoader asyncLoader(&resourceManager);
+	TaskScheduler asyncLoader(&resourceManager);
 
     asyncLoader.LoadAsync<Texture>("async_texture", [](ResourceHandle<Texture> LoadedTexture) {
         if (LoadedTexture.IsValid())
