@@ -16,6 +16,7 @@ import WindowResizeEvent;
 import Renderer;
 import Scene;
 import ResourceManager;
+import TaskScheduler;
 
 VulkanEngine::VulkanEngine()
 {
@@ -29,6 +30,8 @@ VulkanEngine::VulkanEngine()
     WindowSystemInstance = std::make_unique<WindowSystem>(EventSystemInstance.get(), 1280, 720, "EngineSO");
 
     ResourceManagerInstance = std::make_unique<ResourceManager>();
+
+    TaskSchedulerInstance = std::make_unique<TaskScheduler>();
 
     // Context should be create with default constructor
     // Initialize all needed resources for vulkan and GLFW  

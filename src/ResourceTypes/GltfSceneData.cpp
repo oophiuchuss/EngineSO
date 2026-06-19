@@ -357,35 +357,31 @@ void GltfSceneData::Instantiate()
 
 std::vector<std::string> GltfSceneData::RegisterAllTextures()
 {
-	std::cout << "[GltfSceneData] Registering " << RawTextures.size() << " textures...\n";
+	std::cout << "[GltfSceneData] Registering " << RawTextures.size() << " textures (parallel decode)......\n";
 
 	std::vector<std::string> TextureIDs;
 	TextureIDs.reserve(RawTextures.size());
 
 	for (size_t i = 0; i < RawTextures.size(); i++)
 	{
-		std::cout << "[GltfSceneData] Texture " << (i + 1)
-			<< "/" << RawTextures.size()
-			<< ": " << RawTextures[i].Name << "\n";
-
 		auto& Raw = RawTextures[i];
 
 		if (Raw.bIsEmbedded)
 		{
-			// Embedded — load from memory, ID is scene-scoped
 			std::string TexID = GetResourceID() + "_tex_" + std::to_string(i);
-			ResourceManagerRef.LoadFromMemory<TextureData>(TexID, Raw.EmbeddedData);
+			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData, TaskSchedulerRef);
 			TextureIDs.push_back(TexID);
 		}
 		else
 		{
-			// External — use file path as ID, consistent with direct loads
-			ResourceManagerRef.Load<TextureData>(Raw.FilePath);
+			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath, TaskSchedulerRef);
 			TextureIDs.push_back(Raw.FilePath);
 		}
 	}
 
-	std::cout << "[GltfSceneData] Textures done\n";
+	std::cout << "[GltfSceneData] Waiting for texture decodes...\n";
+	TaskSchedulerRef.WaitForAll();
+	std::cout << "[GltfSceneData] All textures decoded.\n";
 
 	return TextureIDs;
 }

@@ -9,6 +9,7 @@ export module VulkanEngine;
 import Renderer;
 import Scene;
 import ResourceManager;
+import TaskScheduler;
 import EventSystem;
 import WindowSystem;
 
@@ -32,6 +33,7 @@ public:
 	Renderer* GetRenderer() const { return RendererInstance.get(); }
 	Scene* GetMainScene() const { return MainSceneInstance.get(); }
 	ResourceManager* GetResourceManager() const { return ResourceManagerInstance.get(); }
+    TaskScheduler* GetTaskScheduler() const { return TaskSchedulerInstance.get(); }
     EventSystem* GetEventSystem() const { return EventSystemInstance.get(); }
 	WindowSystem* GetWindowSystem() const { return WindowSystemInstance.get(); }
 
@@ -48,6 +50,7 @@ private:
     std::unique_ptr<EventSystem> EventSystemInstance;
     std::unique_ptr<WindowSystem> WindowSystemInstance;
 	std::unique_ptr<ResourceManager> ResourceManagerInstance;
+	std::unique_ptr<TaskScheduler> TaskSchedulerInstance;
 
     // Vulkan base objects (should live the entire engine lifetime)
     vk::raii::Context Context;  

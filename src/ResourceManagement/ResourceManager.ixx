@@ -4,9 +4,11 @@ module;
 #include <unordered_map>
 #include <typeindex>
 #include <memory>
+#include <iostream>
 
 export module ResourceManager;
 
+import TaskScheduler;
 import ResourceHandle;
 import ResourceBase;
 import TextureData;
@@ -33,9 +35,16 @@ public:
 	template<typename T, typename ...Args>
 	ResourceHandle<T> Load(const std::string& ResourceID, Args && ...args);
 	
-	template<typename T, typename ...Args>
+	template<typename T>
 	ResourceHandle<T> LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data);
 
+	template<typename T, typename ...Args>
+	ResourceHandle<T> PrepareAsync(const std::string& ResourceID, TaskScheduler& Scheduler, Args && ...args);
+	
+	// Schedule a CPU‑only load from raw bytes on a background thread.
+	template<typename T>
+	ResourceHandle<T> PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, TaskScheduler& Scheduler);
+	
 	void Release(const std::string& ResourceID, const std::type_index& ResourceType);
 
 	void UnloadAll();
@@ -105,7 +114,7 @@ ResourceHandle<T> ResourceManager::Load(const std::string& ResourceID, Args&&...
 	return ResourceHandle<T>(Resource);
 }
 
-template<typename T, typename ...Args>
+template<typename T>
 ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data)
 {
 	static_assert(std::is_base_of_v<ResourceBase, T>, "T must derive from ResourceBase");
@@ -131,6 +140,71 @@ ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID,
 	TypeResources[ResourceID] = { Resource, 1 };
 	return ResourceHandle<T>(Resource);
 }
+
+template<typename T, typename ...Args>
+ResourceHandle<T> ResourceManager::PrepareAsync(const std::string& ResourceID, TaskScheduler& Scheduler, Args && ...args)
+{
+	static_assert(std::is_base_of_v<ResourceBase, T>,
+		"T must derive from ResourceBase");
+
+	auto& TypeResources = Resources[std::type_index(typeid(T))];
+	auto It = TypeResources.find(ResourceID);
+
+	if (It != TypeResources.end())
+	{
+		It->second.RefCount++;
+		return ResourceHandle<T>(std::static_pointer_cast<T>(It->second.Resource));
+	}
+
+	// Create the entry now, but don't load yet.
+	auto Resource = std::make_shared<T>(ResourceID);
+	TypeResources[ResourceID] = { Resource, 1 };
+
+	std::string FilePath = GetResourceFilePath<T>(ResourceID);
+
+	Scheduler.RunAsync([Resource, FilePath]()
+		{
+			Resource->Load(FilePath);
+			if (!Resource->IsLoaded())
+			{
+				std::cerr << "[ResourceManager] PrepareAsync failed to load "
+					<< FilePath << "\n";
+			}
+		});
+
+	return ResourceHandle<T>(Resource);
+}
+
+template<typename T>
+ResourceHandle<T> ResourceManager::PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, TaskScheduler& Scheduler)
+{
+	static_assert(std::is_base_of_v<ResourceBase, T>,
+		"T must derive from ResourceBase");
+
+	auto& TypeResources = Resources[std::type_index(typeid(T))];
+	auto It = TypeResources.find(ResourceID);
+
+	if (It != TypeResources.end())
+	{
+		It->second.RefCount++;
+		return ResourceHandle<T>(std::static_pointer_cast<T>(It->second.Resource));
+	}
+
+	auto Resource = std::make_shared<T>(ResourceID);
+	TypeResources[ResourceID] = { Resource, 1 };
+
+	Scheduler.RunAsync([Resource, Data]()
+		{
+			Resource->LoadFromMemory(Data);
+			if (!Resource->IsLoaded())
+			{
+				std::cerr << "[ResourceManager] PrepareAsyncFromMemory failed\n";
+			}
+		});
+
+	return ResourceHandle<T>(Resource);
+}
+
 
 template<typename T>
 T* ResourceManager::GetResource(const std::string& ResourceID) 

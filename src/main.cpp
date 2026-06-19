@@ -26,17 +26,7 @@ int main() {
 
 	Engine.GetMainScene()->SetActiveCameraEntity(MainCamera);
 
-
-/*    ResourceHandle<Material> NewMaterial = Engine.GetResourceManager()->Load<Material>("basic_material");
-
-    // Triangle mesh (procedural)
-    ResourceHandle<MeshData> NewMeshData = Engine.GetResourceManager()->Load<MeshData>("Triangle");
-    
-	Entity* TriangleEntity = Engine.GetMainScene()->CreateMeshEntity("TriangleEntity", NewMeshData, NewMaterial);
-    
-	TriangleEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(0.0f, 0.0f, -20.0f));*/
-
-    auto SceneDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("main_sponza/NewSponza_Main_glTF_003.gltf", *Engine.GetResourceManager());
+    auto SceneDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("main_sponza/NewSponza_Main_glTF_003.gltf", *Engine.GetResourceManager(), *Engine.GetTaskScheduler());
 
     if (SceneDataHandle.Get())
     {
@@ -44,41 +34,6 @@ int main() {
     }
 
     Engine.Run();
-
-
-    HotReloadResourceManager resourceManager;
-		
-    //auto TextureResource = resourceManager.Load<Texture>("example_texture");
-	//auto MeshResource = resourceManager.Load<Mesh>("example_mesh");
-	//auto ShaderResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eVertex);
-	//auto FragmentResource = resourceManager.Load<Shader>("example_shader", vk::ShaderStageFlagBits::eFragment);
-        
-/*	if (TextureResource.IsValid() && MeshResource.IsValid() && ShaderResource.IsValid() && FragmentResource.IsValid())
-    {
-        Material material(vertexShader, fragmentShader);
-        
-        // Set texture in material
-        //material.SetTexture("diffuse", texture);
-        
-		Entity entity("ExampleEntity");
-        
-        auto meshComponent = entity.AddComponent<MeshComponent>(MeshResource.Get(), &material);
-    }
-        
-    //resourceManager.Release(TextureResource.GetResourceID());
-
-	TaskScheduler asyncLoader(&resourceManager);
-
-    asyncLoader.LoadAsync<Texture>("async_texture", [](ResourceHandle<Texture> LoadedTexture) {
-        if (LoadedTexture.IsValid())
-        {
-            std::cout << "Asynchronously loaded texture: " << LoadedTexture.GetResourceID() << std::endl;
-        }
-        else
-        {
-            std::cout << "Failed to load texture asynchronously." << std::endl;
-        }
-		});*/
 
     return 0;
 }

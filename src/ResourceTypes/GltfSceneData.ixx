@@ -13,6 +13,7 @@ export module GltfSceneData;
 
 import SceneData;
 import ResourceManager;
+import TaskScheduler;
 
 import TextureData; // TOOD: maybe should be removed
 
@@ -21,9 +22,11 @@ export class GltfSceneData : public SceneData
 public:
 	explicit GltfSceneData(
 		const std::string& ID,
-		ResourceManager& RM) : 
+		ResourceManager& RM,
+		TaskScheduler& TS) :
 		SceneData(ID),
-		ResourceManagerRef(RM)
+		ResourceManagerRef(RM),
+		TaskSchedulerRef(TS)
 	{}
 
 	void Instantiate() override;
@@ -88,6 +91,17 @@ private:
 		std::vector<int> ChildIndices;
 	};
 
+	struct TextureDecodeResult
+	{
+		int Index;                     // position in RawTextures
+		std::vector<uint8_t> Pixels;   // decoded RGBA data
+		uint32_t Width = 0;
+		uint32_t Height = 0;
+		uint32_t Channels = 0;
+		bool Success = false;
+	};
+
+
 	// Helper methods
 	glm::mat4 ResolveNodeTransform(const fastgltf::Node& Node) const;
 	std::vector<std::string> RegisterAllTextures();
@@ -100,4 +114,5 @@ private:
 	std::vector<RawNode> RawNodes;
 
 	ResourceManager& ResourceManagerRef;
+	TaskScheduler& TaskSchedulerRef;
 };
