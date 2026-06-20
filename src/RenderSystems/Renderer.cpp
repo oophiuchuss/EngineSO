@@ -200,6 +200,52 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	// Build FrameData
 	const auto& VisibleEntities = CullingSystemInstance->GetAllVisibleEntities();
 
+	// Collect textures that will be used this frame
+	std::vector<std::string> PendingIDs;
+	std::vector<const TextureData*> PendingData;
+	std::unordered_set<std::string> SeenIDs;
+
+	auto CollectTextureIfNeeded = [&](const ResourceHandle<TextureData>& Handle)
+		{
+			const TextureData* TD = Handle.Get();
+			if (!TD) return;
+
+			const std::string& ID = TD->GetResourceID();
+			if (SeenIDs.contains(ID)) 
+			{
+				return;
+			}
+
+			SeenIDs.insert(ID);
+
+			if (!RenderCacheInstance->IsTextureCached(ID)) // cheap lookup, no upload
+			{
+				PendingIDs.push_back(ID);
+				PendingData.push_back(TD);
+			}
+		};
+
+	for (Entity* E : VisibleEntities)
+	{
+		MeshComponent* MC = E->GetComponent<MeshComponent>();
+		if (!MC) continue;
+
+		if (const Material* Mat = MC->GetMaterial())
+		{
+			CollectTextureIfNeeded(Mat->GetAlbedoTexture());
+			CollectTextureIfNeeded(Mat->GetNormalTexture());
+			CollectTextureIfNeeded(Mat->GetMetallicRoughnessTexture());
+			CollectTextureIfNeeded(Mat->GetOcclusionTexture());
+			CollectTextureIfNeeded(Mat->GetEmissiveTexture());
+		}
+	}
+
+	// One batched GPU upload for everything new this frame (no-op if nothing pending)
+	if (!PendingIDs.empty())
+	{
+		RenderCacheInstance->GetOrUploadTextureBatch(PendingIDs, PendingData);
+	}
+
 	FrameData CurrentFrameData;
 	CurrentFrameData.Camera = CameraUBO->GetLastData();
 

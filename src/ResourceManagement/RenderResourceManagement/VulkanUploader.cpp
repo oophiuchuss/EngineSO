@@ -98,8 +98,7 @@ VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelD
 	return Result;
 }
 
-std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
-	std::span<const ImageUploadInfo> Images)
+std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(std::span<const ImageUploadInfo> Images)
 {
 	std::vector<UploadImageResult> Results;
 	if (Images.empty())
@@ -117,8 +116,7 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format));
 	}
 
-	// Record everything into one command buffer.
-	   // 2. Record all copies into one command buffer, submit once, wait once.
+	// Record all copies into one command buffer, submit once, wait once.
 	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
 		{
 			for (size_t i = 0; i < Images.size(); ++i)

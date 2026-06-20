@@ -61,7 +61,7 @@ int RenderResourceCache::GetOrUploadTexture(const std::string& ID, const Texture
     }
 
     // Upload GPU image
-    auto NewTexture = Texture::CreateFromTextureData(Device, PhysicalDevice, *UploaderPtr, Data);
+    auto NewTexture = Texture::CreateFromTextureData(Device, *UploaderPtr, Data);
     if (!NewTexture)
     {
         return -1;
@@ -82,6 +82,69 @@ int RenderResourceCache::GetOrUploadTexture(const std::string& ID, const Texture
     TextureSlotMap[ID] = Slot;
 
     return Slot;
+}
+
+std::vector<int> RenderResourceCache::GetOrUploadTextureBatch(const std::vector<std::string>& IDs, const std::vector<const TextureData*>& DataList)
+{
+    if (IDs.size() != DataList.size())
+    {
+        throw std::invalid_argument("GetOrUploadTextureBatch: IDs and DataList size mismatch");
+    }
+
+    std::vector<int> ResultSlots(IDs.size(), -1);
+
+    // Figure out which ones are already cached, and which need uploading
+    std::vector<size_t> PendingIndices;             // index into IDs/DataList
+    std::vector<const TextureData*> PendingData;
+
+    for (size_t i = 0; i < IDs.size(); ++i)
+    {
+        auto It = TextureSlotMap.find(IDs[i]);
+        if (It != TextureSlotMap.end())
+        {
+            ResultSlots[i] = It->second; // already uploaded — reuse slot
+        }
+        else
+        {
+            PendingIndices.push_back(i);
+            PendingData.push_back(DataList[i]);
+        }
+    }
+
+    if (PendingData.empty())
+    {
+        return ResultSlots; // everything was already cached
+    }
+
+    // Single batched GPU upload for everything not yet cached
+    std::vector<std::unique_ptr<Texture>> NewTextures = Texture::CreateBatchFromTextureData(Device, *UploaderPtr, PendingData);
+
+    if (NewTextures.size() != PendingData.size())
+    {
+        throw std::runtime_error("GetOrUploadTextureBatch: batch upload returned mismatched count");
+    }
+
+    // Allocate slots and write descriptors for each newly uploaded texture
+    for (size_t i = 0; i < NewTextures.size(); ++i)
+    {
+        size_t OriginalIndex = PendingIndices[i];
+        const std::string& ID = IDs[OriginalIndex];
+
+        int Slot = DescriptorHeapPtr->AllocateSlot();
+        if (Slot < 0)
+        {
+            ResultSlots[OriginalIndex] = -1; // out of slots — caller falls back to default
+            continue;
+        }
+
+        DescriptorHeapPtr->WriteSlot(Slot, NewTextures[i]->GetImageView(), DataList[OriginalIndex]->GetSamplerDesc());
+
+        TextureCache[ID] = std::move(NewTextures[i]);
+        TextureSlotMap[ID] = Slot;
+        ResultSlots[OriginalIndex] = Slot;
+    }
+
+    return ResultSlots;
 }
 
 void RenderResourceCache::Evict(const std::string& ID)

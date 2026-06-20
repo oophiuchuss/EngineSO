@@ -2,6 +2,7 @@ module;
 
 #include <vulkan/vulkan_raii.hpp>
 #include <memory>
+#include <vector>
 
 export module Texture;
 
@@ -22,9 +23,15 @@ public:
 
 	static std::unique_ptr<Texture> CreateFromTextureData(
 		const vk::raii::Device& Device,
-		const vk::raii::PhysicalDevice& PhysicalDevice,
 		VulkanUploader& Uploader,
 		const TextureData& Data);
+
+	// Batch variant that uploads many textures in a single command buffer submission
+	static std::vector<std::unique_ptr<Texture>> CreateBatchFromTextureData(
+		const vk::raii::Device& Device,
+		VulkanUploader& Uploader,
+		const std::vector<const TextureData*>& DataList);
+
 
 	vk::Image GetImage() const { return *Image; }
 	vk::ImageView GetImageView() const { return *ImageView; }
