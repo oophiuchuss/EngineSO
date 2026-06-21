@@ -2,8 +2,8 @@ module;
 
 #include <vulkan/vulkan_raii.hpp>
 
-
 #include <vector>
+#include <unordered_set>
 
 export module Renderer;
 
@@ -20,6 +20,9 @@ import EventListener;
 import VulkanUploader;
 import DescriptorHeap;
 import GPUSceneBuffer;
+
+import MeshData;
+import TextureData;
 
 export class Renderer : public EventListener
 {
@@ -41,6 +44,15 @@ private:
 
 	void PreloadSceneResources(Scene& Scene);
 	void PreloadEntityResources(Entity& Entity);
+
+	void CollectEntityResources(
+		Entity& Entity,
+		std::unordered_set<std::string>& SeenTextures,
+		std::vector<std::string>& TextureIDs,
+		std::vector<const TextureData*>& TextureDataPtrs,
+		std::unordered_set<std::string>& SeenMeshes,
+		std::vector<std::string>& MeshIDs,
+		std::vector<const MeshData*>& MeshDataPtrs);
 
 	int ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk::raii::SurfaceKHR& Surface);
 

@@ -84,6 +84,37 @@ int RenderResourceCache::GetOrUploadTexture(const std::string& ID, const Texture
     return Slot;
 }
 
+void RenderResourceCache::GetOrUploadMeshBatch(const std::vector<std::string>& IDs, const std::vector<const MeshData*>& DataList)
+{
+    if (IDs.empty() || IDs.size() != DataList.size())
+    {
+        return;
+    }
+
+    std::vector<const MeshData*> NewData;
+    std::vector<std::string> NewIDs;
+    for (size_t i = 0; i < IDs.size(); ++i)
+    {
+        if (!IsMeshCached(IDs[i]))
+        {
+            NewIDs.push_back(IDs[i]);
+            NewData.push_back(DataList[i]);
+        }
+    }
+
+    if (NewData.empty())
+    {
+        return;
+    }
+
+    auto NewMeshes = Mesh::CreateFromMeshDataBatch(Device, PhysicalDevice, *UploaderPtr, NewData);
+
+    for (size_t i = 0; i < NewMeshes.size(); ++i)
+    {
+        MeshCache[NewIDs[i]] = std::move(NewMeshes[i]);
+    }
+}
+
 std::vector<int> RenderResourceCache::GetOrUploadTextureBatch(const std::vector<std::string>& IDs, const std::vector<const TextureData*>& DataList)
 {
     if (IDs.size() != DataList.size())

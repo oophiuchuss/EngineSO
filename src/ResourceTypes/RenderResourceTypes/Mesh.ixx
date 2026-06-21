@@ -30,6 +30,12 @@ public:
 		const std::vector<uint8_t>& Data,
 		uint8_t Stride);
 
+	static std::unique_ptr<VertexBuffer> CreateFromUploadResult(
+		vk::raii::Buffer&& Buffer,
+		vk::raii::DeviceMemory&& Memory,
+		uint32_t VertexCount,
+		uint8_t Stride);
+
 	// Method to bind the vertex buffer to a command buffer for rendering, specifying the binding point (default is 0)
 	void Bind(const vk::raii::CommandBuffer& CommandBuffer, uint32_t binding = 0) const;
 
@@ -69,6 +75,11 @@ public:
 		VulkanUploader* Uploader,
 		const std::vector<uint32_t>& Indices);
 
+	static std::unique_ptr<IndexBuffer> CreateFromUploadResult(
+		vk::raii::Buffer&& Buffer,
+		vk::raii::DeviceMemory&& Memory,
+		uint32_t IndexCount);
+	
 	// Method to bind the index buffer to a command buffer for rendering, specifying the binding point (default is 0)
 	void Bind(const vk::raii::CommandBuffer& CommandBuffer, uint32_t binding = 0) const;
 
@@ -103,6 +114,13 @@ public:
 		const vk::raii::PhysicalDevice& PhysicalDevice,
 		VulkanUploader* Uploader,
 		const MeshData& MeshData);
+		
+	// Batch variant that uploads many meshes in a single command buffer submission
+	static std::vector<std::unique_ptr<Mesh>> CreateFromMeshDataBatch(
+		const vk::raii::Device& Device,
+		const vk::raii::PhysicalDevice& PhysicalDevice,
+		VulkanUploader& Uploader,
+		const std::vector<const MeshData*>& DataList);
 	
 	inline VertexBuffer* GetVertexBuffer() const { return VertexBufferPtr.get(); }
 	inline IndexBuffer* GetIndexBuffer() const { return IndexBufferPtr.get(); }

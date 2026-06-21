@@ -3,6 +3,7 @@ module;
 #include <vulkan/vulkan_raii.hpp>
 #include <glm/glm.hpp>
 #include <vector>
+#include <unordered_set>
 #include <optional>
 #include <memory>
 #include <iostream>
@@ -818,77 +819,111 @@ void Renderer::SetupRenderPasses()
 
 void Renderer::PreloadSceneResources(Scene& Scene)
 {
-	// Collect every texture used by any entity (not just visible ones)
 	std::vector<std::string> TextureIDs;
 	std::vector<const TextureData*> TextureDataPtrs;
 	std::unordered_set<std::string> SeenTextures;
+	std::vector<std::string> MeshIDs;
+	std::vector<const MeshData*> MeshDataPtrs;
+	std::unordered_set<std::string> SeenMeshes;
 
 	for (Entity* E : Scene.GetAllEntities())
 	{
-		auto* MC = E->GetComponent<MeshComponent>();
-		if (!MC) continue;
-
-		const Material* Mat = MC->GetMaterial();
-		if (!Mat) continue;
-
-		auto Collect = [&](const ResourceHandle<TextureData>& Handle)
-			{
-				const TextureData* TD = Handle.Get();
-				if (!TD || SeenTextures.contains(TD->GetResourceID())) return;
-				SeenTextures.insert(TD->GetResourceID());
-
-				// Only upload if not already cached on GPU
-				if (!RenderCacheInstance->IsTextureCached(TD->GetResourceID()))
-				{
-					TextureIDs.push_back(TD->GetResourceID());
-					TextureDataPtrs.push_back(TD);
-				}
-			};
-
-		Collect(Mat->GetAlbedoTexture());
-		Collect(Mat->GetNormalTexture());
-		Collect(Mat->GetMetallicRoughnessTexture());
-		Collect(Mat->GetOcclusionTexture());
-		Collect(Mat->GetEmissiveTexture());
+		CollectEntityResources(*E,
+			SeenTextures, TextureIDs, TextureDataPtrs,
+			SeenMeshes, MeshIDs, MeshDataPtrs);
 	}
 
-	// If any new textures were found, batch‑upload them now
+	if (!MeshIDs.empty())
+	{
+		std::cout << "[Renderer] Preloading " << MeshIDs.size() << " meshes...\n";
+		RenderCacheInstance->GetOrUploadMeshBatch(MeshIDs, MeshDataPtrs);
+	}
 	if (!TextureIDs.empty())
 	{
-		std::cout << "[Renderer] Preloading " << TextureIDs.size() << " new textures...\n";
+		std::cout << "[Renderer] Preloading " << TextureIDs.size() << " textures...\n";
 		RenderCacheInstance->GetOrUploadTextureBatch(TextureIDs, TextureDataPtrs);
 	}
 }
 
 void Renderer::PreloadEntityResources(Entity& Entity)
 {
-	// Collect textures from this entity
-	auto* MC = Entity.GetComponent<MeshComponent>();
-	if (MC)
+	std::vector<std::string> TextureIDs;
+	std::vector<const TextureData*> TextureDataPtrs;
+	std::unordered_set<std::string> SeenTextures;
+	std::vector<std::string> MeshIDs;
+	std::vector<const MeshData*> MeshDataPtrs;
+	std::unordered_set<std::string> SeenMeshes;
+
+	CollectEntityResources(Entity,
+		SeenTextures, TextureIDs, TextureDataPtrs,
+		SeenMeshes, MeshIDs, MeshDataPtrs);
+
+	if (!MeshIDs.empty())
 	{
-		const Material* Mat = MC->GetMaterial();
-		if (Mat)
+		RenderCacheInstance->GetOrUploadMeshBatch(MeshIDs, MeshDataPtrs);
+	}
+	if (!TextureIDs.empty())
+	{
+		RenderCacheInstance->GetOrUploadTextureBatch(TextureIDs, TextureDataPtrs);
+	}
+}
+
+void Renderer::CollectEntityResources(
+	Entity& Entity, 
+	std::unordered_set<std::string>& SeenTextures, 
+	std::vector<std::string>& TextureIDs, 
+	std::vector<const TextureData*>& TextureDataPtrs, 
+	std::unordered_set<std::string>& SeenMeshes, 
+	std::vector<std::string>& MeshIDs, 
+	std::vector<const MeshData*>& MeshDataPtrs)
+{
+	auto* MC = Entity.GetComponent<MeshComponent>();
+	if (!MC)
+	{
+		return;
+	}
+
+	// Mesh
+	const MeshData* MD = MC->GetMeshData();
+	if (MD && SeenMeshes.insert(MD->GetResourceID()).second)
+	{
+		if (!RenderCacheInstance->IsMeshCached(MD->GetResourceID()))
 		{
-			auto Collect = [&](const ResourceHandle<TextureData>& Handle)
-				{
-					const TextureData* TD = Handle.Get();
-					if (!TD || RenderCacheInstance->IsTextureCached(TD->GetResourceID()))
-						return;
-
-					// Single‑texture upload (still uses batching, but only one texture here)
-					// We can create a tiny batch of one
-					std::vector<const TextureData*> Batch = { TD };
-					std::vector<std::string> IDs = { TD->GetResourceID() };
-					RenderCacheInstance->GetOrUploadTextureBatch(IDs, Batch);
-				};
-
-			Collect(Mat->GetAlbedoTexture());
-			Collect(Mat->GetNormalTexture());
-			Collect(Mat->GetMetallicRoughnessTexture());
-			Collect(Mat->GetOcclusionTexture());
-			Collect(Mat->GetEmissiveTexture());
+			MeshIDs.push_back(MD->GetResourceID());
+			MeshDataPtrs.push_back(MD);
 		}
 	}
+
+	// Textures
+	const Material* Mat = MC->GetMaterial();
+	if (!Mat) 
+	{
+		return;
+	}
+
+	auto Collect = [&](const ResourceHandle<TextureData>& Handle)
+		{
+			const TextureData* TD = Handle.Get();
+			if (!TD) 
+			{
+				return;
+			}
+			if (!SeenTextures.insert(TD->GetResourceID()).second) 
+			{
+				return;
+			}
+			if (!RenderCacheInstance->IsTextureCached(TD->GetResourceID()))
+			{
+				TextureIDs.push_back(TD->GetResourceID());
+				TextureDataPtrs.push_back(TD);
+			}
+		};
+
+	Collect(Mat->GetAlbedoTexture());
+	Collect(Mat->GetNormalTexture());
+	Collect(Mat->GetMetallicRoughnessTexture());
+	Collect(Mat->GetOcclusionTexture());
+	Collect(Mat->GetEmissiveTexture());
 }
 
 int Renderer::ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk::raii::SurfaceKHR& Surface)

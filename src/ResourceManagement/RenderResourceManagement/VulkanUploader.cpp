@@ -98,6 +98,35 @@ VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelD
 	return Result;
 }
 
+std::vector<VulkanUploader::UploadBufferResult> VulkanUploader::UploadBufferBatch(std::span<const BufferUploadInfo> Infos)
+{
+	std::vector<UploadBufferResult> Results;
+	if (Infos.empty()) return Results;
+
+	// Create staging buffers and device‑local buffers for all entries
+	std::vector<StagingBuffer> Stagings;
+	Stagings.reserve(Infos.size());
+	Results.reserve(Infos.size());
+
+	for (const auto& Info : Infos)
+	{
+		Stagings.push_back(CreateStagingBuffer(Info.Data, Info.Size));
+		Results.push_back(CreateDeviceLocalBuffer(Info.Size, Info.TargetUsage | vk::BufferUsageFlagBits::eTransferDst));
+	}
+
+	// Record all copies into one command buffer
+	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
+		{
+			for (size_t i = 0; i < Infos.size(); ++i)
+			{
+				vk::BufferCopy CopyRegion(0, 0, Infos[i].Size);
+				Cmd.copyBuffer(*Stagings[i].Buffer, *Results[i].Buffer, CopyRegion);
+			}
+		});
+
+	return Results;
+}
+
 std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(std::span<const ImageUploadInfo> Images)
 {
 	std::vector<UploadImageResult> Results;

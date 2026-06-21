@@ -36,6 +36,14 @@ public:
 		vk::raii::DeviceMemory Memory;
 	};
 
+	// Descriptor for a single buffer in a batch upload
+	struct BufferUploadInfo
+	{
+		const void* Data = nullptr;
+		vk::DeviceSize Size = 0;
+		vk::BufferUsageFlags TargetUsage = {};
+	};
+
 	// Descriptor for a single image in a batch upload
 	struct ImageUploadInfo
 	{
@@ -55,6 +63,9 @@ public:
 		uint32_t Width, 
 		uint32_t Height, 
 		vk::Format Format);
+
+	// Upload many buffers in a single command buffer — one submit, one fence wait.
+	std::vector<UploadBufferResult> UploadBufferBatch(std::span<const BufferUploadInfo> Infos);
 
 	// Upload many images in a single command buffer — one submit, one fence wait.
 	std::vector<UploadImageResult> UploadImageBatch(std::span<const ImageUploadInfo> Images);
