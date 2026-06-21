@@ -9,10 +9,12 @@ export module HotReloadResourceManager;
 
 export import ResourceManager;
 
+import TaskScheduler;
+
 export class HotReloadResourceManager : public ResourceManager
 {
 public:
-	HotReloadResourceManager()
+	HotReloadResourceManager(TaskScheduler& Scheduler) : ResourceManager(Scheduler)
 	{
 		StartWatcher();
 	}

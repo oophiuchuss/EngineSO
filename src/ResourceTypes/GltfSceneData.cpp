@@ -369,18 +369,18 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 		if (Raw.bIsEmbedded)
 		{
 			std::string TexID = GetResourceID() + "_tex_" + std::to_string(i);
-			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData, TaskSchedulerRef);
+			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData);
 			TextureIDs.push_back(TexID);
 		}
 		else
 		{
-			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath, TaskSchedulerRef);
+			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath);
 			TextureIDs.push_back(Raw.FilePath);
 		}
 	}
 
 	std::cout << "[GltfSceneData] Waiting for texture decodes...\n";
-	TaskSchedulerRef.WaitForAll();
+	ResourceManagerRef.WaitForAsyncLoads();
 	std::cout << "[GltfSceneData] All textures decoded.\n";
 
 	return TextureIDs;

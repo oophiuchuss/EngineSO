@@ -13,20 +13,15 @@ export module GltfSceneData;
 
 import SceneData;
 import ResourceManager;
-import TaskScheduler;
-
-import TextureData; // TOOD: maybe should be removed
 
 export class GltfSceneData : public SceneData
 {
 public:
 	explicit GltfSceneData(
 		const std::string& ID,
-		ResourceManager& RM,
-		TaskScheduler& TS) :
+		ResourceManager& RM) :
 		SceneData(ID),
-		ResourceManagerRef(RM),
-		TaskSchedulerRef(TS)
+		ResourceManagerRef(RM)
 	{}
 
 	void Instantiate() override;
@@ -114,5 +109,4 @@ private:
 	std::vector<RawNode> RawNodes;
 
 	ResourceManager& ResourceManagerRef;
-	TaskScheduler& TaskSchedulerRef;
 };

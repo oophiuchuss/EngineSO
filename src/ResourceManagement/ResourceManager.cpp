@@ -5,6 +5,7 @@ module;
 
 module ResourceManager;
 
+import TaskScheduler;
 import ResourceBase;
 import TextureData;
 import MeshData;
@@ -56,6 +57,12 @@ ResourceBase* ResourceManager::GetResourceByType(const std::string& ResourceID, 
 	}
 
 	return FoundResource;
+}
+
+void ResourceManager::WaitForAsyncLoads()
+{
+	// TODO: for now wait for any operations, but should be sorted to wait only for async loads
+	TaskSchedulerRef.WaitForAll();
 }
 
 std::type_index ResourceManager::GetAssetType(const std::string& FilePath) const

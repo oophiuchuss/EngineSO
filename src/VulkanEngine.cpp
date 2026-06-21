@@ -28,9 +28,9 @@ VulkanEngine::VulkanEngine()
 
     WindowSystemInstance = std::make_unique<WindowSystem>(EventSystemInstance.get(), 1280, 720, "EngineSO");
 
-    ResourceManagerInstance = std::make_unique<ResourceManager>();
-
     TaskSchedulerInstance = std::make_unique<TaskScheduler>();
+
+    ResourceManagerInstance = std::make_unique<ResourceManager>(*TaskSchedulerInstance);
 
     // Context should be create with default constructor
     // Initialize all needed resources for vulkan and GLFW  
@@ -115,6 +115,10 @@ void VulkanEngine::MainLoop()
 
         WindowSystemInstance->PollEvents();     // fires window callbacks → EventSystem
         EventSystemInstance->ProcessQueue();    // flush deferred events if any
+
+        // Process any callbacks that were posted from background threads
+        TaskSchedulerInstance->ProcessMainThreadTasks();
+
         MainSceneInstance->Update(DeltaTime);
         RendererInstance->RenderFrame(MainSceneInstance.get());
     }

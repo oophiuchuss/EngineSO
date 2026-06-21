@@ -8,7 +8,6 @@ import HotReloadResourceManager;
 
 import Shader;
 import Entity;
-import TaskScheduler;
 import MeshComponent;
 import TransformComponent;
 import CameraComponent;
@@ -21,17 +20,20 @@ import GltfSceneData;
 int main() {
     VulkanEngine Engine;
 
-    auto* MainCamera = Engine.GetMainScene()->CreateCameraEntity("MainCamera");
-    MainCamera->AddComponent<FlyCameraControllerComponent>(Engine.GetEventSystem());
+    Engine.GetTaskScheduler()->RunOnMainThread([&]()
+        {
+            auto* MainCamera = Engine.GetMainScene()->CreateCameraEntity("MainCamera");
+            MainCamera->AddComponent<FlyCameraControllerComponent>(Engine.GetEventSystem());
 
-	Engine.GetMainScene()->SetActiveCameraEntity(MainCamera);
+            Engine.GetMainScene()->SetActiveCameraEntity(MainCamera);
 
-    auto SceneDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("main_sponza/NewSponza_Main_glTF_003.gltf", *Engine.GetResourceManager(), *Engine.GetTaskScheduler());
+            auto SceneDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("main_sponza/NewSponza_Main_glTF_003.gltf", *Engine.GetResourceManager());
 
-    if (SceneDataHandle.Get())
-    {
-        Engine.GetMainScene()->InstantiateSceneFromData(*(SceneDataHandle.Get()), *Engine.GetResourceManager());
-    }
+            if (SceneDataHandle.Get())
+            {
+                Engine.GetMainScene()->InstantiateSceneFromData(*(SceneDataHandle.Get()), *Engine.GetResourceManager());
+            }
+        });
 
     Engine.Run();
 

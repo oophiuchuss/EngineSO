@@ -32,6 +32,8 @@ struct ResourceData
 export class ResourceManager
 {
 public:
+	ResourceManager(TaskScheduler& Scheduler) : TaskSchedulerRef(Scheduler) {}
+
 	template<typename T, typename ...Args>
 	ResourceHandle<T> Load(const std::string& ResourceID, Args && ...args);
 	
@@ -39,11 +41,11 @@ public:
 	ResourceHandle<T> LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data);
 
 	template<typename T, typename ...Args>
-	ResourceHandle<T> PrepareAsync(const std::string& ResourceID, TaskScheduler& Scheduler, Args && ...args);
+	ResourceHandle<T> PrepareAsync(const std::string& ResourceID, Args && ...args);
 	
 	// Schedule a CPU‑only load from raw bytes on a background thread.
 	template<typename T>
-	ResourceHandle<T> PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, TaskScheduler& Scheduler);
+	ResourceHandle<T> PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data);
 	
 	void Release(const std::string& ResourceID, const std::type_index& ResourceType);
 
@@ -63,6 +65,8 @@ public:
 	template<typename T>
 	bool HasResourceType() const;
 
+	void WaitForAsyncLoads();
+
 protected:
 	// Convert type to folder name and file extension
 	std::type_index GetAssetType(const std::string& FilePath) const;
@@ -70,6 +74,8 @@ protected:
 	// Build full file path from resource ID and type
 	template<typename T>
 	std::string GetResourceFilePath(const std::string& ResourceID) const;
+
+	TaskScheduler& TaskSchedulerRef;
 
 	std::unordered_map<std::type_index,
 		std::unordered_map<std::string, ResourceData>> Resources;
@@ -142,7 +148,7 @@ ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID,
 }
 
 template<typename T, typename ...Args>
-ResourceHandle<T> ResourceManager::PrepareAsync(const std::string& ResourceID, TaskScheduler& Scheduler, Args && ...args)
+ResourceHandle<T> ResourceManager::PrepareAsync(const std::string& ResourceID, Args && ...args)
 {
 	static_assert(std::is_base_of_v<ResourceBase, T>,
 		"T must derive from ResourceBase");
@@ -162,7 +168,7 @@ ResourceHandle<T> ResourceManager::PrepareAsync(const std::string& ResourceID, T
 
 	std::string FilePath = GetResourceFilePath<T>(ResourceID);
 
-	Scheduler.RunAsync([Resource, FilePath]()
+	TaskSchedulerRef.RunAsync([Resource, FilePath]()
 		{
 			Resource->Load(FilePath);
 			if (!Resource->IsLoaded())
@@ -176,7 +182,7 @@ ResourceHandle<T> ResourceManager::PrepareAsync(const std::string& ResourceID, T
 }
 
 template<typename T>
-ResourceHandle<T> ResourceManager::PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, TaskScheduler& Scheduler)
+ResourceHandle<T> ResourceManager::PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data)
 {
 	static_assert(std::is_base_of_v<ResourceBase, T>,
 		"T must derive from ResourceBase");
@@ -193,7 +199,7 @@ ResourceHandle<T> ResourceManager::PrepareAsyncFromMemory(const std::string& Res
 	auto Resource = std::make_shared<T>(ResourceID);
 	TypeResources[ResourceID] = { Resource, 1 };
 
-	Scheduler.RunAsync([Resource, Data]()
+	TaskSchedulerRef.RunAsync([Resource, Data]()
 		{
 			Resource->LoadFromMemory(Data);
 			if (!Resource->IsLoaded())
