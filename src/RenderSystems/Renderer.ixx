@@ -39,6 +39,9 @@ private:
 	void CreateSyncObjects();
 	void SetupRenderPasses();
 
+	void PreloadSceneResources(Scene& Scene);
+	void PreloadEntityResources(Entity& Entity);
+
 	int ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk::raii::SurfaceKHR& Surface);
 
 	bool IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usage);

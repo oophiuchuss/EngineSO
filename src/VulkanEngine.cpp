@@ -8,7 +8,6 @@ module;
 module VulkanEngine;
 
 import Paths;
-import Renderer;
 
 import EventSystem;
 import WindowSystem;
@@ -45,7 +44,8 @@ VulkanEngine::VulkanEngine()
     MainSceneInstance = std::make_unique<Scene>(EventSystemInstance.get());
 
     EventSystemInstance->AddListener(RendererInstance.get(),
-        static_cast<int>(EventCategory::Window));
+        static_cast<int>(EventCategory::Window) | 
+        static_cast<int>(EventCategory::Scene));
 
     LastFrameTime = 0.0;
 }

@@ -15,6 +15,10 @@ import TransformComponent;
 import MeshComponent;
 import ResourceManager;
 
+import EventSystem;
+import SceneBulkChangedEvent;
+import SceneEntityChangedEvent;
+
 void Scene::Update(float DeltaTime)
 {
 	for (Entity* CurEntity : EntityList)
@@ -88,6 +92,11 @@ void Scene::InstantiateSceneFromData(SceneData& Data, ResourceManager& RM, const
 			}
 		}
 	}
+
+	if (EventSystemPtr)
+	{
+		EventSystemPtr->PublishEvent(SceneBulkChangedEvent(this));
+	}
 }
 
 Entity* Scene::CreateEntity(const std::string& Name)
@@ -100,6 +109,12 @@ Entity* Scene::CreateEntity(const std::string& Name)
 
 	EntityMap.emplace(UniqueName, std::move(NewEntity));
 	EntityList.push_back(NewEntityPtr);
+
+	if (EventSystemPtr)
+	{
+		// TODO: publish from somewhere else, since scene doesn't now whether entity changed mesh or texture
+		EventSystemPtr->PublishEvent(SceneEntityChangedEvent(NewEntityPtr));
+	}
 
 	return NewEntityPtr;
 }

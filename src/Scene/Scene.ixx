@@ -65,7 +65,6 @@ public:
 	// In a full implementation, this would include methods to query objects, perform raycasts, etc.
 
 private:
-
 	std::string GenerateUniqueEntityName(const std::string& BaseName) const;
 
 	EventSystem* EventSystemPtr = nullptr;
