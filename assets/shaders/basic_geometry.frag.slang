@@ -10,7 +10,10 @@ struct PSInput
 
 struct PSOutput
 {
-    float4 outColor : SV_Target0;
+    float4 Albedo : SV_Target0;     // RGBA8  — albedo.rgb, alpha (AO later)
+    float4 Normal : SV_Target1;     // RGBA16F — world‑space normal.xyz
+    float4 MetalRough : SV_Target2; // RGBA8  — metallic, roughness
+    float4 Emissive : SV_Target3;   // RGBA16F — emissive.rgb
 };
 
 // Set 1, Binding 0 — Texture heap
@@ -47,16 +50,11 @@ PSOutput main(PSInput input)
     float3 Emissive = TextureHeap[NonUniformResourceIndex(material.EmissiveIndex)]
                           .Sample(input.inUV).rgb * material.EmissiveStrength;
 
-    // Simple Lambert lighting
-    // TODO: placeholder until deferred pipeline is set up
-    float3 Normal = normalize(input.inNormal);
-    float3 LightDir = normalize(float3(1.0, 2.0, 1.0));
-    float NdotL = max(dot(Normal, LightDir), 0.0);
-    float Ambient = 0.2;
-
-    float3 Color = Albedo.rgb * (Ambient + NdotL * Occlusion) + Emissive;
-
-    output.outColor = float4(Color, Albedo.a);
+    // Write G‑buffer attachments
+    output.Albedo     = float4(Albedo.rgb, Occlusion);          // pack occlusion into alpha
+    output.Normal     = float4(normalize(input.inNormal), 0.0); // world‑space normal
+    output.MetalRough = float4(Metallic, Roughness, 0.0, 0.0);  // metallic, roughness
+    output.Emissive   = float4(Emissive, 0.0);                  // HDR emissive
 
     return output;
 }

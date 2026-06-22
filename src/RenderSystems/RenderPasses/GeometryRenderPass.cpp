@@ -17,7 +17,10 @@ import PushConstants;
 
 GeometryRenderPass::GeometryRenderPass(
 	std::string InName, 
-	std::string InGBufferColorResourceName, 
+	std::string InGBufferAlbedoResourceName,
+	std::string InGBufferNormalResourceName,
+	std::string InGBufferMetalRoughResourceName,
+	std::string InGBufferEmissiveResourceName,
 	std::string InGBufferDepthResourceName,
 	Shader* InGeometryShader,
 	PipelineCache* InPipelineCache,
@@ -25,7 +28,10 @@ GeometryRenderPass::GeometryRenderPass(
 	DescriptorHeap* InDescriptorHeap,
 	GPUSceneBuffer* InGPUScene) :
 	RenderPassBase(InName), 
-	GBufferColorResourceName(InGBufferColorResourceName),
+	GBufferAlbedoResourceName(InGBufferAlbedoResourceName),
+	GBufferNormalResourceName(InGBufferNormalResourceName),
+	GBufferMetalRoughResourceName(InGBufferMetalRoughResourceName),
+	GBufferEmissiveResourceName(InGBufferEmissiveResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
 	GeometryShaderPtr(InGeometryShader),
 	PipelineCachePtr(InPipelineCache),
@@ -33,40 +39,58 @@ GeometryRenderPass::GeometryRenderPass(
 	DescriptorHeapPtr(InDescriptorHeap),
 	GPUScenePtr(InGPUScene)
 {
-	AddOutput(GBufferColorResourceName);
+	AddOutput(GBufferAlbedoResourceName);
+	AddOutput(GBufferNormalResourceName);
+	AddOutput(GBufferMetalRoughResourceName);
+	AddOutput(GBufferEmissiveResourceName);
 	AddOutput(GBufferDepthResourceName);
 }
 
 void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
-	// Begin rendering with dynamic rendering 
-	vk::RenderingInfoKHR RenderingInfo;
-
 	// Get needed resources
-	Resource* GBufferColor = Graph.GetResource(GBufferColorResourceName);
-	Resource* GBufferDepth = Graph.GetResource(GBufferDepthResourceName);
+	Resource* Albedo = Graph.GetResource(GBufferAlbedoResourceName);
+	Resource* Normal = Graph.GetResource(GBufferNormalResourceName);
+	Resource* MetalRough = Graph.GetResource(GBufferMetalRoughResourceName);
+	Resource* Emissive = Graph.GetResource(GBufferEmissiveResourceName);
+	Resource* Depth = Graph.GetResource(GBufferDepthResourceName);
 
-	// Set up color attachment
-	vk::RenderingAttachmentInfoKHR ColorAttachment;
-	ColorAttachment.setImageView(GBufferColor->View)
-		.setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)	// TODO: shouldn't be checked resource current layout?
-		.setLoadOp(vk::AttachmentLoadOp::eClear)
-		.setStoreOp(vk::AttachmentStoreOp::eStore)
-		.setClearValue(vk::ClearColorValue(std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}));
-	
+	// Helper to build a clear-on-load color attachment
+	auto MakeColorAttachment = [](Resource* Res, std::array<float, 4> ClearColor)
+		{
+			vk::RenderingAttachmentInfoKHR Attachment;
+			Attachment.setImageView(Res->View)
+				.setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+				.setLoadOp(vk::AttachmentLoadOp::eClear)
+				.setStoreOp(vk::AttachmentStoreOp::eStore)
+				.setClearValue(vk::ClearColorValue(ClearColor));
+			return Attachment;
+		};
+
+	// Set up color attachments
+	std::array<vk::RenderingAttachmentInfoKHR, 4> ColorAttachments = {
+		MakeColorAttachment(Albedo,     { 0.0f, 0.0f, 0.0f, 1.0f }),
+		MakeColorAttachment(Normal,     { 0.0f, 0.0f, 0.0f, 0.0f }),
+		MakeColorAttachment(MetalRough, { 0.0f, 0.0f, 0.0f, 0.0f }),
+		MakeColorAttachment(Emissive,   { 0.0f, 0.0f, 0.0f, 0.0f }),
+	};
+
+
 	// Set up depth attachment
 	vk::RenderingAttachmentInfoKHR DepthAttachment;
-	DepthAttachment.setImageView(GBufferDepth->View)
-		.setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)	// TODO: shouldn't be checked resource current layout?
+	DepthAttachment.setImageView(Depth->View)
+		.setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
 		.setLoadOp(vk::AttachmentLoadOp::eClear)
 		.setStoreOp(vk::AttachmentStoreOp::eStore)
 		.setClearValue(vk::ClearDepthStencilValue(1.0f, 0.0f));
 
-	// Configure rendring info
-	RenderingInfo.setRenderArea(vk::Rect2D({ 0, 0 }, { GBufferColor->Extent.width, GBufferColor->Extent.height }))
+	// Begin rendering with dynamic rendering 
+	vk::RenderingInfoKHR RenderingInfo;
+	RenderingInfo.setRenderArea(vk::Rect2D({ 0, 0 }, { Albedo->Extent.width, Albedo->Extent.height }))
 		.setLayerCount(1)
 		.setColorAttachmentCount(1)
-		.setPColorAttachments(&ColorAttachment)
+		.setColorAttachmentCount(static_cast<uint32_t>(ColorAttachments.size()))
+		.setPColorAttachments(ColorAttachments.data())
 		.setPDepthAttachment(&DepthAttachment);
 
 	// Begin dynamic rendering
@@ -102,14 +126,17 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 
 	Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderArea));
 
-	// Build the base key from resource formats — same for every mesh this pass
-	Resource* GBufferColor = Graph.GetResource(GBufferColorResourceName);
-	Resource* GBufferDepth = Graph.GetResource(GBufferDepthResourceName);
+	Resource* Albedo = Graph.GetResource(GBufferAlbedoResourceName);
+	Resource* Normal = Graph.GetResource(GBufferNormalResourceName);
+	Resource* MetalRough = Graph.GetResource(GBufferMetalRoughResourceName);
+	Resource* Emissive = Graph.GetResource(GBufferEmissiveResourceName);
+	Resource* Depth = Graph.GetResource(GBufferDepthResourceName);
 
+	// Build the base key from resource formats — same for every mesh this pass
 	PipelineKey Key;
 	Key.ShaderPtr = GeometryShaderPtr;
-	Key.ColorFormats = { GBufferColor->Format };
-	Key.DepthFormat = GBufferDepth->Format;
+	Key.ColorFormats = { Albedo->Format, Normal->Format, MetalRough->Format, Emissive->Format };
+	Key.DepthFormat = Depth->Format;
 
 	// Optain pipeline and layout from cache based on shader
 	auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);

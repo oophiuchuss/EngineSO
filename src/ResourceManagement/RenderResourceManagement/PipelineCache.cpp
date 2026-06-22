@@ -167,8 +167,12 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 
 	ColorBlendAttachment.setBlendEnable(VK_FALSE);
 
+	// One blend attachment state per color format — must match Key.ColorFormats.size()
+	std::vector<vk::PipelineColorBlendAttachmentState> ColorBlendAttachments(
+		Key.ColorFormats.size(), ColorBlendAttachment);
+
 	vk::PipelineColorBlendStateCreateInfo ColorBlendInfo(
-		{}, VK_FALSE, vk::LogicOp::eCopy, ColorBlendAttachment);
+		{}, VK_FALSE, vk::LogicOp::eCopy, ColorBlendAttachments);
 
 	vk::DynamicState DynamicStates[] = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
 	vk::PipelineDynamicStateCreateInfo DynamicStateInfo({}, DynamicStates);

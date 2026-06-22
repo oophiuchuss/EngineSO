@@ -149,8 +149,19 @@ void VulkanUtils::TransitionImageLayout(
         SrcStage = vk::PipelineStageFlagBits::eTransfer;                // After any transfer ops
         DstStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // Before colour attachment writes
     }
+    // Undefined-to-TransferSrc layout transition
+    // Used when a render target that starts as undefined needs to later be read as a transfer source (e.g., copying Main_Color to swapchain)
+    else if (OldLayout == vk::ImageLayout::eUndefined && NewLayout == vk::ImageLayout::eTransferSrcOptimal)
+    {
+        // Memory permissions
+        SrcAccess = vk::AccessFlagBits::eNone;              // No previous access – image is uninitialised
+        DstAccess = vk::AccessFlagBits::eTransferRead;      // The image will be read by transfer operations
+
+        // Pipeline stage synchronisation
+        SrcStage = vk::PipelineStageFlagBits::eTopOfPipe;   // No previous work to wait
+        DstStage = vk::PipelineStageFlagBits::eTransfer;    // Before transfer operations
+     }
     // TODO: Add more transitions as needed:
-    // - Transfer Dst -> Shader Read (for uploading textures)
     // - Shader Read -> Transfer Src (for reading back textures to CPU)
     else
     {

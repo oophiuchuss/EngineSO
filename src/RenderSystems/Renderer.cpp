@@ -768,29 +768,73 @@ void Renderer::CreateSyncObjects()
 
 void Renderer::SetupRenderPasses()
 {
+	// G‑buffer color attachments (geometry pass outputs)
+	RendergraphInstance->AddResource(
+		"GBuffer_Albedo",
+		vk::Format::eR8G8B8A8Unorm,					// RGBA8 – albedo.rgb, alpha (AO later)
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled,           // sampled by lighting pass
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal     // lighting pass reads it
+	);
+
+	RendergraphInstance->AddResource(
+		"GBuffer_Normal",
+		vk::Format::eR16G16B16A16Sfloat,            // RGBA16F – world‑space normal
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal
+	);
+
+	RendergraphInstance->AddResource(
+		"GBuffer_MetalRough",
+		vk::Format::eR8G8B8A8Unorm,                 // RGBA8 – metallic, roughness
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal
+	);
+
+	RendergraphInstance->AddResource(
+		"GBuffer_Emissive",
+		vk::Format::eR16G16B16A16Sfloat,            // RGBA16F – emissive (HDR)
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal
+	);
+
+	// Lighting pass output + swapchain target
 	RendergraphInstance->AddResource(
 		"Main_Color",
-		vk::Format::eB8G8R8A8Unorm,					// Format – swapchain compatible
-		SwapchainExtent,							// Extent – screen size
-		vk::ImageUsageFlagBits::eColorAttachment |	// Usage – render target
-		vk::ImageUsageFlagBits::eTransferSrc |		// Usage – also allow transfer to swapchain for presentation
-		vk::ImageUsageFlagBits::eSampled,			// Usage - allow sampling for post-process or UI
-		vk::ImageAspectFlagBits::eColor,			// Aspect – color only
-		vk::ImageLayout::eUndefined,				// Initial layout – don't care (will be cleared)
-		vk::ImageLayout::eTransferSrcOptimal		// Final layout – ready for copy to swapchain
+		vk::Format::eB8G8R8A8Unorm,
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |    // lighting pass writes here
+		vk::ImageUsageFlagBits::eTransferSrc,         // blit to swapchain
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eTransferSrcOptimal
 	);
 
+	// Depth / stencil (shared by geometry and lighting passes)
 	RendergraphInstance->AddResource(
 		"Main_Depth",
-		vk::Format::eD32Sfloat,						// Format – 32‑bit float depth
-		SwapchainExtent,							// Same extent as color
-		vk::ImageUsageFlagBits::eDepthStencilAttachment, // Usage – depth testing
-		vk::ImageAspectFlagBits::eDepth,			// Aspect – depth only
-		vk::ImageLayout::eUndefined,				// Initial layout – undefined
-		vk::ImageLayout::eDepthStencilAttachmentOptimal // Final layout – can stay as depth attachment (next frame will transition)
+		vk::Format::eD32Sfloat,
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eDepthStencilAttachment,
+		vk::ImageAspectFlagBits::eDepth,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eDepthStencilAttachmentOptimal
 	);
-
-	// TODO G buffer resources to add;
 
 	// Load geometry shader - pass owns it, not individual meshes
 	ShaderData* GeometryShaderData = ResourceManagerPtr->GetResource<ShaderData>("basic_geometry");
@@ -803,9 +847,13 @@ void Renderer::SetupRenderPasses()
 
 	Shader* GeometryShader = RenderCacheInstance->GetOrCompileShader(GeometryShaderData->GetResourceID(), *GeometryShaderData);
 
+	// Geometry pass — writes all 4 G‑buffer attachments + depth
 	auto GeomtryPass = RendergraphInstance->AddRenderPass<GeometryRenderPass>(
 		"GeometryPass",
-		"Main_Color", 
+		"GBuffer_Albedo",
+		"GBuffer_Normal",
+		"GBuffer_MetalRough",
+		"GBuffer_Emissive",
 		"Main_Depth",
 		GeometryShader,
 		PipelineCacheInstance.get(),

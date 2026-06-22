@@ -19,7 +19,10 @@ export class GeometryRenderPass : public RenderPassBase
 public:
 	explicit GeometryRenderPass(
 		std::string InName,
-		std::string InGBufferColorResourceName,
+		std::string InGBufferAlbedoResourceName,
+		std::string InGBufferNormalResourceName,
+		std::string InGBufferMetalRoughResourceName,
+		std::string InGBufferEmissiveResourceName,
 		std::string InGBufferDepthResourceName,
 		Shader* InGeometryShader,
 		PipelineCache* InPipelineCache,
@@ -37,8 +40,11 @@ protected:
 	virtual void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
 
 private:
-	std::string GBufferColorResourceName; // TODO: potentially optimize access to pointers
-	std::string GBufferDepthResourceName; // TODO: potentially optimize access to pointers
+	std::string GBufferAlbedoResourceName;
+	std::string GBufferNormalResourceName;
+	std::string GBufferMetalRoughResourceName;
+	std::string GBufferEmissiveResourceName;
+	std::string GBufferDepthResourceName;
 
 	Shader* GeometryShaderPtr = nullptr;
 	PipelineCache* PipelineCachePtr = nullptr;
