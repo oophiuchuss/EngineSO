@@ -193,6 +193,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 		CameraUniformData Data;
 		Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
+		CamData.InverseViewProj = glm::inverse(CamData.ViewProj);
 		Data.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
 
 		CameraUBO->Update(Data);

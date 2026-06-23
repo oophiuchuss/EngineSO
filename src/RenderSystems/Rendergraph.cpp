@@ -56,6 +56,12 @@ void Rendergraph::Compile()
 
         CurrentLayouts[CurName] = CurResource.InitialLayout;    // Initialize Layouts of Resources
     }
+
+    if (bIsPassesDirty)
+    {
+        SortPasses();
+        bIsPassesDirty = false;
+    }
 }
 
 void Rendergraph::Reset()

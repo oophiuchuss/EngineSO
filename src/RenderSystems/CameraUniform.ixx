@@ -8,6 +8,7 @@ export module CameraUniform;
 // Data layout – matches the shader’s uniform block
 export struct CameraUniformData {
     glm::mat4 ViewProj;
+	glm::mat4 InverseViewProj;
     glm::vec4 CameraPos;   // xyz = position, w = unused
 };
 

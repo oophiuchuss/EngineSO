@@ -8,79 +8,77 @@ module LightingPass;
 
 import Rendergraph;
 import FrameData;
+import GBufferDescriptorSet;
 
 LightingPass::LightingPass(
-	std::string InName, 
-	std::string InGBufferColorResourceName) : 
-	RenderPassBase(InName),
-	GBufferColorResourceName(InGBufferColorResourceName)
+    std::string InName,
+    std::string InOutputColorResourceName,
+    std::string InGBufferAlbedoResourceName,
+    std::string InGBufferNormalResourceName,
+    std::string InGBufferMetalRoughResourceName,
+    std::string InGBufferEmissiveResourceName,
+    std::string InGBufferDepthResourceName,
+    CameraUniformBuffer* InCameraUBO,
+    LightBuffer* InLightBuffer
+    GBufferDescriptorSet* InGBufferDescSet) :
+    RenderPassBase(InName),
+    OutputColorResourceName(InOutputColorResourceName),
+    GBufferAlbedoResourceName(InGBufferAlbedoResourceName),
+    GBufferNormalResourceName(InGBufferNormalResourceName),
+    GBufferMetalRoughResourceName(InGBufferMetalRoughResourceName),
+    GBufferEmissiveResourceName(InGBufferEmissiveResourceName),
+    GBufferDepthResourceName(InGBufferDepthResourceName),
+    CameraUBOPtr(InCameraUBO),
+    LightBufferPtr(InLightBuffer),
+    GBufferDescSetPtr(InGBufferDescSet)
 {
-	AddInput(GBufferColorResourceName);
-	AddOutput(GBufferColorResourceName);
+    // Declare inputs (G‑buffer reads)
+    AddInput(GBufferAlbedoResourceName);
+    AddInput(GBufferNormalResourceName);
+    AddInput(GBufferMetalRoughResourceName);
+    AddInput(GBufferEmissiveResourceName);
+    AddInput(GBufferDepthResourceName);
+
+    // Declare output (lit result)
+    AddOutput(OutputColorResourceName);
 }
 
-void LightingPass::AddLight(Light* LightToAdd)
+void LightingPass::BeginPass(
+    vk::raii::CommandBuffer& Cmd,
+    Rendergraph& Graph,
+    FrameData& CurrentFrameData)
 {
-	Lights.push_back(LightToAdd);
+    Resource* OutputColor = Graph.GetResource(OutputColorResourceName);
+
+    vk::RenderingAttachmentInfoKHR ColorAttachment;
+    ColorAttachment.setImageView(OutputColor->View)
+        .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+        .setLoadOp(vk::AttachmentLoadOp::eClear)
+        .setStoreOp(vk::AttachmentStoreOp::eStore)
+        .setClearValue(vk::ClearColorValue({ 0.0f, 0.0f, 0.0f, 1.0f }));
+
+    vk::RenderingInfoKHR RenderingInfo;
+    RenderingInfo.setRenderArea(
+        vk::Rect2D({ 0, 0 }, { OutputColor->Extent.width, OutputColor->Extent.height }))
+        .setLayerCount(1)
+        .setColorAttachmentCount(1)
+        .setPColorAttachments(&ColorAttachment);
+
+    Cmd.beginRendering(RenderingInfo);
 }
 
-void LightingPass::RemoveLight(Light* LightToRemove)
+void LightingPass::ExecuteMainLogic(
+    vk::raii::CommandBuffer& Cmd,
+    Rendergraph& Graph,
+    FrameData& CurrentFrameData)
 {
-	auto it = std::find(Lights.begin(), Lights.end(), LightToRemove);
-	if (it != Lights.end())
-	{
-		Lights.erase(it);
-	}
+    // TODO: bind pipeline, descriptor sets, draw full‑screen triangle
 }
 
-void LightingPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
+void LightingPass::EndPass(
+    vk::raii::CommandBuffer& Cmd,
+    Rendergraph& Graph,
+    FrameData& CurrentFrameData)
 {
-	// Begin rendering with dynamic rendering 
-	vk::RenderingInfoKHR RenderingInfo;
-
-	// Get needed resources
-	Resource* GBufferColor = Graph.GetResource(GBufferColorResourceName);
-
-	// Set up color attachment
-	vk::RenderingAttachmentInfoKHR ColorAttachment;
-	ColorAttachment.setImageView(GBufferColor->View)
-		.setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)	// TODO: shouldn't be checked resource current layout?
-		.setLoadOp(vk::AttachmentLoadOp::eClear)
-		.setStoreOp(vk::AttachmentStoreOp::eStore)
-		.setClearValue(vk::ClearColorValue(std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}));
-
-	// Configure rendring info
-	RenderingInfo.setRenderArea(vk::Rect2D({ 0, 0 }, { GBufferColor->Extent.width, GBufferColor->Extent.height }))
-		.setLayerCount(1)
-		.setColorAttachmentCount(1)
-		.setPColorAttachments(&ColorAttachment);
-
-	// Begin dynamic rendering
-	Cmd.beginRendering(RenderingInfo);
-}
-
-void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
-{
-	// Get needed resources
-	Resource* GBufferColor = Graph.GetResource(GBufferColorResourceName);
-
-	// Set up descriptor sets for G-Buffer textures
-	// With dynamic rendering we access G-Buffer textures directly as shader resources rather than as subpass input
-
-	// Render full-screen quad with lighting shader
-	
-	// For each light
-	for (const Light* CurLight : Lights)
-	{
-		// Set light props
-		// Draw light volume
-	}
-
-
-}
-
-void LightingPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
-{
-	// End dynamic rendering
-	Cmd.endRendering();		
+    Cmd.endRendering();
 }

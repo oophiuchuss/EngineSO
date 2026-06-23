@@ -11,6 +11,7 @@ struct VSInput
 struct CameraUBO
 {
     float4x4 viewProj;
+    float4x4 InverseViewProj;
     float4 cameraPos;
 };
 
