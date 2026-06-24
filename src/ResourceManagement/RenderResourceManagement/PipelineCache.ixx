@@ -13,13 +13,26 @@ export struct PipelineKey
 {
     Shader* ShaderPtr = nullptr;
     std::vector<vk::Format> ColorFormats;               // supports multiple color attachments
-    vk::Format              DepthFormat = vk::Format::eUndefined;
+    vk::Format DepthFormat = vk::Format::eUndefined;
+    std::vector<vk::DescriptorSetLayout> DescriptorSetLayouts;
+
+    // Size = 0 means no push constants
+    vk::PushConstantRange PushConstantRange;
+
+    // False for fullscreen passes with no vertex buffer (e.g. LightingPass)
+    bool bUseVertexInput = true;
 
     bool operator==(const PipelineKey& Other) const
     {
         return ShaderPtr == Other.ShaderPtr
             && ColorFormats == Other.ColorFormats
-            && DepthFormat == Other.DepthFormat;
+            && DepthFormat == Other.DepthFormat
+            && DescriptorSetLayouts == Other.DescriptorSetLayouts
+            && PushConstantRange.stageFlags == Other.PushConstantRange.stageFlags
+            && PushConstantRange.size == Other.PushConstantRange.size
+            && PushConstantRange.offset == Other.PushConstantRange.offset
+            && bUseVertexInput == Other.bUseVertexInput;
+
     }
 };
 
@@ -41,19 +54,37 @@ export struct PipelineKeyHash
         Seed ^= std::hash<uint32_t>{}(static_cast<uint32_t>(Key.DepthFormat))
             + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
 
+        for (auto Layout : Key.DescriptorSetLayouts)
+        {
+            Seed ^= std::hash<void*>{}(static_cast<void*>(Layout))  // raw handle pointer
+                + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+        }
+
+        Seed ^= std::hash<uint32_t>{}(static_cast<uint32_t>(Key.PushConstantRange.stageFlags))
+            + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+        
+        Seed ^= std::hash<uint32_t>{}(Key.PushConstantRange.size)
+            + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+        
+        Seed ^= std::hash<uint32_t>{}(Key.PushConstantRange.offset)
+            + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+
+        Seed ^= std::hash<bool>{}(Key.bUseVertexInput)
+            + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+
         return Seed;
     }
 };
 
 struct PipelineCacheEntry
 {
-    vk::raii::Pipeline       Pipeline;
+    vk::raii::Pipeline Pipeline;
     vk::raii::PipelineLayout PipelineLayout;
 };
 
 export struct PipelineHandles
 {
-    vk::Pipeline       Pipeline;
+    vk::Pipeline Pipeline;
     vk::PipelineLayout Layout;
 };
 
@@ -62,9 +93,6 @@ export class PipelineCache
 public:
     PipelineCache(const vk::raii::Device& Device,
         const vk::raii::PhysicalDevice& PhysicalDevice,
-        vk::DescriptorSetLayout CameraUBOLayout,
-        vk::DescriptorSetLayout DescriptorHeapLayout,
-        vk::DescriptorSetLayout GPUSceneLayout,
         const std::string& CacheFilePath = "");
 
 	~PipelineCache();
@@ -93,12 +121,9 @@ private:
 
     const vk::raii::Device& Device;
     const vk::raii::PhysicalDevice& PhysicalDevice;
-    vk::DescriptorSetLayout CameraUBOLayout;
-    vk::DescriptorSetLayout DescriptorHeapLayout;
-    vk::DescriptorSetLayout GPUSceneLayout;
     std::string CacheFilePath;
 
-    vk::raii::PipelineCache VkPipelineCache = nullptr;
+    vk::raii::PipelineCache CurrentVkPipelineCache = nullptr;
 
 	std::unordered_map<PipelineKey, std::unique_ptr<PipelineCacheEntry>, PipelineKeyHash> Cache;
 };

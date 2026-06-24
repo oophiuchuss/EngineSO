@@ -95,7 +95,7 @@ void LightBuffer::CreateDescriptorPool()
 
 void LightBuffer::CreateDescriptorSet()
 {
-    vk::DescriptorSetAllocateInfo AllocInfo(DescriptorPool, DescriptorLayout);
+    vk::DescriptorSetAllocateInfo AllocInfo(*DescriptorPool, *DescriptorLayout);
     DescriptorSet = std::move(Device.allocateDescriptorSets(AllocInfo).front());
 
     vk::DescriptorBufferInfo BufferInfo(*Buffer, 0, BufferSize);

@@ -16,15 +16,9 @@ import PushConstants;
 PipelineCache::PipelineCache(
 	const vk::raii::Device& Device,
 	const vk::raii::PhysicalDevice& PhysicalDevice,
-	vk::DescriptorSetLayout CameraUBOLayout, 
-	vk::DescriptorSetLayout DescriptorHeapLayout,
-	vk::DescriptorSetLayout GPUSceneLayout,
-	const std::string& CacheFilePath)
-	: Device(Device),
+	const std::string& CacheFilePath):
+	Device(Device),
 	PhysicalDevice(PhysicalDevice),
-	CameraUBOLayout(CameraUBOLayout),
-	DescriptorHeapLayout(DescriptorHeapLayout),
-	GPUSceneLayout(GPUSceneLayout),
 	CacheFilePath(CacheFilePath)
 {
 	auto Props = PhysicalDevice.getProperties();
@@ -57,7 +51,7 @@ PipelineCache::PipelineCache(
 		CacheData.size(),
 		CacheData.empty() ? nullptr : CacheData.data());
 
-	VkPipelineCache = Device.createPipelineCache(CacheInfo);
+	CurrentVkPipelineCache = Device.createPipelineCache(CacheInfo);
 }
 
 PipelineCache::~PipelineCache()
@@ -104,10 +98,10 @@ void PipelineCache::EvictAll()
 
 void PipelineCache::SaveToDisk() const
 {
-	if (CacheFilePath.empty() || VkPipelineCache == nullptr)
+	if (CacheFilePath.empty() || CurrentVkPipelineCache == nullptr)
 		return;
 
-	auto Data = VkPipelineCache.getData();
+	auto Data = CurrentVkPipelineCache.getData();
 	if (Data.empty()) return;
 
 	std::ofstream File(CacheFilePath, std::ios::binary | std::ios::trunc);
@@ -118,22 +112,23 @@ void PipelineCache::SaveToDisk() const
 
 PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 {
-	vk::PushConstantRange PushRange(
-		vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-		0, sizeof(PushConstantData)
-	);
+	std::vector<vk::PushConstantRange> PushRanges;
+	
+	if (Key.PushConstantRange.size > 0)
+	{
+		PushRanges.push_back(Key.PushConstantRange);
+	}
 
-	std::array<vk::DescriptorSetLayout, 3> Layouts = {
-		CameraUBOLayout,
-		DescriptorHeapLayout,
-		GPUSceneLayout
-	};
+	vk::PipelineLayoutCreateInfo PipelineLayoutInfo(
+		{},
+		Key.DescriptorSetLayouts,
+		PushRanges);
 
-	vk::PipelineLayoutCreateInfo PipelineLayoutInfo({}, Layouts, PushRange);
 	vk::raii::PipelineLayout PipelineLayout = vk::raii::PipelineLayout(Device, PipelineLayoutInfo);
 
 	auto Stages = Key.ShaderPtr->GetShaderStageInfos();
 
+	// Vertex input — empty for fullscreen passes with no vertex buffer
 	vk::VertexInputBindingDescription BindingDesc(0, sizeof(Vertex), vk::VertexInputRate::eVertex);
 
 	std::array<vk::VertexInputAttributeDescription, 3> AttribDescs = { {
@@ -142,22 +137,32 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 		{ 2, 0, vk::Format::eR32G32B32Sfloat,  offsetof(Vertex, Normal) },
 	} };
 
-	vk::PipelineVertexInputStateCreateInfo VertexInputInfo({}, BindingDesc, AttribDescs);
+	vk::PipelineVertexInputStateCreateInfo VertexInputInfo;
+	if (Key.bUseVertexInput)
+	{
+		VertexInputInfo = vk::PipelineVertexInputStateCreateInfo({}, BindingDesc, AttribDescs);
+	}
+	// else: leave default-constructed — zero bindings, zero attributes
+
 	vk::PipelineInputAssemblyStateCreateInfo InputAssemblyInfo({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
 
 	// Viewport and scissor will be dynamic states, so we don't specify them here
 	vk::PipelineViewportStateCreateInfo ViewportStateInfo({}, 1, nullptr, 1, nullptr);
 
+	// Lighting pass is a fullscreen triangle — no backface culling concerns, cull none is safest
 	vk::PipelineRasterizationStateCreateInfo RasterizerInfo(
 		{}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill,
-		vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
+		Key.bUseVertexInput ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone,
+		vk::FrontFace::eCounterClockwise,
 		VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f);
 
 	vk::PipelineMultisampleStateCreateInfo MultisampleInfo(
 		{}, vk::SampleCountFlagBits::e1, VK_FALSE);
 
+	// Depth test/write only meaningful if a depth attachment is actually bound
+	bool bHasDepth = (Key.DepthFormat != vk::Format::eUndefined);
 	vk::PipelineDepthStencilStateCreateInfo DepthStencilInfo(
-		{}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess,
+		{}, bHasDepth, bHasDepth, vk::CompareOp::eLess,
 		VK_FALSE, VK_FALSE);
 
 	vk::PipelineColorBlendAttachmentState ColorBlendAttachment;
@@ -203,7 +208,7 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 
 	PipelineInfo.setPNext(&DynamicRenderingInfo); // Chain dynamic rendering info to pipeline create info
 
-	vk::raii::Pipeline Pipeline = Device.createGraphicsPipeline(VkPipelineCache, PipelineInfo);
+	vk::raii::Pipeline Pipeline = Device.createGraphicsPipeline(CurrentVkPipelineCache, PipelineInfo);
 
 	// Store in cache and return
 	auto Entry = std::make_unique<PipelineCacheEntry>(PipelineCacheEntry(std::move(Pipeline), std::move(PipelineLayout)));

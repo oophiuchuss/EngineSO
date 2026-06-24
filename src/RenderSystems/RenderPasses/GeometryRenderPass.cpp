@@ -138,6 +138,20 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	Key.ColorFormats = { Albedo->Format, Normal->Format, MetalRough->Format, Emissive->Format };
 	Key.DepthFormat = Depth->Format;
 
+	Key.DescriptorSetLayouts = {
+		CameraUBOPtr ? *CameraUBOPtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{},
+		DescriptorHeapPtr ? DescriptorHeapPtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{},
+		GPUScenePtr ? GPUScenePtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{}
+	};
+
+	Key.PushConstantRange = vk::PushConstantRange(
+		vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+		0,
+		sizeof(PushConstantData));
+
+	Key.bUseVertexInput = true;   // real vertex buffers, real meshes
+
+
 	// Optain pipeline and layout from cache based on shader
 	auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);
 

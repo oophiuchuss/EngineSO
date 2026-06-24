@@ -20,6 +20,8 @@ import EventListener;
 import VulkanUploader;
 import DescriptorHeap;
 import GPUSceneBuffer;
+import GBufferDescriptorSet;
+import LightBuffer;
 
 import MeshData;
 import TextureData;
@@ -101,6 +103,8 @@ private:
 	std::unique_ptr<VulkanUploader>			UploaderInstance;
 	std::unique_ptr<DescriptorHeap>			DescriptorHeapInstance;
 	std::unique_ptr<GPUSceneBuffer>			GPUSceneInstance;
+	std::unique_ptr<GBufferDescriptorSet>	GBufferDescSet;
+	std::unique_ptr<LightBuffer>			LightBufferInstance;
 	std::unique_ptr<RenderResourceCache>	RenderCacheInstance;
 	std::unique_ptr<PipelineCache>			PipelineCacheInstance;
 };

@@ -10,6 +10,8 @@ import FrameData;
 import CameraUniform;
 import LightBuffer;
 import GBufferDescriptorSet;
+import Shader;
+import PipelineCache;
 
 export class LightingPass : public RenderPassBase
 {
@@ -23,8 +25,10 @@ public:
         std::string InGBufferEmissiveResourceName,
         std::string InGBufferDepthResourceName,
         CameraUniformBuffer* InCameraUBO,
-        LightBuffer* InLightBuffer
-        GBufferDescriptorSet* InGBufferDescSet);
+        LightBuffer* InLightBuffer,
+        GBufferDescriptorSet* InGBufferDescSet,
+        Shader* InLightingShader,       
+        PipelineCache* InPipelineCache);
 
 protected:
     void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData) override;
@@ -42,4 +46,6 @@ private:
     CameraUniformBuffer* CameraUBOPtr = nullptr;
     LightBuffer* LightBufferPtr = nullptr;
     GBufferDescriptorSet* GBufferDescSetPtr = nullptr;
+    Shader* LightingShaderPtr = nullptr;
+    PipelineCache* PipelineCachePtr = nullptr;
 };

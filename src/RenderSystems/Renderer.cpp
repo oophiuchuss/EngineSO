@@ -25,6 +25,9 @@ import VulkanUploader;
 import DescriptorHeap;
 import GPUSceneBuffer;
 import GPUSceneData;
+import GBufferDescriptorSet;
+import LightBuffer;
+import LightData;
 import RenderResourceCache;
 import FrameData;
 
@@ -90,6 +93,11 @@ Renderer::Renderer(
 		4096,   // TODO: MaxObjects — hardcoded for now, matches DescriptorHeap's pattern
 		512);   // TODO: MaxMaterials — hardcoded for now
 
+	LightBufferInstance = std::make_unique<LightBuffer>(
+		Device,
+		PhysicalDevice, 
+		128);	// TODO: MaxLights should be handled better
+
 	RenderCacheInstance = std::make_unique<RenderResourceCache>(
 		Device, 
 		PhysicalDevice,
@@ -99,9 +107,6 @@ Renderer::Renderer(
 	PipelineCacheInstance = std::make_unique<PipelineCache>(
 		Device, 
 		PhysicalDevice, 
-		*CameraUBO->GetDescriptorSetLayout(),
-		*DescriptorHeapInstance->GetDescriptorSetLayout(),
-		*GPUSceneInstance->GetDescriptorSetLayout(),
 		Paths::GetCacheRoot() + "pipeline.bin");
 
 	// Create command pool and buffers
@@ -117,6 +122,7 @@ Renderer::Renderer(
 	// Set up render passes and framebuffers in the rendergraph
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
+	GBufferDescSet->Initialize(*RendergraphInstance);
 }
 
 Renderer::~Renderer()
@@ -193,7 +199,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 		CameraUniformData Data;
 		Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
-		CamData.InverseViewProj = glm::inverse(CamData.ViewProj);
+		Data.InverseViewProj = glm::inverse(Data.ViewProj);
 		Data.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
 
 		CameraUBO->Update(Data);
@@ -301,6 +307,18 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	{
 		GPass->SetRenderArea(SwapchainExtent);
 	}
+
+	// Collect light data from scene
+	// TODO: hardocded for now
+	std::vector<LightData> Lights;
+	LightData Sun;
+	Sun.Direction = glm::normalize(glm::vec3(0.3f, -1.0f, 0.5f));
+	Sun.Intensity = 1.5f;
+	Sun.Color = glm::vec3(1.0f, 0.95f, 0.85f);
+	Lights.push_back(Sun);
+
+	LightBufferInstance->Update(Lights);
+
 
 	// Record rendering commands into command buffer using rendergraph
 	RendergraphInstance->Execute(Cmd, GraphicsQueue, CurrentFrameData);
@@ -837,6 +855,15 @@ void Renderer::SetupRenderPasses()
 		vk::ImageLayout::eDepthStencilAttachmentOptimal
 	);
 
+	// GBuffer descriptor set
+	GBufferDescSet = std::make_unique<GBufferDescriptorSet>(
+		Device,
+		"GBuffer_Albedo",
+		"GBuffer_Normal",
+		"GBuffer_MetalRough",
+		"GBuffer_Emissive",
+		"Main_Depth");
+
 	// Load geometry shader - pass owns it, not individual meshes
 	ShaderData* GeometryShaderData = ResourceManagerPtr->GetResource<ShaderData>("basic_geometry");
 	if (!GeometryShaderData)
@@ -847,7 +874,7 @@ void Renderer::SetupRenderPasses()
 	}
 
 	Shader* GeometryShader = RenderCacheInstance->GetOrCompileShader(GeometryShaderData->GetResourceID(), *GeometryShaderData);
-
+	
 	// Geometry pass — writes all 4 G‑buffer attachments + depth
 	auto GeomtryPass = RendergraphInstance->AddRenderPass<GeometryRenderPass>(
 		"GeometryPass",
@@ -862,7 +889,28 @@ void Renderer::SetupRenderPasses()
 		DescriptorHeapInstance.get(),
 		GPUSceneInstance.get());
 
-	//auto LightPass = RendergraphInstance->AddRenderPass<LightingPass>("LightPass", "Main_Color");
+	// Load lighting shader - pass owns it, not individual meshes
+	ShaderData* LightingShaderData = ResourceManagerPtr->GetResource<ShaderData>("deferred_lighting");
+	if (!LightingShaderData)
+	{
+		// Load shader if not already loaded
+		ResourceHandle<ShaderData> Handle = ResourceManagerPtr->Load<ShaderData>("deferred_lighting");
+		LightingShaderData = Handle.Get();
+	}
+
+	Shader* LightingShader = RenderCacheInstance->GetOrCompileShader(LightingShaderData->GetResourceID(), *LightingShaderData);
+
+	auto LightPass = RendergraphInstance->AddRenderPass<LightingPass>(
+		"LightPass",
+		"Main_Color",
+		"GBuffer_Albedo", "GBuffer_Normal", "GBuffer_MetalRough", "GBuffer_Emissive",
+		"Main_Depth",
+		CameraUBO.get(),
+		LightBufferInstance.get(),
+		GBufferDescSet.get(),
+		LightingShader,
+		PipelineCacheInstance.get());
+
 	//auto PostProcess = RendergraphInstance->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");
 }
 
