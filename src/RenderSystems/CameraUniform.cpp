@@ -49,8 +49,12 @@ void CameraUniformBuffer::CreateBuffer()
 void CameraUniformBuffer::CreateDescriptor()
 {
 	// Descriptor set layout
-	vk::DescriptorSetLayoutBinding LayoutBinding(0, vk::DescriptorType::eUniformBuffer,
-                                                 1, vk::ShaderStageFlagBits::eVertex);
+	vk::DescriptorSetLayoutBinding LayoutBinding(
+		0,
+		vk::DescriptorType::eUniformBuffer,
+        1,
+		vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment
+	);
 
     vk::DescriptorSetLayoutCreateInfo LayoutInfo({}, LayoutBinding);
 	DescriptorSetLayout = Device.createDescriptorSetLayout(LayoutInfo);

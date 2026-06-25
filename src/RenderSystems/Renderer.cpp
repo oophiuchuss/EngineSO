@@ -458,6 +458,7 @@ void Renderer::RecreateSwapchain()
 	RendergraphInstance->Reset(); // Clear existing rendergraph resources and passes
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
+	GBufferDescSet->Initialize(*RendergraphInstance);
 	CreateSyncObjects(); // Recreate synchronization objects if they depend on swapchain (e.g. semaphores for each swapchain image)
 }
 
@@ -600,6 +601,7 @@ void Renderer::CreateLogicalDevice()
 
 	vk::DeviceCreateInfo DeviceCreateInfo({}, QueueCreateInfos, {}, DeviceExtensions);
 
+
 	// Enable dynamic rendering feature
 	vk::PhysicalDeviceDynamicRenderingFeatures DynamicRenderingFeature;
 	DynamicRenderingFeature.setDynamicRendering(VK_TRUE);
@@ -611,10 +613,16 @@ void Renderer::CreateLogicalDevice()
 							 .setDescriptorBindingPartiallyBound(VK_TRUE)				// partially filled array
 							 .setRuntimeDescriptorArray(VK_TRUE);						// variable array size
 
-	// Chain DescriptorIndexingFeature to DynamicRendering
-	DynamicRenderingFeature.setPNext(&DescriptorIndexingFeature);
+	// Enable shaderDrawParameters (for SV_VertexID in fullscreen triangle)
+	vk::PhysicalDeviceVulkan11Features Vulkan11Features;
+	Vulkan11Features.setShaderDrawParameters(VK_TRUE)
+					.setPNext(nullptr);						// end of chain
 
-	// Chain DynamicRendering into the device create info
+	// Chain: DescriptorIndexing -> Vulkan11Features
+	DescriptorIndexingFeature.setPNext(&Vulkan11Features);
+	// Chain: DynamicRendering -> DescriptorIndexing
+	DynamicRenderingFeature.setPNext(&DescriptorIndexingFeature);
+	// Chain: DeviceCreateInfo -> DynamicRendering
 	DeviceCreateInfo.setPNext(&DynamicRenderingFeature);
 
 	Device = vk::raii::Device(PhysicalDevice, DeviceCreateInfo);
@@ -849,7 +857,8 @@ void Renderer::SetupRenderPasses()
 		"Main_Depth",
 		vk::Format::eD32Sfloat,
 		SwapchainExtent,
-		vk::ImageUsageFlagBits::eDepthStencilAttachment,
+		vk::ImageUsageFlagBits::eDepthStencilAttachment |
+		vk::ImageUsageFlagBits::eSampled,
 		vk::ImageAspectFlagBits::eDepth,
 		vk::ImageLayout::eUndefined,
 		vk::ImageLayout::eDepthStencilAttachmentOptimal

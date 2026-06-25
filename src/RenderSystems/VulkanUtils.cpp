@@ -161,6 +161,18 @@ void VulkanUtils::TransitionImageLayout(
         SrcStage = vk::PipelineStageFlagBits::eTopOfPipe;   // No previous work to wait
         DstStage = vk::PipelineStageFlagBits::eTransfer;    // Before transfer operations
      }
+    // ShaderRead-to-DepthStencilAttachment layout 
+    // Reusing a sampled depth texture as a depth-stencil attachment again
+    else if (OldLayout == vk::ImageLayout::eShaderReadOnlyOptimal && NewLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
+    {
+        // Memory permissions
+        SrcAccess = vk::AccessFlagBits::eShaderRead;                    // Wait for previoues shader reads to complete 
+        DstAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Will write to depth stencil attachment
+
+        // Pipeline stage synchronisation
+        SrcStage = vk::PipelineStageFlagBits::eFragmentShader;          // After shader reads complete
+        DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;      // Wait until early fragment tests
+    }
     // TODO: Add more transitions as needed:
     // - Shader Read -> Transfer Src (for reading back textures to CPU)
     else
