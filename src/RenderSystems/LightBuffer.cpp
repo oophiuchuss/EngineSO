@@ -31,7 +31,8 @@ void LightBuffer::CreateBuffer()
     vk::BufferCreateInfo BufferInfo(
         {},
         BufferSize,
-        vk::BufferUsageFlagBits::eStorageBuffer,
+        vk::BufferUsageFlagBits::eStorageBuffer |
+        vk::BufferUsageFlagBits::eUniformBuffer,
         vk::SharingMode::eExclusive);
 
     Buffer = Device.createBuffer(BufferInfo);
@@ -73,37 +74,54 @@ void LightBuffer::Update(const std::vector<LightData>& Lights)
 
 void LightBuffer::CreateDescriptorLayout()
 {
-    vk::DescriptorSetLayoutBinding Binding(
-        0,                                              // binding
-        vk::DescriptorType::eStorageBuffer,
-        1,
-        vk::ShaderStageFlagBits::eFragment);
+    std::array<vk::DescriptorSetLayoutBinding, 2> Bindings = {
+        {
+            // Binding 0 – light count (uniform buffer, just the 16‑byte header)
+            { 0, vk::DescriptorType::eUniformBuffer, 1,
+              vk::ShaderStageFlagBits::eFragment },
+            
+              // Binding 1 – light data array (storage buffer, starts after header)
+            { 1, vk::DescriptorType::eStorageBuffer, 1,
+              vk::ShaderStageFlagBits::eFragment },
+        }
+    };
 
-    vk::DescriptorSetLayoutCreateInfo LayoutInfo({}, 1, &Binding);
+    vk::DescriptorSetLayoutCreateInfo LayoutInfo({}, Bindings);
     DescriptorLayout = Device.createDescriptorSetLayout(LayoutInfo);
 }
 
 void LightBuffer::CreateDescriptorPool()
 {
-    vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eStorageBuffer, 1);
+    std::array<vk::DescriptorPoolSize, 2> PoolSizes = { 
+        {
+            { vk::DescriptorType::eUniformBuffer, 1 },
+            { vk::DescriptorType::eStorageBuffer, 1 },
+        }
+    };
+
     vk::DescriptorPoolCreateInfo PoolInfo(
         vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        1, PoolSize);
+        1, PoolSizes);
 
     DescriptorPool = Device.createDescriptorPool(PoolInfo);
 }
 
 void LightBuffer::CreateDescriptorSet()
 {
-    vk::DescriptorSetAllocateInfo AllocInfo(*DescriptorPool, *DescriptorLayout);
+    vk::DescriptorSetAllocateInfo AllocInfo(*DescriptorPool, 1, &*DescriptorLayout);
     DescriptorSet = std::move(Device.allocateDescriptorSets(AllocInfo).front());
 
-    vk::DescriptorBufferInfo BufferInfo(*Buffer, 0, BufferSize);
-    vk::WriteDescriptorSet Write(
-        *DescriptorSet,
-        0, 0, 1,
-        vk::DescriptorType::eStorageBuffer,
-        nullptr,
-        &BufferInfo);
-    Device.updateDescriptorSets(Write, {});
+    // Binding 0 – 16‑byte header (count + padding)
+    vk::DescriptorBufferInfo HeaderInfo(*Buffer, 0, 16);
+    // Binding 1 – LightData[] starting at offset 16
+    vk::DescriptorBufferInfo DataInfo(*Buffer, 16, sizeof(LightData) * MaxLights);
+
+    std::array<vk::WriteDescriptorSet, 2> Writes = { {
+        { *DescriptorSet, 0, 0, 1, vk::DescriptorType::eUniformBuffer,
+          nullptr, &HeaderInfo },
+        { *DescriptorSet, 1, 0, 1, vk::DescriptorType::eStorageBuffer,
+          nullptr, &DataInfo },
+    } };
+
+    Device.updateDescriptorSets(Writes, {});
 }

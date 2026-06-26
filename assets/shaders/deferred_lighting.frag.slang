@@ -31,9 +31,13 @@ struct CameraUBO
 [[vk::binding(3, 1)]] Sampler2D GBuffer_Emissive;
 [[vk::binding(4, 1)]] Sampler2D Main_Depth;
 
-// Set 2, Binding 0 — LightBuffer (SSBO)
-// Layout: [uint LightCount][3×uint padding][LightData[]]
-[[vk::binding(0, 2)]] StructuredBuffer<LightData> gLights;
+// Set 2, Binding 0 – light count header
+[[vk::binding(0, 2)]]
+ConstantBuffer<uint> LightCountRaw;
+
+// Set 2, Binding 1 – LightData array
+[[vk::binding(1, 2)]]
+StructuredBuffer<LightData> gLights;
 
 // Helpers
 
@@ -108,15 +112,13 @@ PSOutput main(PSInput input)
 
     // Accumulate lighting from directional lights
     float3 LitColor     = float3(0.0);
+    uint Count = LightCountRaw;
 
-    // Hardcoded sun (fallback when light buffer is empty)
-    LightData Sun;
-    Sun.Direction = normalize(float3(0.3, -1.0, 0.5));
-    Sun.Intensity = 1.5;
-    Sun.Color     = float3(1.0, 0.95, 0.85);
-
-    LitColor += ComputeDirectionalLight(
-        Sun, WorldPos, Normal, Albedo.rgb, Metallic, Roughness, ViewDir);
+    for (uint i = 0; i < Count; ++i)
+    {
+        LitColor += ComputeDirectionalLight(
+            gLights[i], WorldPos, Normal, Albedo.rgb, Metallic, Roughness, ViewDir);
+    }
 
     // Ambient term
     float3 Ambient = Albedo.rgb * 0.03 * Occlusion;

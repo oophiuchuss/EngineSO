@@ -38,6 +38,7 @@ import SceneEntityChangedEvent;
 
 import MeshComponent;
 import TransformComponent;
+import LightComponent;
 import MeshData;
 import ShaderData;
 import TextureData;
@@ -309,13 +310,16 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	}
 
 	// Collect light data from scene
-	// TODO: hardocded for now
+	// TODO: make better gathering, maybe throuhg registration
 	std::vector<LightData> Lights;
-	LightData Sun;
-	Sun.Direction = glm::normalize(glm::vec3(0.3f, -1.0f, 0.5f));
-	Sun.Intensity = 1.5f;
-	Sun.Color = glm::vec3(1.0f, 0.95f, 0.85f);
-	Lights.push_back(Sun);
+	for (Entity* E : SceneToRender->GetAllEntities())
+	{
+		auto* LC = E->GetComponent<LightComponent>();
+		if (LC)
+		{
+			Lights.push_back(LC->GetLightData());
+		}
+	}
 
 	LightBufferInstance->Update(Lights);
 
