@@ -121,8 +121,11 @@ PSOutput main(PSInput input)
     }
 
     // Ambient term
-    float3 Ambient = Albedo.rgb * 0.03 * Occlusion;
+    float3 Ambient = Albedo.rgb * 0.15 * Occlusion;
 
-    output.outColor = float4(Ambient + LitColor + Emissive, 1.0);
+    float3 MappedColor = LitColor + Emissive + Ambient;
+    MappedColor = MappedColor / (MappedColor + float3(1.0));
+    output.outColor = float4(MappedColor, 1.0);
+
     return output;
 }
