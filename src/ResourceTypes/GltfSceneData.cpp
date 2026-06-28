@@ -30,7 +30,7 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 	std::cout << "[GltfSceneData] Loading: " << FilePath << "\n";
 
 	// fastgltf handles both .gltf and .glb  transparently
-	fastgltf::Parser Parser;
+	fastgltf::Parser Parser{ fastgltf::Extensions::KHR_lights_punctual };
 	
 	fastgltf::GltfFileStream FileStream(FilePath.c_str());
 	if (!FileStream.isOpen())
@@ -55,6 +55,8 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 	}
 
 	fastgltf::Asset& Asset = LoadResult.get();
+
+	Asset.extensionsUsed;
 
 	// Parse textures/images
 	RawTextures.reserve(Asset.images.size());
@@ -282,6 +284,34 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 		RawMeshes.push_back(std::move(Raw));
 	}
 
+	// Parse lights (KHR_lights_punctual extension)
+	RawLights.reserve(Asset.lights.size());
+
+	for (auto& Light : Asset.lights)
+	{
+		RawLight R;
+		R.Name = std::string(Light.name);
+
+		R.Color = glm::vec3(Light.color[0], Light.color[1], Light.color[2]);
+
+		R.Intensity = Light.intensity;
+
+		if (Light.range.has_value())
+		{
+			R.Range = Light.range.value();
+		}
+
+		R.Type = Light.type;
+
+		if (Light.type == fastgltf::LightType::Spot)
+		{
+			R.InnerConeAngle = Light.innerConeAngle.has_value() ? Light.innerConeAngle.value() : 0.0f;
+			R.OuterConeAngle = Light.outerConeAngle.has_value() ? Light.outerConeAngle.value() : glm::radians(45.0f);
+		}
+
+		RawLights.push_back(std::move(R));
+	}
+
 	// Parse nodes
 	RawNodes.resize(Asset.nodes.size());
 
@@ -296,6 +326,11 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 			RawNode.MeshIndex = static_cast<int>(Node.meshIndex.value());
 		}
 
+		if (Node.lightIndex.has_value())
+		{
+			RawNode.LightIndex = static_cast<int>(Node.lightIndex.value());
+		}
+
 		for (auto& ChildIdx : Node.children)
 		{
 			RawNode.ChildIndices.push_back(static_cast<int>(ChildIdx));
@@ -305,13 +340,12 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 		// Transform — handle both TRS and matrix
 		RawNode.LocalTransform = ResolveNodeTransform(Node);
 	}
-
-	// TODO: parse light
 	
 	std::cout << "[GltfSceneData] Parsed: "
 		<< RawMeshes.size() << " meshes, "
 		<< RawMaterials.size() << " materials, "
 		<< RawTextures.size() << " textures, "
+		<< RawLights.size() << " lights, "
 		<< RawNodes.size() << " nodes\n";
 
 	return true;
@@ -574,6 +608,7 @@ void GltfSceneData::UnloadResource()
 	RawMeshes.clear();
 	RawMaterials.clear();
 	RawTextures.clear();
+	RawLights.clear();
 	RawNodes.clear();
 
 	// Call base to clear NodeEntries and bIsInstantiated

@@ -77,11 +77,23 @@ private:
 		int EmissiveTextureIndex = -1;
 	};
 	
+	struct RawLight
+	{
+		std::string Name;
+		glm::vec3   Color = glm::vec3(1.0f);
+		float Intensity = 1.0f;
+		float Range = 0.0f;
+		float InnerConeAngle = 0.0f;
+		float OuterConeAngle = 0.0f;
+		fastgltf::LightType Type = fastgltf::LightType::Directional;
+	};
+
 	struct RawNode
 	{
 		std::string Name;
 		glm::mat4 LocalTransform = glm::mat4(1.0f);
-		int MeshIndex = -1; // -1 if no mesh
+		int MeshIndex = -1;		// -1 if no mesh
+		int LightIndex = -1;	// -1 if no light attached
 		std::optional<int> ParentIndex;
 		std::vector<int> ChildIndices;
 	};
@@ -106,6 +118,7 @@ private:
 	std::vector<RawMesh> RawMeshes;
 	std::vector<RawMaterial> RawMaterials;
 	std::vector<RawTexture> RawTextures;
+	std::vector<RawLight> RawLights;
 	std::vector<RawNode> RawNodes;
 
 	ResourceManager& ResourceManagerRef;

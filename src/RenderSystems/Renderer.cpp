@@ -2,6 +2,7 @@ module;
 
 #include <vulkan/vulkan_raii.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <vector>
 #include <unordered_set>
 #include <optional>
@@ -27,7 +28,7 @@ import GPUSceneBuffer;
 import GPUSceneData;
 import GBufferDescriptorSet;
 import LightBuffer;
-import LightData;
+import GPULightData;
 import RenderResourceCache;
 import FrameData;
 
@@ -38,7 +39,10 @@ import SceneEntityChangedEvent;
 
 import MeshComponent;
 import TransformComponent;
-import LightComponent;
+import LightComponentBase;
+import DirectionalLightComponent;
+import SpotLightComponent;
+import PointLightComponent;
 import MeshData;
 import ShaderData;
 import TextureData;
@@ -311,15 +315,51 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 	// Collect light data from scene
 	// TODO: make better gathering, maybe throuhg registration
-	std::vector<LightData> Lights;
+	std::vector<GPULightData> Lights;
 	for (Entity* E : SceneToRender->GetAllEntities())
 	{
-		auto* LC = E->GetComponent<LightComponent>();
-		if (LC)
+		auto* TC = E->GetComponent<TransformComponent>();
+		auto* Base = E->GetComponent<LightComponentBase>();
+		if (!TC || !Base) 
 		{
-			Lights.push_back(LC->GetLightData());
+			continue;
 		}
+
+		GPULightData LightData;
+		LightData.Color_Intensity = glm::vec4(Base->GetColor(), Base->GetIntensity());
+
+		glm::quat Rot = TC->GetWorldRotation();
+		glm::vec3 Forward = Rot * glm::vec3(0.0f, 0.0f, -1.0f);
+
+		switch (Base->GetType())
+		{
+		case LightType::Directional:
+			LightData.Direction = glm::vec4(Forward, 0.0f);
+			LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
+			break;
+
+		case LightType::Point:
+			LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
+			LightData.Params = glm::vec4(static_cast<PointLightComponent*>(Base)->GetRange(),
+				0.0f, 0.0f, float(LightType::Point));
+			break;
+
+		case LightType::Spot:
+			LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
+			LightData.Direction = glm::vec4(Forward, 0.0f);
+			{
+				auto* Spot = static_cast<SpotLightComponent*>(Base);
+				LightData.Params = glm::vec4(Spot->GetRange(),
+					glm::cos(Spot->GetInnerConeAngle()),
+					glm::cos(Spot->GetOuterConeAngle()),
+					float(LightType::Spot));
+			}
+			break;
+		}
+		
+		Lights.push_back(LightData);
 	}
+
 
 	LightBufferInstance->Update(Lights);
 
@@ -878,11 +918,11 @@ void Renderer::SetupRenderPasses()
 		"Main_Depth");
 
 	// Load geometry shader - pass owns it, not individual meshes
-	ShaderData* GeometryShaderData = ResourceManagerPtr->GetResource<ShaderData>("basic_geometry");
+	ShaderData* GeometryShaderData = ResourceManagerPtr->GetResource<ShaderData>("deferred_geometry");
 	if (!GeometryShaderData)
 	{
 		// Load shader if not already loaded
-		ResourceHandle<ShaderData> Handle = ResourceManagerPtr->Load<ShaderData>("basic_geometry");
+		ResourceHandle<ShaderData> Handle = ResourceManagerPtr->Load<ShaderData>("deferred_geometry");
 		GeometryShaderData = Handle.Get();
 	}
 

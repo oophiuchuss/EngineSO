@@ -6,7 +6,7 @@ module;
 
 module LightBuffer;
 
-import LightData;
+import GPULightData;
 import VulkanUtils;
 
 LightBuffer::LightBuffer(
@@ -26,7 +26,7 @@ LightBuffer::LightBuffer(
 void LightBuffer::CreateBuffer()
 {
     // Layout: [uint32 LightCount][3 x uint32 padding][LightData[]]
-    BufferSize = 16 + sizeof(LightData) * MaxLights;
+    BufferSize = 16 + sizeof(GPULightData) * MaxLights;
 
     vk::BufferCreateInfo BufferInfo(
         {},
@@ -53,19 +53,19 @@ void LightBuffer::CreateBuffer()
 }
 
 
-void LightBuffer::Update(const std::vector<LightData>& Lights)
+void LightBuffer::Update(const std::vector<GPULightData>& Lights)
 {
     if (Lights.size() > MaxLights)
         throw std::runtime_error("LightBuffer: light count exceeds MaxLights");
 
     uint32_t Count = static_cast<uint32_t>(Lights.size());
     vk::DeviceSize HeaderSize = 16; // count + padding
-    vk::DeviceSize DataSize = Count * sizeof(LightData);
+    vk::DeviceSize DataSize = Count * sizeof(GPULightData);
 
     // Write header (light count) directly to mapped memory
     std::memcpy(MappedMemory, &Count, sizeof(Count));
 
-    // Write LightData array right after the header
+    // Write GPULightData array right after the header
     std::memcpy(
         static_cast<uint8_t*>(MappedMemory) + HeaderSize,
         Lights.data(),
@@ -114,7 +114,7 @@ void LightBuffer::CreateDescriptorSet()
     // Binding 0 – 16‑byte header (count + padding)
     vk::DescriptorBufferInfo HeaderInfo(*Buffer, 0, 16);
     // Binding 1 – LightData[] starting at offset 16
-    vk::DescriptorBufferInfo DataInfo(*Buffer, 16, sizeof(LightData) * MaxLights);
+    vk::DescriptorBufferInfo DataInfo(*Buffer, 16, sizeof(GPULightData) * MaxLights);
 
     std::array<vk::WriteDescriptorSet, 2> Writes = { {
         { *DescriptorSet, 0, 0, 1, vk::DescriptorType::eUniformBuffer,

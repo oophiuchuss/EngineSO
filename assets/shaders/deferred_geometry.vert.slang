@@ -1,18 +1,12 @@
 import PushConstants;
 import GPUSceneData;
+import CameraUBO;
 
 struct VSInput
 {
     [[vk::location(0)]] float3 inPosition;
     [[vk::location(1)]] float2 inUV;
     [[vk::location(2)]] float3 inNormal;
-};
-
-struct CameraUBO
-{
-    float4x4 viewProj;
-    float4x4 InverseViewProj;
-    float4 cameraPos;
 };
 
 // Set 0, Binding 0 — Camera UBO
@@ -53,7 +47,7 @@ VSOutput main(VSInput input)
 
     // Transform position to world space then clip space
     float4 WorldPos = mul(object.ModelMatrix, float4(input.inPosition, 1.0));
-    output.position = mul(uCamera.viewProj, WorldPos);
+    output.position = mul(uCamera.ViewProj, WorldPos);
     output.outUV = input.inUV;
     output.outWorldPos = WorldPos.xyz;
 

@@ -1,7 +1,8 @@
 // Reads the G‑buffer, reconstructs world position, and applies PBR lighting
 // from a directional light read from the LightBuffer.
 
-import LightData;
+import GPULightData;
+import CameraUBO;
 
 struct PSInput
 {
@@ -16,12 +17,6 @@ struct PSOutput
 // Descriptor sets
 
 // Set 0, Binding 0 — Camera UBO
-struct CameraUBO
-{
-    float4x4 ViewProj;
-    float4x4 InverseViewProj;
-    float4   CameraPos;
-};
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUBO> uCamera;
 
 // Set 1 — G‑buffer textures (bindings 0‑4)
@@ -37,7 +32,10 @@ ConstantBuffer<uint> LightCountRaw;
 
 // Set 2, Binding 1 – LightData array
 [[vk::binding(1, 2)]]
-StructuredBuffer<LightData> gLights;
+StructuredBuffer<GPULightData> gLights;
+
+// Constnats
+static const float PI = 3.14159265;
 
 // Helpers
 
@@ -53,29 +51,29 @@ float3 ReconstructWorldPosition(float2 UV, float Depth)
     return WorldPos.xyz / WorldPos.w;
 }
 
-float3 ComputeDirectionalLight(
-    LightData Light,
-    float3    WorldPos,
+float3 ComputePBRLighting(
+    float3    LightDir,
     float3    Normal,
     float3    Albedo,
     float     Metallic,
     float     Roughness,
-    float3    ViewDir)
+    float3    ViewDir,
+    float3    LightColor,
+    float     LightIntensity,
+    float     NdotL)
 {
-    float3 LightDir = normalize(-Light.Direction);
-    float3 HalfVec  = normalize(LightDir + ViewDir);
+    float3 HalfVec = normalize(LightDir + ViewDir);
 
-    float3 F0       = lerp(float3(0.04), Albedo, Metallic);
-    float  NdotL    = max(dot(Normal, LightDir), 0.0);
-    float  NdotV    = max(dot(Normal, ViewDir),  0.0);
-    float  NdotH    = max(dot(Normal, HalfVec),  0.0);
+    float3 F0   = lerp(float3(0.04), Albedo, Metallic);
+    float  NdotV = max(dot(Normal, ViewDir),  0.0);
+    float  NdotH = max(dot(Normal, HalfVec),  0.0);
 
     float3 F = F0 + (1.0 - F0) * pow(1.0 - NdotH, 5.0);
 
-    float Alpha     = Roughness * Roughness;
-    float Alpha2    = Alpha * Alpha;
-    float Denom     = NdotH * NdotH * (Alpha2 - 1.0) + 1.0;
-    float D         = Alpha2 / (3.14159265 * Denom * Denom);
+    float Alpha  = Roughness * Roughness;
+    float Alpha2 = Alpha * Alpha;
+    float Denom  = NdotH * NdotH * (Alpha2 - 1.0) + 1.0;
+    float D      = Alpha2 / (PI * Denom * Denom);
 
     float K  = (Roughness + 1.0) * (Roughness + 1.0) / 8.0;
     float G1V = NdotV / (NdotV * (1.0 - K) + K);
@@ -85,7 +83,75 @@ float3 ComputeDirectionalLight(
     float3 Specular = (D * G * F) / max(4.0 * NdotV * NdotL, 0.001);
     float3 KD = (1.0 - F) * (1.0 - Metallic);
 
-    return (KD * Albedo / 3.14159265 + Specular) * Light.Color * Light.Intensity * NdotL;
+    return (KD * Albedo / PI + Specular) * LightColor * LightIntensity * NdotL;
+}
+
+float3 ApplyDirectionalLight(
+    GPULightData Light,
+    float3       WorldPos,
+    float3       Normal,
+    float3       Albedo,
+    float        Metallic,
+    float        Roughness,
+    float3       ViewDir)
+{
+    float3 LightDir = normalize(-Light.Direction.xyz);
+    float  NdotL    = max(dot(Normal, LightDir), 0.0);
+    return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness,
+                              ViewDir, Light.Color_Intensity.rgb,
+                              Light.Color_Intensity.a, NdotL);
+}
+
+float3 ApplyPointLight(
+    GPULightData Light,
+    float3       WorldPos,
+    float3       Normal,
+    float3       Albedo,
+    float        Metallic,
+    float        Roughness,
+    float3       ViewDir)
+{
+    float3 LightVec = Light.Position.xyz - WorldPos;
+    float  Distance = length(LightVec);
+    float3 LightDir = LightVec / Distance;
+
+    float NdotL       = max(dot(Normal, LightDir), 0.0);
+    float Attenuation = max(1.0 - (Distance / Light.Params.x), 0.0);
+    Attenuation      *= Attenuation;
+
+    return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness,
+                              ViewDir, Light.Color_Intensity.rgb,
+                              Light.Color_Intensity.a, NdotL)
+           * Attenuation;
+}
+
+float3 ApplySpotLight(
+    GPULightData Light,
+    float3       WorldPos,
+    float3       Normal,
+    float3       Albedo,
+    float        Metallic,
+    float        Roughness,
+    float3       ViewDir)
+{
+    float3 LightVec = Light.Position.xyz - WorldPos;
+    float  Distance = length(LightVec);
+    float3 LightDir = LightVec / Distance;
+
+    float NdotL = max(dot(Normal, LightDir), 0.0);
+
+    // Distance attenuation
+    float DistanceAtten = max(1.0 - (Distance / Light.Params.x), 0.0);
+    DistanceAtten *= DistanceAtten;
+
+    // Cone attenuation
+    float CosTheta   = dot(LightDir, -Light.Direction.xyz);
+    float ConeAtten  = smoothstep(Light.Params.z, Light.Params.y, CosTheta);
+
+    return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness,
+                              ViewDir, Light.Color_Intensity.rgb,
+                              Light.Color_Intensity.a, NdotL)
+           * DistanceAtten * ConeAtten;
 }
 
 // Entry point
@@ -110,22 +176,36 @@ PSOutput main(PSInput input)
     float3 WorldPos     = ReconstructWorldPosition(input.uv, Depth);
     float3 ViewDir      = normalize(uCamera.CameraPos.xyz - WorldPos);
 
-    // Accumulate lighting from directional lights
+    // Accumulate lighting from all lights in the buffer
     float3 LitColor     = float3(0.0);
     uint Count = LightCountRaw;
 
     for (uint i = 0; i < Count; ++i)
     {
-        LitColor += ComputeDirectionalLight(
-            gLights[i], WorldPos, Normal, Albedo.rgb, Metallic, Roughness, ViewDir);
+        GPULightData L = gLights[i];
+        uint Type = asuint(L.Params.w);
+
+        if (Type == LightType_Directional)
+        {
+            LitColor += ApplyDirectionalLight(L, WorldPos, Normal, Albedo.rgb,
+                                              Metallic, Roughness, ViewDir);
+        }
+        else if (Type == LightType_Point)
+        {
+            LitColor += ApplyPointLight(L, WorldPos, Normal, Albedo.rgb,
+                                            Metallic, Roughness, ViewDir);
+        }
+        else if (Type == LightType_Spot)
+        {
+            LitColor += ApplySpotLight(L, WorldPos, Normal, Albedo.rgb,
+                                       Metallic, Roughness, ViewDir);
+        }
     }
 
     // Ambient term
-    float3 Ambient = Albedo.rgb * 0.15 * Occlusion;
+    float3 Ambient = Albedo.rgb * 0.03 * Occlusion;
 
-    float3 MappedColor = LitColor + Emissive + Ambient;
-    MappedColor = MappedColor / (MappedColor + float3(1.0));
-    output.outColor = float4(MappedColor, 1.0);
+    output.outColor = float4(LitColor + Emissive + Ambient, 1.0);
 
     return output;
 }

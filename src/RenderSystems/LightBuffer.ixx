@@ -5,7 +5,7 @@ module;
 
 export module LightBuffer;
 
-import LightData;
+import GPULightData;
 
 export class LightBuffer
 {
@@ -17,9 +17,9 @@ public:
 
     ~LightBuffer() = default;
 
-    // Upload an array of LightData to the GPU buffer.
+    // Upload an array of GPULightData to the GPU buffer.
     // Automatically writes the light count header followed by the LightData entries.
-    void Update(const std::vector<LightData>& Lights);
+    void Update(const std::vector<GPULightData>& Lights);
 
     vk::DescriptorSet GetDescriptorSet() const { return *DescriptorSet; }
     vk::DescriptorSetLayout GetDescriptorSetLayout() const { return *DescriptorLayout; }
