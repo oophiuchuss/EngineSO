@@ -13,6 +13,9 @@ import Material;
 import CameraComponent;
 import TransformComponent;
 import MeshComponent;
+import DirectionalLightComponent;
+import PointLightComponent;
+import SpotLightComponent;
 import ResourceManager;
 
 import EventSystem;
@@ -38,22 +41,25 @@ void Scene::InstantiateSceneFromData(SceneData& Data, ResourceManager& RM, const
 		Data.Instantiate();
 	}
 
-	const auto& Entries = Data.GetMeshEntries();
-	if (Entries.empty())
+	const auto& Nodes = Data.GetNodeEntries();
+	const auto& Meshes = Data.GetMeshInstances();
+	const auto& Lights = Data.GetLightInstances();
+
+	if (Nodes.empty())
 	{
 		return;
 	}
 
 	// Create all entities flat, store entry index -> entity mapping
-	std::vector<Entity*> EntryToEntity(Entries.size(), nullptr);
+	std::vector<Entity*> EntryToEntity(Nodes.size(), nullptr);
 
-	for (size_t i = 0; i < Entries.size(); i++)
+	for (size_t i = 0; i < Nodes.size(); i++)
 	{
-		const SceneNodeEntry& Entry = Entries[i];
+		const SceneNodeEntry& Entry = Nodes[i];
 
 		Entity* E = CreateEntity(Entry.Name);
 
-		// Apply root transform to root entries — children inherit via hierarchy
+		// Apply root transform to root Nodes — children inherit via hierarchy
 		glm::mat4 FinalLocalTransform = Entry.ParentIndex.has_value()
 			? Entry.LocalTransform
 			: RootTransform * Entry.LocalTransform;
@@ -62,21 +68,77 @@ void Scene::InstantiateSceneFromData(SceneData& Data, ResourceManager& RM, const
 		auto* TC = E->AddComponent<TransformComponent>();
 		TC->SetTransformFromMatrix(FinalLocalTransform);
 
-		// Only add MeshComponent if this node has geometry
-		if (Entry.bHasMesh)
-		{
-			auto MeshHandle = RM.GetHandle<MeshData>(Entry.MeshID);
-			auto MatHandle = RM.GetHandle<Material>(Entry.MaterialID);
-			E->AddComponent<MeshComponent>(MeshHandle, MatHandle);
-		}
-
 		EntryToEntity[i] = E;
 	}
 
-	// Wire parent/child relationships
-	for (size_t i = 0; i < Entries.size(); i++)
+
+	// Attach meshes
+	for (const MeshInstance& MI : Meshes)
 	{
-		const SceneNodeEntry& Entry = Entries[i];
+		if (MI.NodeIndex < 0 || MI.NodeIndex >= static_cast<int>(EntryToEntity.size()))
+		{
+			continue;
+		}
+
+		Entity* E = EntryToEntity[MI.NodeIndex];
+		if (!E)
+		{
+			continue;
+		}
+
+		auto MeshHandle = RM.GetHandle<MeshData>(MI.MeshID);
+		auto MatHandle = RM.GetHandle<Material>(MI.MaterialID);
+		E->AddComponent<MeshComponent>(MeshHandle, MatHandle);
+	}
+
+	// Attach lights
+	for (const LightInstance& LI : Lights)
+	{
+		if (LI.NodeIndex < 0 || LI.NodeIndex >= static_cast<int>(EntryToEntity.size()))
+		{
+			continue;
+		}
+		
+		Entity* E = EntryToEntity[LI.NodeIndex];
+		if (!E)
+		{
+			continue;
+		}
+
+		switch (LI.Type)
+		{
+		case LightType::Directional:
+		{
+			auto* Dir = E->AddComponent<DirectionalLightComponent>();
+			Dir->SetColor(LI.Color);
+			Dir->SetIntensity(LI.Intensity);
+			break;
+		}
+		case LightType::Point:
+		{
+			auto* Pt = E->AddComponent<PointLightComponent>();
+			Pt->SetColor(LI.Color);
+			Pt->SetIntensity(LI.Intensity);
+			Pt->SetRange(LI.Range);
+			break;
+		}
+		case LightType::Spot:
+		{
+			auto* Sp = E->AddComponent<SpotLightComponent>();
+			Sp->SetColor(LI.Color);
+			Sp->SetIntensity(LI.Intensity);
+			Sp->SetRange(LI.Range);
+			Sp->SetInnerConeAngle(LI.InnerConeAngle);
+			Sp->SetOuterConeAngle(LI.OuterConeAngle);
+			break;
+		}
+		}
+	}
+
+	// Wire parent/child relationships
+	for (size_t i = 0; i < Nodes.size(); i++)
+	{
+		const SceneNodeEntry& Entry = Nodes[i];
 		Entity* E = EntryToEntity[i];
 
 		if (Entry.ParentIndex.has_value())

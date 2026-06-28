@@ -509,6 +509,10 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 			return "default";
 		};
 
+	NodeEntries.clear();
+	MeshInstances.clear();
+	LightInstances.clear();
+
 	// Create MeshData and NodeEntries for every node with a mesh
 	for (size_t NodeIdx = 0; NodeIdx < RawNodes.size(); NodeIdx++)
 	{
@@ -518,11 +522,10 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 		Entry.Name = Node.Name;
 		Entry.LocalTransform = Node.LocalTransform;
 		Entry.ParentIndex = std::nullopt; // resolved later
-		Entry.bHasMesh = Node.MeshIndex >= 0;
 
 		int FirstPrimEntryIndex = -1;   // index of the first primitive entry (if any)
 
-		if (Entry.bHasMesh)
+		if (Node.MeshIndex >= 0)
 		{
 			auto& RawMesh = RawMeshes[Node.MeshIndex];
 
@@ -530,8 +533,15 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 			if (!RawMesh.Primitives.empty())
 			{
 				const auto& Prim = RawMesh.Primitives[0];
-				Entry.MeshID = CreateMeshDataForPrimitive(Prim, Node.MeshIndex, 0);
-				Entry.MaterialID = ResolveMaterial(Prim);
+				std::string MeshID = CreateMeshDataForPrimitive(Prim, Node.MeshIndex, 0);
+				std::string MaterialID = ResolveMaterial(Prim);
+
+				MeshInstance MI;
+				MI.NodeIndex = static_cast<int>(NodeEntries.size());   // current entry index
+				MI.MeshID = MeshID;
+				MI.MaterialID = MaterialID;
+				MeshInstances.push_back(MI);
+
 				Entry.Name = RawMesh.Name;
 
 				// Keep a simple name for multi‑primitive meshes
@@ -554,19 +564,48 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 			for (size_t PrimIdx = 1; PrimIdx < RawMesh.Primitives.size(); ++PrimIdx)
 			{
 				const auto& Prim = RawMesh.Primitives[PrimIdx];
+				std::string MeshID = CreateMeshDataForPrimitive(Prim, Node.MeshIndex, PrimIdx);
+				std::string MaterialID = ResolveMaterial(Prim);
 
 				SceneNodeEntry PrimEntry;
 				PrimEntry.Name = RawMesh.Name + "_prim_" + std::to_string(PrimIdx);
 				PrimEntry.LocalTransform = glm::mat4(1.0f);          // inherited from parent
-				PrimEntry.bHasMesh = true;
-				PrimEntry.MeshID = CreateMeshDataForPrimitive(Prim, Node.MeshIndex, PrimIdx);
-				PrimEntry.MaterialID = ResolveMaterial(Prim);
 				PrimEntry.ParentIndex = FirstPrimEntryIndex;
 
 				int PrimEntryIndex = static_cast<int>(NodeEntries.size());
 				NodeEntries[FirstPrimEntryIndex].ChildIndices.push_back(PrimEntryIndex);
 				NodeEntries.push_back(std::move(PrimEntry));
+
+				// Mesh instance for this additional primitive
+				MeshInstance MI;
+				MI.NodeIndex = PrimEntryIndex;
+				MI.MeshID = MeshID;
+				MI.MaterialID = MaterialID;
+				MeshInstances.push_back(MI);
 			}
+		}
+
+		// Light attachment
+		if (Node.LightIndex >= 0 && Node.LightIndex < static_cast<int>(RawLights.size()))
+		{
+			const auto& L = RawLights[Node.LightIndex];
+			LightInstance LI;
+			LI.NodeIndex = FirstPrimEntryIndex;   // attach to the first entry of this node
+			LI.Color = L.Color;
+			LI.Intensity = L.Intensity;
+			LI.Range = L.Range;
+			LI.InnerConeAngle = L.InnerConeAngle;
+			LI.OuterConeAngle = L.OuterConeAngle;
+
+			switch (L.Type)
+			{
+			case fastgltf::LightType::Directional: LI.Type = LightType::Directional; break;
+			case fastgltf::LightType::Point:       LI.Type = LightType::Point;       break;
+			case fastgltf::LightType::Spot:        LI.Type = LightType::Spot;        break;
+			default: continue; // skip unknown types
+			}
+
+			LightInstances.push_back(LI);
 		}
 	}
 			
@@ -594,13 +633,13 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 		}
 	}
 
-	int MeshEntriesCount = std::count_if(NodeEntries.begin(), NodeEntries.end(),
-		[](const SceneNodeEntry& E) { return E.bHasMesh; });
+	int MeshCount = static_cast<int>(MeshInstances.size());
+	int LightCount = static_cast<int>(LightInstances.size());
 
 	std::cout << "[GltfSceneData] Nodes done: "
-		<< NodeEntries.size() << " entries ("
-		<< MeshEntriesCount
-		<< " with meshes)\n";
+		<< NodeEntries.size() << " entries, "
+		<< MeshCount << " mesh instances, "
+		<< LightCount << " light instances.\n";
 }
 
 void GltfSceneData::UnloadResource()
