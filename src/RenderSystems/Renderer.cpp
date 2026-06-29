@@ -319,45 +319,48 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	for (Entity* E : SceneToRender->GetAllEntities())
 	{
 		auto* TC = E->GetComponent<TransformComponent>();
-		auto* Base = E->GetComponent<LightComponentBase>();
-		if (!TC || !Base) 
+		if (!TC) 
 		{
 			continue;
 		}
 
-		GPULightData LightData;
-		LightData.Color_Intensity = glm::vec4(Base->GetColor(), Base->GetIntensity());
-
-		glm::quat Rot = TC->GetWorldRotation();
-		glm::vec3 Forward = Rot * glm::vec3(0.0f, 0.0f, -1.0f);
-
-		switch (Base->GetType())
+		auto LightComponents = E->GetComponentsOfBaseType<LightComponentBase>();
+		for (auto* Base : LightComponents)
 		{
-		case LightType::Directional:
-			LightData.Direction = glm::vec4(Forward, 0.0f);
-			LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
-			break;
+			GPULightData LightData;
+			LightData.Color_Intensity = glm::vec4(Base->GetColor(), Base->GetIntensity());
 
-		case LightType::Point:
-			LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
-			LightData.Params = glm::vec4(static_cast<PointLightComponent*>(Base)->GetRange(),
-				0.0f, 0.0f, float(LightType::Point));
-			break;
+			glm::quat Rot = TC->GetWorldRotation();
+			glm::vec3 Forward = Rot * glm::vec3(0.0f, 0.0f, -1.0f);
 
-		case LightType::Spot:
-			LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
-			LightData.Direction = glm::vec4(Forward, 0.0f);
+			switch (Base->GetType())
 			{
-				auto* Spot = static_cast<SpotLightComponent*>(Base);
-				LightData.Params = glm::vec4(Spot->GetRange(),
-					glm::cos(Spot->GetInnerConeAngle()),
-					glm::cos(Spot->GetOuterConeAngle()),
-					float(LightType::Spot));
+			case LightType::Directional:
+				LightData.Direction = glm::vec4(Forward, 0.0f);
+				LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
+				break;
+
+			case LightType::Point:
+				LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
+				LightData.Params = glm::vec4(static_cast<PointLightComponent*>(Base)->GetRange(),
+					0.0f, 0.0f, float(LightType::Point));
+				break;
+
+			case LightType::Spot:
+				LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
+				LightData.Direction = glm::vec4(Forward, 0.0f);
+				{
+					auto* Spot = static_cast<SpotLightComponent*>(Base);
+					LightData.Params = glm::vec4(Spot->GetRange(),
+						glm::cos(Spot->GetInnerConeAngle()),
+						glm::cos(Spot->GetOuterConeAngle()),
+						float(LightType::Spot));
+				}
+				break;
 			}
-			break;
-		}
 		
-		Lights.push_back(LightData);
+			Lights.push_back(LightData);
+		}
 	}
 
 

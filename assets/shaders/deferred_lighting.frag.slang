@@ -178,12 +178,12 @@ PSOutput main(PSInput input)
 
     // Accumulate lighting from all lights in the buffer
     float3 LitColor     = float3(0.0);
-    uint Count = LightCountRaw;
+    uint Count          = LightCountRaw;
 
     for (uint i = 0; i < Count; ++i)
     {
         GPULightData L = gLights[i];
-        uint Type = asuint(L.Params.w);
+        uint Type = uint(L.Params.w);
 
         if (Type == LightType_Directional)
         {

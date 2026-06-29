@@ -77,6 +77,21 @@ public:
 	}
 
 	template<typename T>
+	std::vector<T*> GetComponentsOfBaseType() const
+	{
+		static_assert(std::is_base_of_v<ComponentBase, T>, "T must be a subclass of ComponentBase");
+
+		std::vector<T*> Results;
+		for (const auto& Comp : Components)
+		{
+			T* Casted = dynamic_cast<T*>(Comp.get());
+			if (Casted)
+				Results.push_back(Casted);
+		}
+		return Results;
+	}
+
+	template<typename T>
 	bool RemoveComponent()
 	{
 		size_t TypeID = ComponentBase::GetTypeID<T>();
