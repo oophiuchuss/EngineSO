@@ -20,6 +20,11 @@ void Rendergraph::Compile()
     // Physical Resource Allocation and Creation (transforms to actual GPU resource)
     for (auto& [CurName, CurResource] : Resources)
     {
+        if (ExternalImages.count(CurName) > 0)
+        {
+            continue;   // external image, don't create GPU resources
+        }
+
         // Configure Image creation parameters
         vk::ImageCreateInfo ImageInfo;
         ImageInfo.setImageType(vk::ImageType::e2D)                                  // 2d texture/render target
@@ -71,15 +76,29 @@ void Rendergraph::Reset()
 	Passes.clear();
 	SortedPasses.clear();
 	CurrentLayouts.clear();
+    ExternalImages.clear();
+    FrameExternalViews.clear();
     bIsPassesDirty = true;
 }
 
-void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue, FrameData& CurrentFrameData)
+void Rendergraph::Execute(
+    vk::raii::CommandBuffer& CommandBuffer, 
+    vk::Queue Queue, 
+    FrameData& CurrentFrameData)
 {
     if (bIsPassesDirty)
     {
         SortPasses();
         bIsPassesDirty = false;
+    }
+
+    // Reset current layout for external resources
+    for (const auto& [Name, Res] : Resources)
+    {
+        if (ExternalImages.count(Name))
+        {
+            CurrentLayouts[Name] = Res.InitialLayout;
+        }
     }
 
     // Pass execution with dependency-sage order
@@ -136,32 +155,110 @@ void Rendergraph::Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queu
         TransitionResourceImageLayout(CommandBuffer, &CurResource, CurrentLayouts[CurOutput], TargetLayout);
     }
 
-    // Note: Rremoved per-pass submissions and semaphores because:
+    ExternalImages.clear();
+    FrameExternalViews.clear();
+
+    // Note: Removed per-pass submissions and semaphores because:
     // 1. Submitting one command buffer is more efficient (less driver overhead)
     // 2. Command buffers execute sequentially, so passes naturally run in order
     // 3. Barriers inside the command buffer handle all synchronization
 }
 
-void Rendergraph::TransitionResourceImageLayout(vk::raii::CommandBuffer& CommandBuffer, Resource* ResourcePtr, vk::ImageLayout OldLayout, vk::ImageLayout NewLayout)
+void Rendergraph::TransitionResourceImageLayout(
+    vk::raii::CommandBuffer& CommandBuffer,
+    Resource* ResourcePtr,
+    vk::ImageLayout OldLayout,
+    vk::ImageLayout NewLayout)
 {
     if (ResourcePtr == nullptr)
     {
-		return;
+        return;
     }
 
-    if (CurrentLayouts[ResourcePtr->Name] != NewLayout)
+    if (CurrentLayouts[ResourcePtr->Name] == NewLayout)
     {
-        // Transition image to target layout
-        VulkanUtils::TransitionImageLayout(CommandBuffer, *ResourcePtr->Image, ResourcePtr->Aspect, CurrentLayouts[ResourcePtr->Name], NewLayout);
-
-        // Update this resource current layout 
-        CurrentLayouts[ResourcePtr->Name] = NewLayout;
+        return;
     }
+
+    // Resolve the actual VkImage (external or internal)
+    vk::Image Image;
+    auto extIt = ExternalImages.find(ResourcePtr->Name);
+    if (extIt != ExternalImages.end())
+    {
+        Image = extIt->second;
+    }
+    else
+    {
+        Image = *ResourcePtr->Image;
+    }
+
+    VulkanUtils::TransitionImageLayout(
+        CommandBuffer,
+        Image,
+        ResourcePtr->Aspect,
+        CurrentLayouts[ResourcePtr->Name],
+        NewLayout);
+
+    CurrentLayouts[ResourcePtr->Name] = NewLayout;
 }
 
 void Rendergraph::AddResource(const std::string& Name, vk::Format Format, vk::Extent2D Extent, vk::ImageUsageFlags Usage, vk::ImageAspectFlags Aspect, vk::ImageLayout InitLayout, vk::ImageLayout FinalLayout)
 {
     Resources.try_emplace(Name, Name, Format, Extent, Usage, Aspect, InitLayout, FinalLayout);
+}
+
+void Rendergraph::ImportExternalImage(
+    const std::string& Name,
+    vk::Format Format,
+    vk::Extent2D Extent,
+    vk::ImageUsageFlags Usage,
+    vk::ImageAspectFlags Aspect,
+    vk::ImageLayout InitialLayout,
+    vk::ImageLayout FinalLayout)
+{
+    // Create a metadata entry in Resources (no GPU allocation)
+    Resource R;
+    R.Name = Name;
+    R.Format = Format;
+    R.Extent = Extent;
+    R.Usage = Usage;
+    R.Aspect = Aspect;
+    R.InitialLayout = InitialLayout;
+    R.FinalLayout = FinalLayout;
+    R.Image = nullptr;      // graph never owns this image
+    R.View = nullptr;      // view provided per‑frame later
+
+    ExternalImages[Name] = VK_NULL_HANDLE;
+
+    Resources[Name] = std::move(R);
+
+    // Track the initial layout
+    CurrentLayouts[Name] = InitialLayout;
+}
+
+void Rendergraph::SetFrameExternalImage(const std::string& Name, vk::Image Image, vk::ImageView View)
+{
+    ExternalImages[Name] = Image;
+    FrameExternalViews[Name] = View;
+}
+
+vk::ImageView Rendergraph::GetResourceView(const std::string& Name) const
+{
+    // Per‑frame temporary view
+    auto frameIt = FrameExternalViews.find(Name);
+    if (frameIt != FrameExternalViews.end())
+    {
+        return frameIt->second;
+    }
+
+    // Graph‑owned resource view
+    auto resIt = Resources.find(Name);
+    if (resIt != Resources.end())
+    {
+        return resIt->second.View;
+    }
+
+    return nullptr;
 }
 
 void Rendergraph::RemoveRenderPass(const std::string& Name)
@@ -185,21 +282,24 @@ void Rendergraph::SortPasses()
     std::unordered_map<std::string, std::string> ResourceWriters;
 
     // Analyze each pass to determine data flow relationships
-    for (const auto& [CurName, CurRenderPass] : Passes)
+    for (const auto& [CurName, CurPass] : Passes)
     {
-        for(const std::string& Input : CurRenderPass->GetInputs())
+        for (const std::string& Output : CurPass->GetOutputs())
+        {
+            ResourceWriters[Output] = CurName;
+        }
+    }
+
+    for (const auto& [CurName, CurPass] : Passes)
+    {
+        for (const std::string& Input : CurPass->GetInputs())
         {
             auto it = ResourceWriters.find(Input);
             if (it != ResourceWriters.end())
             {
-                Dependencies[CurName].push_back(it->second);    // current depends on writer
+                Dependencies[CurName].push_back(it->second);
                 Dependents[it->second].push_back(CurName);
             }
-        }
-        
-        for(const std::string& Output: CurRenderPass->GetOutputs())
-        {
-            ResourceWriters[Output] = CurName;
         }
     }
 

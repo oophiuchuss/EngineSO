@@ -24,15 +24,6 @@ GBufferDescriptorSet::GBufferDescriptorSet(
 
 void GBufferDescriptorSet::Initialize(Rendergraph& Graph)
 {
-    Resource* Albedo = Graph.GetResource(AlbedoName);
-    Resource* Normal = Graph.GetResource(NormalName);
-    Resource* MetalRough = Graph.GetResource(MetalRoughName);
-    Resource* Emissive = Graph.GetResource(EmissiveName);
-    Resource* Depth = Graph.GetResource(DepthName);
-
-    if (!Albedo || !Normal || !MetalRough || !Emissive || !Depth)
-        throw std::runtime_error("GBufferDescriptorSet: resource missing");
-
     // Sampler – nearest, clamp
     vk::SamplerCreateInfo SamplerInfo;
     SamplerInfo.setMagFilter(vk::Filter::eNearest).setMinFilter(vk::Filter::eNearest)
@@ -66,11 +57,11 @@ void GBufferDescriptorSet::Initialize(Rendergraph& Graph)
 
     // Write
     std::array<vk::DescriptorImageInfo, 5> ImageInfos = { {
-        { *Sampler, Albedo->View, vk::ImageLayout::eShaderReadOnlyOptimal },
-        { *Sampler, Normal->View, vk::ImageLayout::eShaderReadOnlyOptimal },
-        { *Sampler, MetalRough->View, vk::ImageLayout::eShaderReadOnlyOptimal },
-        { *Sampler, Emissive->View, vk::ImageLayout::eShaderReadOnlyOptimal },
-        { *Sampler, Depth->View, vk::ImageLayout::eShaderReadOnlyOptimal },
+        { *Sampler, Graph.GetResourceView(AlbedoName), vk::ImageLayout::eShaderReadOnlyOptimal },
+        { *Sampler, Graph.GetResourceView(NormalName), vk::ImageLayout::eShaderReadOnlyOptimal },
+        { *Sampler, Graph.GetResourceView(MetalRoughName), vk::ImageLayout::eShaderReadOnlyOptimal },
+        { *Sampler, Graph.GetResourceView(EmissiveName), vk::ImageLayout::eShaderReadOnlyOptimal },
+        { *Sampler, Graph.GetResourceView(DepthName), vk::ImageLayout::eShaderReadOnlyOptimal },
     } };
 
     std::array<vk::WriteDescriptorSet, 5> Writes;

@@ -58,13 +58,21 @@ export struct Resource
 export class Rendergraph
 {
 public:
-	explicit Rendergraph(vk::raii::Device& Device, vk::raii::PhysicalDevice& PhysicalDevice) : Device(Device), PhysicalDevice(PhysicalDevice) {};
+	explicit Rendergraph(
+		vk::raii::Device& Device, 
+		vk::raii::PhysicalDevice& PhysicalDevice) :
+		Device(Device), 
+		PhysicalDevice(PhysicalDevice) 
+	{};
 
 	void Compile();
 
 	void Reset();
 
-	void Execute(vk::raii::CommandBuffer& CommandBuffer, vk::Queue Queue, FrameData& CurrentFrameData);
+	void Execute(
+		vk::raii::CommandBuffer& CommandBuffer, 
+		vk::Queue Queue, 
+		FrameData& CurrentFrameData);
 
 	void TransitionResourceImageLayout(
 		vk::raii::CommandBuffer& CommandBuffer,
@@ -80,6 +88,21 @@ public:
 		vk::ImageAspectFlags Aspect,
 		vk::ImageLayout InitLayout,
 		vk::ImageLayout FinalLayout);
+
+	void ImportExternalImage(
+		const std::string& Name,
+		vk::Format Format,
+		vk::Extent2D Extent,
+		vk::ImageUsageFlags Usage,
+		vk::ImageAspectFlags Aspect,
+		vk::ImageLayout InitialLayout,
+		vk::ImageLayout FinalLayout);
+
+	// Set the per‑frame VkImage and VkImageView for an imported resource.
+	// Must be called before Execute(). Cleared automatically after Execute().
+	void SetFrameExternalImage(const std::string& Name, vk::Image Image, vk::ImageView View);
+
+	vk::ImageView GetResourceView(const std::string& Name) const;
 
 	template<typename T, typename... Args>
 	T* AddRenderPass(const std::string& Name, Args&&... args)
@@ -137,6 +160,9 @@ private:
 	std::unordered_map<std::string, std::unique_ptr<RenderPassBase>> Passes;	// All rendering passes 
 	std::vector<RenderPassBase*> SortedPasses;									// Optimal execution order
 	bool bIsPassesDirty = true;
+
+	std::unordered_map<std::string, vk::Image> ExternalImages;
+	std::unordered_map<std::string, vk::ImageView> FrameExternalViews;
 
 	std::unordered_map<std::string, vk::ImageLayout> CurrentLayouts; // Current layouts of resources
 

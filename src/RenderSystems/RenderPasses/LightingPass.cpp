@@ -57,7 +57,7 @@ void LightingPass::BeginPass(
     Resource* OutputColor = Graph.GetResource(OutputColorResourceName);
 
     vk::RenderingAttachmentInfoKHR ColorAttachment;
-    ColorAttachment.setImageView(OutputColor->View)
+    ColorAttachment.setImageView(Graph.GetResourceView(OutputColorResourceName))
         .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
         .setLoadOp(vk::AttachmentLoadOp::eClear)
         .setStoreOp(vk::AttachmentStoreOp::eStore)

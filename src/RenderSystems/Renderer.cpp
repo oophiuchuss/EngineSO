@@ -17,7 +17,7 @@ import CullingSystem;
 import Entity;
 import GeometryRenderPass;
 import LightingPass;
-import PostProcessPass;
+import PostProcessStepPass;
 import CameraUniform;
 import Scene;
 import ResourceManager;
@@ -27,6 +27,7 @@ import DescriptorHeap;
 import GPUSceneBuffer;
 import GPUSceneData;
 import GBufferDescriptorSet;
+import SingleTextureDescriptorSet;
 import LightBuffer;
 import GPULightData;
 import RenderResourceCache;
@@ -128,6 +129,9 @@ Renderer::Renderer(
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
 	GBufferDescSet->Initialize(*RendergraphInstance);
+	ToneMapInputDesc->Initialize(*RendergraphInstance);
+	GammaInputDesc->Initialize(*RendergraphInstance);
+	FinalOutputDesc->Initialize(*RendergraphInstance);
 }
 
 Renderer::~Renderer()
@@ -183,6 +187,12 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	else if (AcquireNextImageResult != vk::Result::eSuccess && AcquireNextImageResult != vk::Result::eSuboptimalKHR) {
 		throw std::runtime_error("Failed to acquire swapchain image");
 	}
+
+	// Provide the current swapchain image view to the graph
+	RendergraphInstance->SetFrameExternalImage(
+		"Swapchain",
+		SwapchainImages[ImageIndex],           // vk::Image (non‑owning)
+		*SwapchainImageViews[ImageIndex]);     // vk::ImageView
 
 	// Reset the fence for the current frame only after successfully acquiring an image, to avoid waiting on a fence that won't be signaled if acquisition fails
 	Device.resetFences({ *InFlightFences[CurrentFrame] }); 
@@ -370,67 +380,6 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	// Record rendering commands into command buffer using rendergraph
 	RendergraphInstance->Execute(Cmd, GraphicsQueue, CurrentFrameData);
 
-	// Copy "Main_Color" to swapchain image (transition layouts accordingly)
-	Resource* MainColorResource = RendergraphInstance->GetResource("Main_Color");
-
-	if (!MainColorResource || MainColorResource->Image == nullptr)
-	{
-		throw std::runtime_error("Main_Color resource not found in rendergraph");
-	}
-
-	vk::Image SrcImage = *MainColorResource->Image; // Get the Vulkan image handle from the resource
-
-	// Transition the acquired swapchain image to be a transfer destination
-	vk::ImageMemoryBarrier PreCopyBarrier(
-		vk::AccessFlagBits::eNone,						// No previous access required (image was just acquired)
-		vk::AccessFlagBits::eTransferWrite,				// Make it writable for transfer
-		vk::ImageLayout::eUndefined,					// Current layout is undefined after acquire
-		vk::ImageLayout::eTransferDstOptimal,			// Transition to transfer destination optimal for copy
-		VK_QUEUE_FAMILY_IGNORED,						// No queue family ownership transfer
-		VK_QUEUE_FAMILY_IGNORED,
-		SwapchainImages[ImageIndex],					// The specific swapchain image we're targeting
-		{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 } // Full image, color aspect]
-	);
-
-	Cmd.pipelineBarrier(
-		vk::PipelineStageFlagBits::eTopOfPipe,		// Earliest stage – we don't wait for anything
-		vk::PipelineStageFlagBits::eTransfer,		// Before any transfer operations
-		vk::DependencyFlagBits::eByRegion,			// Enable region-local optimization
-		{}, {}, { PreCopyBarrier }
-	);
-
-	// Copy whole Main_Color image to swapchain image
-	vk::ImageCopy CopyRegion;
-	CopyRegion.setSrcSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })	// Source subresource (full image)
-		.setDstSubresource({ vk::ImageAspectFlagBits::eColor, 0, 0, 1 })		// Destination subresource (full image)
-		.setExtent(vk::Extent3D(MainColorResource->Extent, 1));					// Copy extent (full image size)
-	
-	Cmd.copyImage(
-		SrcImage,						vk::ImageLayout::eTransferSrcOptimal,	// Source image and layout
-		SwapchainImages[ImageIndex],	vk::ImageLayout::eTransferDstOptimal,	// Destination image and layout
-		{ CopyRegion } // Regions to copy
-	);
-
-	// Transition swapchain image to present layout for presentation
-	vk::ImageMemoryBarrier PresentBarrier(
-		vk::AccessFlagBits::eTransferWrite,			// Wait for the copy to finish
-		vk::AccessFlagBits::eNone,					// The presentation engine doesn't need any specific GPU access flags
-		vk::ImageLayout::eTransferDstOptimal,       // Layout after copy is done
-		vk::ImageLayout::ePresentSrcKHR,			// Target layout – required for presentation
-		VK_QUEUE_FAMILY_IGNORED,                  // We're not transferring queue ownership
-		VK_QUEUE_FAMILY_IGNORED,
-		SwapchainImages[ImageIndex],              // The specific swapchain image we acquired
-		{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }  // Full image, color aspect
-	);
-
-	// Execute the barrier
-	Cmd.pipelineBarrier(
-		vk::PipelineStageFlagBits::eTransfer,		// After transfer stage where copy happens
-		vk::PipelineStageFlagBits::eBottomOfPipe,	// Latest stage – make sure layout change is done before anything later
-		vk::DependencyFlagBits::eByRegion,			// Enable region-local optimization
-		{}, {}, { PresentBarrier }
-	);
-
 	// Command submission with sync
 	// Submit buffer
 	Cmd.end();
@@ -506,6 +455,9 @@ void Renderer::RecreateSwapchain()
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
 	GBufferDescSet->Initialize(*RendergraphInstance);
+	ToneMapInputDesc->Initialize(*RendergraphInstance);
+	GammaInputDesc->Initialize(*RendergraphInstance);
+	FinalOutputDesc->Initialize(*RendergraphInstance);
 	CreateSyncObjects(); // Recreate synchronization objects if they depend on swapchain (e.g. semaphores for each swapchain image)
 }
 
@@ -514,6 +466,7 @@ void Renderer::SetActiveCamera(CameraComponent* Camera)
 	CullingSystemInstance->SetActiveCamera(Camera);
 
 	// Update camera component aspect ratio to match swapchain extent
+	// TODO: camera should be the one who changes aspect ration upon resize
 	if (Camera)
 	{
 		float AspectRatio = static_cast<float>(SwapchainExtent.width) / static_cast<float>(SwapchainExtent.height);
@@ -842,6 +795,15 @@ void Renderer::CreateSyncObjects()
 
 void Renderer::SetupRenderPasses()
 {
+	RendergraphInstance->ImportExternalImage(
+		"Swapchain",
+		SwapchainImageFormat,
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::ePresentSrcKHR);
+
 	// G‑buffer color attachments (geometry pass outputs)
 	RendergraphInstance->AddResource(
 		"GBuffer_Albedo",
@@ -892,11 +854,12 @@ void Renderer::SetupRenderPasses()
 		"Main_Color",
 		vk::Format::eB8G8R8A8Unorm,
 		SwapchainExtent,
-		vk::ImageUsageFlagBits::eColorAttachment |    // lighting pass writes here
-		vk::ImageUsageFlagBits::eTransferSrc,         // blit to swapchain
+		vk::ImageUsageFlagBits::eColorAttachment |	// lighting pass writes here
+		vk::ImageUsageFlagBits::eTransferSrc |		// keep for potential blit / other use
+		vk::ImageUsageFlagBits::eSampled,           // required for post‑processing sampling
 		vk::ImageAspectFlagBits::eColor,
 		vk::ImageLayout::eUndefined,
-		vk::ImageLayout::eTransferSrcOptimal
+		vk::ImageLayout::eShaderReadOnlyOptimal
 	);
 
 	// Depth / stencil (shared by geometry and lighting passes)
@@ -920,16 +883,18 @@ void Renderer::SetupRenderPasses()
 		"GBuffer_Emissive",
 		"Main_Depth");
 
-	// Load geometry shader - pass owns it, not individual meshes
-	ShaderData* GeometryShaderData = ResourceManagerPtr->GetResource<ShaderData>("deferred_geometry");
-	if (!GeometryShaderData)
-	{
-		// Load shader if not already loaded
-		ResourceHandle<ShaderData> Handle = ResourceManagerPtr->Load<ShaderData>("deferred_geometry");
-		GeometryShaderData = Handle.Get();
-	}
+	auto LoadShader = [&](const std::string& Name) -> Shader*
+		{
+			ShaderData* SD = ResourceManagerPtr->GetResource<ShaderData>(Name);
+			if (!SD)
+			{ 
+				ResourceManagerPtr->Load<ShaderData>(Name); SD = ResourceManagerPtr->GetResource<ShaderData>(Name);
+			}
 
-	Shader* GeometryShader = RenderCacheInstance->GetOrCompileShader(GeometryShaderData->GetResourceID(), *GeometryShaderData);
+			return RenderCacheInstance->GetOrCompileShader(SD->GetResourceID(), *SD);
+		};
+
+	Shader* GeometryShader = LoadShader("deferred_geometry");
 	
 	// Geometry pass — writes all 4 G‑buffer attachments + depth
 	auto GeomtryPass = RendergraphInstance->AddRenderPass<GeometryRenderPass>(
@@ -945,16 +910,7 @@ void Renderer::SetupRenderPasses()
 		DescriptorHeapInstance.get(),
 		GPUSceneInstance.get());
 
-	// Load lighting shader - pass owns it, not individual meshes
-	ShaderData* LightingShaderData = ResourceManagerPtr->GetResource<ShaderData>("deferred_lighting");
-	if (!LightingShaderData)
-	{
-		// Load shader if not already loaded
-		ResourceHandle<ShaderData> Handle = ResourceManagerPtr->Load<ShaderData>("deferred_lighting");
-		LightingShaderData = Handle.Get();
-	}
-
-	Shader* LightingShader = RenderCacheInstance->GetOrCompileShader(LightingShaderData->GetResourceID(), *LightingShaderData);
+	Shader* LightingShader = LoadShader("deferred_lighting");
 
 	auto LightPass = RendergraphInstance->AddRenderPass<LightingPass>(
 		"LightPass",
@@ -967,7 +923,74 @@ void Renderer::SetupRenderPasses()
 		LightingShader,
 		PipelineCacheInstance.get());
 
-	//auto PostProcess = RendergraphInstance->AddRenderPass<PostProcessPass>("PostProcessPass", "Main_Color");
+	Shader* ToneMapShader = LoadShader("aces_tone_map");
+	Shader* GammaShader = LoadShader("gamma_correct");
+	Shader* FinalOutputShader = LoadShader("final_output");
+
+	ToneMapShader = LoadShader("aces_tone_map");
+	GammaShader = LoadShader("gamma_correct");
+	FinalOutputShader = LoadShader("final_output");
+
+	std::string FinalInput = "Main_Color";
+
+	// ACES Tone Mapping
+	RendergraphInstance->AddResource(
+		"ToneMapped_Color",
+		vk::Format::eB8G8R8A8Unorm,
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal
+	);
+
+	ToneMapInputDesc = std::make_unique<SingleTextureDescriptorSet>(Device, FinalInput);
+
+	RendergraphInstance->AddRenderPass<PostProcessStepPass>(
+		"ToneMap",
+		FinalInput,
+		"ToneMapped_Color",
+		ToneMapShader,
+		PipelineCacheInstance.get(),
+		ToneMapInputDesc.get());
+
+	FinalInput = "ToneMapped_Color";
+
+	// Gamma Correction
+	RendergraphInstance->AddResource(
+		"GammaCorrected_Color",
+		vk::Format::eB8G8R8A8Unorm,
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal
+	);
+
+	GammaInputDesc = std::make_unique<SingleTextureDescriptorSet>(Device, FinalInput);
+
+	RendergraphInstance->AddRenderPass<PostProcessStepPass>(
+		"GammaCorrect",
+		FinalInput,
+		"GammaCorrected_Color",
+		GammaShader,
+		PipelineCacheInstance.get(),
+		GammaInputDesc.get());
+
+	FinalInput = "GammaCorrected_Color";
+
+	// Final output – always present
+	FinalOutputDesc = std::make_unique<SingleTextureDescriptorSet>(Device, FinalInput);
+
+	RendergraphInstance->AddRenderPass<PostProcessStepPass>(
+		"FinalOutput",
+		FinalInput,
+		"Swapchain",
+		FinalOutputShader,
+		PipelineCacheInstance.get(),
+		FinalOutputDesc.get());
 }
 
 void Renderer::PreloadSceneResources(Scene& Scene)

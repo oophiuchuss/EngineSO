@@ -173,6 +173,30 @@ void VulkanUtils::TransitionImageLayout(
         SrcStage = vk::PipelineStageFlagBits::eFragmentShader;          // After shader reads complete
         DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;      // Wait until early fragment tests
     }
+    // Present-to-ColorAttachment layout transition
+    // Used when writing to a swapchain image that was just acquired for a new frame
+    else if (OldLayout == vk::ImageLayout::ePresentSrcKHR && NewLayout == vk::ImageLayout::eColorAttachmentOptimal)
+    {
+        // Memory permissions
+        SrcAccess = vk::AccessFlagBits::eMemoryRead;                    // Ensure presentation engine has finished reading
+        DstAccess = vk::AccessFlagBits::eColorAttachmentWrite;          // Enable colour writes
+
+        // Pipeline stage synchronisation
+        SrcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // After presentation engine
+        DstStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // Before colour attachment writes
+    }
+    // ColorAttachment-to-Present layout transition
+    // Used when presenting the swapchain image after rendering is complete
+    else if (OldLayout == vk::ImageLayout::eColorAttachmentOptimal && NewLayout == vk::ImageLayout::ePresentSrcKHR)
+    {
+        // Memory permissions
+        SrcAccess = vk::AccessFlagBits::eColorAttachmentWrite;          // Wait for colour writes to finish
+        DstAccess = vk::AccessFlagBits::eNone;                          // Presentation engine doesn't need specific access
+
+        // Pipeline stage synchronisation
+        SrcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // After all colour writes
+        DstStage = vk::PipelineStageFlagBits::eBottomOfPipe;            // Before presentation
+    }
     // TODO: Add more transitions as needed:
     // - Shader Read -> Transfer Src (for reading back textures to CPU)
     else

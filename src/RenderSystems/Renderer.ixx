@@ -21,6 +21,7 @@ import VulkanUploader;
 import DescriptorHeap;
 import GPUSceneBuffer;
 import GBufferDescriptorSet;
+import SingleTextureDescriptorSet;
 import LightBuffer;
 
 import MeshData;
@@ -33,11 +34,10 @@ public:
 	~Renderer();
 
 	void RenderFrame(Scene* SceneToRender);
-	void RecreateSwapchain();
-
-	void SetActiveCamera(CameraComponent* Camera); // TODO: make better place where to get active camera
 
 private:
+	void SetActiveCamera(CameraComponent* Camera);
+	void RecreateSwapchain();
 	void PickPhysicalDevice();
 	void CreateLogicalDevice();
 	void CreateSwapchain();
@@ -97,14 +97,17 @@ private:
 	vk::raii::CommandPool CommandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer>  CommandBuffers;
 
-	std::unique_ptr<Rendergraph>			RendergraphInstance;
-	std::unique_ptr<CullingSystem>			CullingSystemInstance;
-	std::unique_ptr<CameraUniformBuffer>	CameraUBO;
-	std::unique_ptr<VulkanUploader>			UploaderInstance;
-	std::unique_ptr<DescriptorHeap>			DescriptorHeapInstance;
-	std::unique_ptr<GPUSceneBuffer>			GPUSceneInstance;
-	std::unique_ptr<GBufferDescriptorSet>	GBufferDescSet;
-	std::unique_ptr<LightBuffer>			LightBufferInstance;
-	std::unique_ptr<RenderResourceCache>	RenderCacheInstance;
-	std::unique_ptr<PipelineCache>			PipelineCacheInstance;
+	std::unique_ptr<Rendergraph>				RendergraphInstance;
+	std::unique_ptr<CullingSystem>				CullingSystemInstance;
+	std::unique_ptr<CameraUniformBuffer>		CameraUBO;
+	std::unique_ptr<VulkanUploader>				UploaderInstance;
+	std::unique_ptr<DescriptorHeap>				DescriptorHeapInstance;
+	std::unique_ptr<GPUSceneBuffer>				GPUSceneInstance;
+	std::unique_ptr<GBufferDescriptorSet>		GBufferDescSet;
+	std::unique_ptr<SingleTextureDescriptorSet> ToneMapInputDesc;
+	std::unique_ptr<SingleTextureDescriptorSet> GammaInputDesc;
+	std::unique_ptr<SingleTextureDescriptorSet> FinalOutputDesc;
+	std::unique_ptr<LightBuffer>				LightBufferInstance;
+	std::unique_ptr<RenderResourceCache>		RenderCacheInstance;
+	std::unique_ptr<PipelineCache>				PipelineCacheInstance;
 };

@@ -48,18 +48,15 @@ GeometryRenderPass::GeometryRenderPass(
 
 void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
-	// Get needed resources
 	Resource* Albedo = Graph.GetResource(GBufferAlbedoResourceName);
-	Resource* Normal = Graph.GetResource(GBufferNormalResourceName);
-	Resource* MetalRough = Graph.GetResource(GBufferMetalRoughResourceName);
-	Resource* Emissive = Graph.GetResource(GBufferEmissiveResourceName);
-	Resource* Depth = Graph.GetResource(GBufferDepthResourceName);
+
+	const Rendergraph& RGraph = Graph;
 
 	// Helper to build a clear-on-load color attachment
-	auto MakeColorAttachment = [](Resource* Res, std::array<float, 4> ClearColor)
+	auto MakeColorAttachment = [&Graph](const std::string& ResName, std::array<float, 4> ClearColor)
 		{
 			vk::RenderingAttachmentInfoKHR Attachment;
-			Attachment.setImageView(Res->View)
+			Attachment.setImageView(Graph.GetResourceView(ResName))
 				.setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
 				.setLoadOp(vk::AttachmentLoadOp::eClear)
 				.setStoreOp(vk::AttachmentStoreOp::eStore)
@@ -69,16 +66,16 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 
 	// Set up color attachments
 	std::array<vk::RenderingAttachmentInfoKHR, 4> ColorAttachments = {
-		MakeColorAttachment(Albedo,     { 0.0f, 0.0f, 0.0f, 1.0f }),
-		MakeColorAttachment(Normal,     { 0.0f, 0.0f, 0.0f, 0.0f }),
-		MakeColorAttachment(MetalRough, { 0.0f, 0.0f, 0.0f, 0.0f }),
-		MakeColorAttachment(Emissive,   { 0.0f, 0.0f, 0.0f, 0.0f }),
+		MakeColorAttachment(GBufferAlbedoResourceName,     { 0.0f, 0.0f, 0.0f, 1.0f }),
+		MakeColorAttachment(GBufferNormalResourceName,     { 0.0f, 0.0f, 0.0f, 0.0f }),
+		MakeColorAttachment(GBufferMetalRoughResourceName, { 0.0f, 0.0f, 0.0f, 0.0f }),
+		MakeColorAttachment(GBufferEmissiveResourceName,   { 0.0f, 0.0f, 0.0f, 0.0f }),
 	};
 
 
 	// Set up depth attachment
 	vk::RenderingAttachmentInfoKHR DepthAttachment;
-	DepthAttachment.setImageView(Depth->View)
+	DepthAttachment.setImageView(Graph.GetResourceView(GBufferDepthResourceName))
 		.setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
 		.setLoadOp(vk::AttachmentLoadOp::eClear)
 		.setStoreOp(vk::AttachmentStoreOp::eStore)
