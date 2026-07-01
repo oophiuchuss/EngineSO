@@ -1,18 +1,15 @@
 module;
-
 #include <vulkan/vulkan_raii.hpp>
-
-module PostProcessStepPass;
-
+module PostProcessPass;
 import Rendergraph;
 
-PostProcessStepPass::PostProcessStepPass(
+PostProcessPass::PostProcessPass(
     std::string InName,
     const std::string& InInputResourceName,
     const std::string& InOutputResourceName,
     Shader* InShader,
     PipelineCache* InPipelineCache,
-    SingleTextureDescriptorSet* InInputDescSet):
+    SingleTextureDescriptorSet* InInputDescSet) :
     RenderPassBase(InName),
     InputResourceName(InInputResourceName),
     OutputResourceName(InOutputResourceName),
@@ -24,7 +21,7 @@ PostProcessStepPass::PostProcessStepPass(
     AddOutput(OutputResourceName);
 }
 
-void PostProcessStepPass::BeginPass(
+void PostProcessPass::BeginPass(
     vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
 {
     Resource* Res = Graph.GetResource(OutputResourceName);
@@ -43,7 +40,7 @@ void PostProcessStepPass::BeginPass(
     Cmd.beginRendering(Info);
 }
 
-void PostProcessStepPass::ExecuteMainLogic(
+void PostProcessPass::ExecuteMainLogic(
     vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
 {
     Resource* Res = Graph.GetResource(OutputResourceName);
@@ -53,6 +50,10 @@ void PostProcessStepPass::ExecuteMainLogic(
     Key.ColorFormats = { Res->Format };
     Key.DepthFormat = vk::Format::eUndefined;
     Key.DescriptorSetLayouts = { InputDescSetPtr->GetDescriptorSetLayout() };
+    Key.PushConstantRange = vk::PushConstantRange(
+        vk::ShaderStageFlagBits::eFragment,
+        0,
+        sizeof(PostProcessPushConstants));
     Key.bUseVertexInput = false;
 
     auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);
@@ -61,11 +62,13 @@ void PostProcessStepPass::ExecuteMainLogic(
     Cmd.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, PipelineLayout, 0,
         { InputDescSetPtr->GetDescriptorSet() }, {});
+    Cmd.pushConstants<PostProcessPushConstants>(
+        PipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, PushConstants);
 
     Cmd.draw(3, 1, 0, 0);
 }
 
-void PostProcessStepPass::EndPass(
+void PostProcessPass::EndPass(
     vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
 {
     Cmd.endRendering();

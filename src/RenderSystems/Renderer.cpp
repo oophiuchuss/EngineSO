@@ -17,7 +17,7 @@ import CullingSystem;
 import Entity;
 import GeometryRenderPass;
 import LightingPass;
-import PostProcessStepPass;
+import PostProcessPass;
 import CameraUniform;
 import Scene;
 import ResourceManager;
@@ -129,9 +129,7 @@ Renderer::Renderer(
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
 	GBufferDescSet->Initialize(*RendergraphInstance);
-	ToneMapInputDesc->Initialize(*RendergraphInstance);
-	GammaInputDesc->Initialize(*RendergraphInstance);
-	FinalOutputDesc->Initialize(*RendergraphInstance);
+	PostProcessDesc->Initialize(*RendergraphInstance);
 }
 
 Renderer::~Renderer()
@@ -455,9 +453,7 @@ void Renderer::RecreateSwapchain()
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
 	GBufferDescSet->Initialize(*RendergraphInstance);
-	ToneMapInputDesc->Initialize(*RendergraphInstance);
-	GammaInputDesc->Initialize(*RendergraphInstance);
-	FinalOutputDesc->Initialize(*RendergraphInstance);
+	PostProcessDesc->Initialize(*RendergraphInstance);
 	CreateSyncObjects(); // Recreate synchronization objects if they depend on swapchain (e.g. semaphores for each swapchain image)
 }
 
@@ -885,10 +881,15 @@ void Renderer::SetupRenderPasses()
 
 	auto LoadShader = [&](const std::string& Name) -> Shader*
 		{
-			ShaderData* SD = ResourceManagerPtr->GetResource<ShaderData>(Name);
+			ResourceHandle<ShaderData> SD = ResourceManagerPtr->GetHandle<ShaderData>(Name);
 			if (!SD)
 			{ 
-				ResourceManagerPtr->Load<ShaderData>(Name); SD = ResourceManagerPtr->GetResource<ShaderData>(Name);
+				SD = ResourceManagerPtr->Load<ShaderData>(Name);
+
+				if (!SD)
+				{
+					throw std::runtime_error("Failed to load shader: " + Name);
+				}
 			}
 
 			return RenderCacheInstance->GetOrCompileShader(SD->GetResourceID(), *SD);
@@ -923,74 +924,17 @@ void Renderer::SetupRenderPasses()
 		LightingShader,
 		PipelineCacheInstance.get());
 
-	Shader* ToneMapShader = LoadShader("aces_tone_map");
-	Shader* GammaShader = LoadShader("gamma_correct");
-	Shader* FinalOutputShader = LoadShader("final_output");
+	Shader* PostProcessShader = LoadShader("post_process");
 
-	ToneMapShader = LoadShader("aces_tone_map");
-	GammaShader = LoadShader("gamma_correct");
-	FinalOutputShader = LoadShader("final_output");
+	PostProcessDesc = std::make_unique<SingleTextureDescriptorSet>(Device, "Main_Color");
 
-	std::string FinalInput = "Main_Color";
-
-	// ACES Tone Mapping
-	RendergraphInstance->AddResource(
-		"ToneMapped_Color",
-		vk::Format::eB8G8R8A8Unorm,
-		SwapchainExtent,
-		vk::ImageUsageFlagBits::eColorAttachment |
-		vk::ImageUsageFlagBits::eSampled,
-		vk::ImageAspectFlagBits::eColor,
-		vk::ImageLayout::eUndefined,
-		vk::ImageLayout::eShaderReadOnlyOptimal
-	);
-
-	ToneMapInputDesc = std::make_unique<SingleTextureDescriptorSet>(Device, FinalInput);
-
-	RendergraphInstance->AddRenderPass<PostProcessStepPass>(
-		"ToneMap",
-		FinalInput,
-		"ToneMapped_Color",
-		ToneMapShader,
-		PipelineCacheInstance.get(),
-		ToneMapInputDesc.get());
-
-	FinalInput = "ToneMapped_Color";
-
-	// Gamma Correction
-	RendergraphInstance->AddResource(
-		"GammaCorrected_Color",
-		vk::Format::eB8G8R8A8Unorm,
-		SwapchainExtent,
-		vk::ImageUsageFlagBits::eColorAttachment |
-		vk::ImageUsageFlagBits::eSampled,
-		vk::ImageAspectFlagBits::eColor,
-		vk::ImageLayout::eUndefined,
-		vk::ImageLayout::eShaderReadOnlyOptimal
-	);
-
-	GammaInputDesc = std::make_unique<SingleTextureDescriptorSet>(Device, FinalInput);
-
-	RendergraphInstance->AddRenderPass<PostProcessStepPass>(
-		"GammaCorrect",
-		FinalInput,
-		"GammaCorrected_Color",
-		GammaShader,
-		PipelineCacheInstance.get(),
-		GammaInputDesc.get());
-
-	FinalInput = "GammaCorrected_Color";
-
-	// Final output – always present
-	FinalOutputDesc = std::make_unique<SingleTextureDescriptorSet>(Device, FinalInput);
-
-	RendergraphInstance->AddRenderPass<PostProcessStepPass>(
-		"FinalOutput",
-		FinalInput,
+	RendergraphInstance->AddRenderPass<PostProcessPass>(
+		"PostProcess",
+		"Main_Color",
 		"Swapchain",
-		FinalOutputShader,
+		PostProcessShader,
 		PipelineCacheInstance.get(),
-		FinalOutputDesc.get());
+		PostProcessDesc.get());
 }
 
 void Renderer::PreloadSceneResources(Scene& Scene)

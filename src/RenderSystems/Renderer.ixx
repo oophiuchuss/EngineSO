@@ -104,9 +104,7 @@ private:
 	std::unique_ptr<DescriptorHeap>				DescriptorHeapInstance;
 	std::unique_ptr<GPUSceneBuffer>				GPUSceneInstance;
 	std::unique_ptr<GBufferDescriptorSet>		GBufferDescSet;
-	std::unique_ptr<SingleTextureDescriptorSet> ToneMapInputDesc;
-	std::unique_ptr<SingleTextureDescriptorSet> GammaInputDesc;
-	std::unique_ptr<SingleTextureDescriptorSet> FinalOutputDesc;
+	std::unique_ptr<SingleTextureDescriptorSet> PostProcessDesc;
 	std::unique_ptr<LightBuffer>				LightBufferInstance;
 	std::unique_ptr<RenderResourceCache>		RenderCacheInstance;
 	std::unique_ptr<PipelineCache>				PipelineCacheInstance;
