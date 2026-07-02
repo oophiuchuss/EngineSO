@@ -7,6 +7,7 @@ export module SingleTextureDescriptorSet;
 
 import Rendergraph;
 
+// Potentialy make a parent for descriptor sets, like GBufferDescriptorSet and SingleTextureDescriptorSet
 export class SingleTextureDescriptorSet
 {
 public:
@@ -16,6 +17,8 @@ public:
 
     // Must be called after Rendergraph::Compile() – the resource's view is then valid
     void Initialize(Rendergraph& Graph);
+
+    void ResetDescriptorSet();
 
     vk::DescriptorSet GetDescriptorSet() const { return *DescriptorSet; }
     vk::DescriptorSetLayout GetDescriptorSetLayout() const { return *DescriptorLayout; }

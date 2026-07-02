@@ -449,11 +449,29 @@ void Renderer::RecreateSwapchain()
 	CreateSwapchain();
 
 	// Recreate framebuffers and render passes that depend on swapchain images 
+	
+	// Reset descriptor sets that depend on swapchain images and rendregraph resources
+	if (GBufferDescSet)
+	{
+		GBufferDescSet->ResetDescriptorSet();
+	}
+	if (PostProcessDesc)
+	{
+		PostProcessDesc->ResetDescriptorSet();
+	}
+	
 	RendergraphInstance->Reset(); // Clear existing rendergraph resources and passes
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
-	GBufferDescSet->Initialize(*RendergraphInstance);
-	PostProcessDesc->Initialize(*RendergraphInstance);
+
+	if (GBufferDescSet)
+	{
+		GBufferDescSet->Initialize(*RendergraphInstance);
+	}
+	if (PostProcessDesc)
+	{
+		PostProcessDesc->Initialize(*RendergraphInstance);
+	}
 	CreateSyncObjects(); // Recreate synchronization objects if they depend on swapchain (e.g. semaphores for each swapchain image)
 }
 
@@ -871,13 +889,16 @@ void Renderer::SetupRenderPasses()
 	);
 
 	// GBuffer descriptor set
-	GBufferDescSet = std::make_unique<GBufferDescriptorSet>(
-		Device,
-		"GBuffer_Albedo",
-		"GBuffer_Normal",
-		"GBuffer_MetalRough",
-		"GBuffer_Emissive",
-		"Main_Depth");
+	if (!GBufferDescSet)
+	{
+		GBufferDescSet = std::make_unique<GBufferDescriptorSet>(
+			Device,
+			"GBuffer_Albedo",
+			"GBuffer_Normal",
+			"GBuffer_MetalRough",
+			"GBuffer_Emissive",
+			"Main_Depth");
+	}
 
 	auto LoadShader = [&](const std::string& Name) -> Shader*
 		{
@@ -926,7 +947,10 @@ void Renderer::SetupRenderPasses()
 
 	Shader* PostProcessShader = LoadShader("post_process");
 
-	PostProcessDesc = std::make_unique<SingleTextureDescriptorSet>(Device, "Main_Color");
+	if (!PostProcessDesc)
+	{
+		PostProcessDesc = std::make_unique<SingleTextureDescriptorSet>(Device, "Main_Color");
+	}
 
 	RendergraphInstance->AddRenderPass<PostProcessPass>(
 		"PostProcess",

@@ -52,3 +52,11 @@ void SingleTextureDescriptorSet::Initialize(Rendergraph& Graph)
         &ImageInfo);
     Device.updateDescriptorSets(Write, {});
 }
+
+void SingleTextureDescriptorSet::ResetDescriptorSet()
+{
+    DescriptorSet = nullptr;
+    DescriptorPool = nullptr;
+    DescriptorLayout = nullptr;
+    Sampler = nullptr;
+}

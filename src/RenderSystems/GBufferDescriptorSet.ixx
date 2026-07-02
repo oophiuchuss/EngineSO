@@ -22,6 +22,8 @@ public:
 
     // Must be called once after Rendergraph::Compile()
     void Initialize(Rendergraph& Graph);
+   
+    void ResetDescriptorSet();
 
     vk::DescriptorSet GetDescriptorSet() const { return *DescriptorSet; }
     vk::DescriptorSetLayout GetDescriptorSetLayout() const { return *Layout; }

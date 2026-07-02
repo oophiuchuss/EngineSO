@@ -72,3 +72,11 @@ void GBufferDescriptorSet::Initialize(Rendergraph& Graph)
         .setPImageInfo(&ImageInfos[i]);
     Device.updateDescriptorSets(Writes, {});
 }
+
+void GBufferDescriptorSet::ResetDescriptorSet()
+{
+    DescriptorSet = nullptr;
+    Pool = nullptr;
+    Layout = nullptr;
+    Sampler = nullptr;
+}
