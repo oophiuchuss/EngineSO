@@ -12,6 +12,7 @@ module;
 module Renderer;
 
 import Paths;
+import GPUProfiler;
 import Rendergraph;
 import CullingSystem;
 import Entity;
@@ -70,6 +71,11 @@ Renderer::Renderer(
 	CreateSwapchain();
 	// Create synchronization primitives
 	CreateSyncObjects();
+
+	ProfilerInstance = std::make_unique<GPUProfiler>(
+		Device, 
+		PhysicalDevice, 
+		MAX_FRAMES_IN_FLIGHT);
 
 	RendergraphInstance = std::make_unique<Rendergraph>(
 		Device, 
@@ -202,181 +208,187 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 	vk::CommandBufferBeginInfo BeginInfo({});
 	Cmd.begin(BeginInfo); // TODO: should this command buffer begin with no additional info?
 	
-	CameraComponent* CamComp = SceneToRender->GetActiveCameraComponent();
-
-	if (CamComp)
+	ProfilerInstance->BeginFrame(Cmd, CurrentFrame);
+	
 	{
-		SetActiveCamera(CamComp);
+		auto FrameScope = ProfilerInstance->BeginScope(Cmd, CurrentFrame, "TotalFrame");
 
-		TransformComponent* CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
+		CameraComponent* CamComp = SceneToRender->GetActiveCameraComponent();
 
-		CameraUniformData Data;
-		Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
-		Data.InverseViewProj = glm::inverse(Data.ViewProj);
-		Data.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
-
-		CameraUBO->Update(Data);
-	}
-
-	// Cull scene and update per-frame data
-	CullingSystemInstance->CullScene(SceneToRender->GetRenderableEntities());
-
-	// Build FrameData
-	const auto& VisibleEntities = CullingSystemInstance->GetAllVisibleEntities();
-
-	FrameData CurrentFrameData;
-	CurrentFrameData.Camera = CameraUBO->GetLastData();
-
-	std::vector<ObjectData> FrameObjects;
-	std::vector<MaterialData> FrameMaterials;
-	FrameObjects.reserve(VisibleEntities.size());
-	FrameMaterials.reserve(VisibleEntities.size());
-
-	for (Entity* E : VisibleEntities)
-	{
-		MeshComponent* MC = E->GetComponent<MeshComponent>();
-		TransformComponent* TC = E->GetComponent<TransformComponent>();
-		if (!MC || !TC) continue;
-
-		// Resolve CPU data
-		const MeshData* MD = MC->GetMeshData();
-		if (!MD) continue;
-
-		// Get GPU objects from cache (upload if necessary)
-		Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
-		if (!GPUMesh) continue;
-		
-		MaterialProperties Props = MC->GetEffectiveMaterialProperties();
-
-		// If this entity has a material, resolve its textures
-		if (const Material* Mat = MC->GetMaterial())
+		if (CamComp)
 		{
-			auto ResolveTexture = [&](const ResourceHandle<TextureData>& Handle,
-				int DefaultIndex) -> int
-				{
-					if (const TextureData* TexData = Handle.Get())
-					{
-						return RenderCacheInstance->GetOrUploadTexture(TexData->GetResourceID(), *TexData);
-					}
-					return DefaultIndex;
-				};
+			SetActiveCamera(CamComp);
 
-			Props.AlbedoIndex = ResolveTexture(Mat->GetAlbedoTexture(), TextureSlots::DefaultWhite);
-			Props.NormalIndex = ResolveTexture(Mat->GetNormalTexture(), TextureSlots::DefaultNormal);
-			Props.MetallicRoughnessIndex = ResolveTexture(Mat->GetMetallicRoughnessTexture(), TextureSlots::DefaultWhite);
-			Props.OcclusionIndex = ResolveTexture(Mat->GetOcclusionTexture(), TextureSlots::DefaultWhite);
-			Props.EmissiveIndex = ResolveTexture(Mat->GetEmissiveTexture(), TextureSlots::DefaultBlack);
+			TransformComponent* CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
+
+			CameraUniformData Data;
+			Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
+			Data.InverseViewProj = glm::inverse(Data.ViewProj);
+			Data.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
+
+			CameraUBO->Update(Data);
 		}
 
-		// Build material data for this renderable
-		// TODO: make so there is no duplicates
-		MaterialData MatData;
-		MatData.AlbedoColor = Props.AlbedoColor;
-		MatData.Metallic = Props.Metallic;
-		MatData.Roughness = Props.Roughness;
-		MatData.EmissiveStrength = Props.EmissiveStrength;
-		MatData.AlbedoIndex = static_cast<uint32_t>(Props.AlbedoIndex);
-		MatData.NormalIndex = static_cast<uint32_t>(Props.NormalIndex);
-		MatData.MetallicRoughnessIndex = static_cast<uint32_t>(Props.MetallicRoughnessIndex);
-		MatData.OcclusionIndex = static_cast<uint32_t>(Props.OcclusionIndex);
-		MatData.EmissiveIndex = static_cast<uint32_t>(Props.EmissiveIndex);
+		// Cull scene and update per-frame data
+		CullingSystemInstance->CullScene(SceneToRender->GetRenderableEntities());
 
-		uint32_t MaterialIndex = static_cast<uint32_t>(FrameMaterials.size());
-		FrameMaterials.push_back(MatData);
+		// Build FrameData
+		const auto& VisibleEntities = CullingSystemInstance->GetAllVisibleEntities();
 
-		// Build ObjectData for this renderable 
-		glm::mat4 WorldTransform = TC->GetWorldTransformMatrix();
+		FrameData CurrentFrameData;
+		CurrentFrameData.Camera = CameraUBO->GetLastData();
 
-		// Normal matrix computed once on CPU — inverse transpose of upper-left 3x3
-		// Stored as mat4 to avoid GLM/GPU std430 mat3 alignment mismatch
-		glm::mat3 NormalMat3 = glm::transpose(glm::inverse(glm::mat3(WorldTransform)));
+		std::vector<ObjectData> FrameObjects;
+		std::vector<MaterialData> FrameMaterials;
+		FrameObjects.reserve(VisibleEntities.size());
+		FrameMaterials.reserve(VisibleEntities.size());
 
-		ObjectData Obj;
-		Obj.ModelMatrix = WorldTransform;
-		Obj.NormalMatrix = glm::mat4(NormalMat3); // upper-left 3x3 used by shader, rest is identity padding
-		Obj.MaterialIndex = MaterialIndex;
-
-		uint32_t ObjectIndex = static_cast<uint32_t>(FrameObjects.size());
-		FrameObjects.push_back(Obj);
-
-		// ---- World-space bounds for culling ----
-		BoundingBox WorldBounds = MD->GetBoundingBox();
-		WorldBounds.Transform(WorldTransform);
-
-		// RenderableMesh no longer needs PushData — GeometryRenderPass only needs GPUMesh now,
-		// since transform/material live in the SSBOs indexed by ObjectIndex
-		CurrentFrameData.Renderables.push_back({
-			GPUMesh,
-			WorldBounds,
-			ObjectIndex
-			});
-	}
-
-	GPUSceneInstance->Update(FrameObjects, FrameMaterials);
-
-	// TODO: make better handling of this
-	GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphInstance->GetRenderPass("GeometryPass"));
-	if (GPass)
-	{
-		GPass->SetRenderArea(SwapchainExtent);
-	}
-
-	// Collect light data from scene
-	// TODO: make better gathering, maybe throuhg registration
-	std::vector<GPULightData> Lights;
-	for (Entity* E : SceneToRender->GetAllEntities())
-	{
-		auto* TC = E->GetComponent<TransformComponent>();
-		if (!TC) 
+		for (Entity* E : VisibleEntities)
 		{
-			continue;
-		}
+			MeshComponent* MC = E->GetComponent<MeshComponent>();
+			TransformComponent* TC = E->GetComponent<TransformComponent>();
+			if (!MC || !TC) continue;
 
-		auto LightComponents = E->GetComponentsOfBaseType<LightComponentBase>();
-		for (auto* Base : LightComponents)
-		{
-			GPULightData LightData;
-			LightData.Color_Intensity = glm::vec4(Base->GetColor(), Base->GetIntensity());
+			// Resolve CPU data
+			const MeshData* MD = MC->GetMeshData();
+			if (!MD) continue;
 
-			glm::quat Rot = TC->GetWorldRotation();
-			glm::vec3 Forward = Rot * glm::vec3(0.0f, 0.0f, -1.0f);
+			// Get GPU objects from cache (upload if necessary)
+			Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
+			if (!GPUMesh) continue;
 
-			switch (Base->GetType())
+			MaterialProperties Props = MC->GetEffectiveMaterialProperties();
+
+			// If this entity has a material, resolve its textures
+			if (const Material* Mat = MC->GetMaterial())
 			{
-			case LightType::Directional:
-				LightData.Direction = glm::vec4(Forward, 0.0f);
-				LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
-				break;
+				auto ResolveTexture = [&](const ResourceHandle<TextureData>& Handle,
+					int DefaultIndex) -> int
+					{
+						if (const TextureData* TexData = Handle.Get())
+						{
+							return RenderCacheInstance->GetOrUploadTexture(TexData->GetResourceID(), *TexData);
+						}
+						return DefaultIndex;
+					};
 
-			case LightType::Point:
-				LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
-				LightData.Params = glm::vec4(static_cast<PointLightComponent*>(Base)->GetRange(),
-					0.0f, 0.0f, float(LightType::Point));
-				break;
-
-			case LightType::Spot:
-				LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
-				LightData.Direction = glm::vec4(Forward, 0.0f);
-				{
-					auto* Spot = static_cast<SpotLightComponent*>(Base);
-					LightData.Params = glm::vec4(Spot->GetRange(),
-						glm::cos(Spot->GetInnerConeAngle()),
-						glm::cos(Spot->GetOuterConeAngle()),
-						float(LightType::Spot));
-				}
-				break;
+				Props.AlbedoIndex = ResolveTexture(Mat->GetAlbedoTexture(), TextureSlots::DefaultWhite);
+				Props.NormalIndex = ResolveTexture(Mat->GetNormalTexture(), TextureSlots::DefaultNormal);
+				Props.MetallicRoughnessIndex = ResolveTexture(Mat->GetMetallicRoughnessTexture(), TextureSlots::DefaultWhite);
+				Props.OcclusionIndex = ResolveTexture(Mat->GetOcclusionTexture(), TextureSlots::DefaultWhite);
+				Props.EmissiveIndex = ResolveTexture(Mat->GetEmissiveTexture(), TextureSlots::DefaultBlack);
 			}
-		
-			Lights.push_back(LightData);
+
+			// Build material data for this renderable
+			// TODO: make so there is no duplicates
+			MaterialData MatData;
+			MatData.AlbedoColor = Props.AlbedoColor;
+			MatData.Metallic = Props.Metallic;
+			MatData.Roughness = Props.Roughness;
+			MatData.EmissiveStrength = Props.EmissiveStrength;
+			MatData.AlbedoIndex = static_cast<uint32_t>(Props.AlbedoIndex);
+			MatData.NormalIndex = static_cast<uint32_t>(Props.NormalIndex);
+			MatData.MetallicRoughnessIndex = static_cast<uint32_t>(Props.MetallicRoughnessIndex);
+			MatData.OcclusionIndex = static_cast<uint32_t>(Props.OcclusionIndex);
+			MatData.EmissiveIndex = static_cast<uint32_t>(Props.EmissiveIndex);
+
+			uint32_t MaterialIndex = static_cast<uint32_t>(FrameMaterials.size());
+			FrameMaterials.push_back(MatData);
+
+			// Build ObjectData for this renderable 
+			glm::mat4 WorldTransform = TC->GetWorldTransformMatrix();
+
+			// Normal matrix computed once on CPU — inverse transpose of upper-left 3x3
+			// Stored as mat4 to avoid GLM/GPU std430 mat3 alignment mismatch
+			glm::mat3 NormalMat3 = glm::transpose(glm::inverse(glm::mat3(WorldTransform)));
+
+			ObjectData Obj;
+			Obj.ModelMatrix = WorldTransform;
+			Obj.NormalMatrix = glm::mat4(NormalMat3); // upper-left 3x3 used by shader, rest is identity padding
+			Obj.MaterialIndex = MaterialIndex;
+
+			uint32_t ObjectIndex = static_cast<uint32_t>(FrameObjects.size());
+			FrameObjects.push_back(Obj);
+
+			// ---- World-space bounds for culling ----
+			BoundingBox WorldBounds = MD->GetBoundingBox();
+			WorldBounds.Transform(WorldTransform);
+
+			// RenderableMesh no longer needs PushData — GeometryRenderPass only needs GPUMesh now,
+			// since transform/material live in the SSBOs indexed by ObjectIndex
+			CurrentFrameData.Renderables.push_back({
+				GPUMesh,
+				WorldBounds,
+				ObjectIndex
+				});
 		}
+
+		GPUSceneInstance->Update(FrameObjects, FrameMaterials);
+
+		// TODO: make better handling of this
+		GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphInstance->GetRenderPass("GeometryPass"));
+		if (GPass)
+		{
+			GPass->SetRenderArea(SwapchainExtent);
+		}
+
+		// Collect light data from scene
+		// TODO: make better gathering, maybe throuhg registration
+		std::vector<GPULightData> Lights;
+		for (Entity* E : SceneToRender->GetAllEntities())
+		{
+			auto* TC = E->GetComponent<TransformComponent>();
+			if (!TC)
+			{
+				continue;
+			}
+
+			auto LightComponents = E->GetComponentsOfBaseType<LightComponentBase>();
+			for (auto* Base : LightComponents)
+			{
+				GPULightData LightData;
+				LightData.Color_Intensity = glm::vec4(Base->GetColor(), Base->GetIntensity());
+
+				glm::quat Rot = TC->GetWorldRotation();
+				glm::vec3 Forward = Rot * glm::vec3(0.0f, 0.0f, -1.0f);
+
+				switch (Base->GetType())
+				{
+				case LightType::Directional:
+					LightData.Direction = glm::vec4(Forward, 0.0f);
+					LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
+					break;
+
+				case LightType::Point:
+					LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
+					LightData.Params = glm::vec4(static_cast<PointLightComponent*>(Base)->GetRange(),
+						0.0f, 0.0f, float(LightType::Point));
+					break;
+
+				case LightType::Spot:
+					LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
+					LightData.Direction = glm::vec4(Forward, 0.0f);
+					{
+						auto* Spot = static_cast<SpotLightComponent*>(Base);
+						LightData.Params = glm::vec4(Spot->GetRange(),
+							glm::cos(Spot->GetInnerConeAngle()),
+							glm::cos(Spot->GetOuterConeAngle()),
+							float(LightType::Spot));
+					}
+					break;
+				}
+
+				Lights.push_back(LightData);
+			}
+		}
+
+
+		LightBufferInstance->Update(Lights);
+
+
+		// Record rendering commands into command buffer using rendergraph
+		RendergraphInstance->Execute(Cmd, GraphicsQueue, CurrentFrameData, ProfilerInstance.get(), CurrentFrame);
 	}
-
-
-	LightBufferInstance->Update(Lights);
-
-
-	// Record rendering commands into command buffer using rendergraph
-	RendergraphInstance->Execute(Cmd, GraphicsQueue, CurrentFrameData);
 
 	// Command submission with sync
 	// Submit buffer

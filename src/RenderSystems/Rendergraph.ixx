@@ -12,6 +12,7 @@ export module Rendergraph;
 
 import RenderPassBase;
 import FrameData;
+import GPUProfiler;
 
 // Resource description and management structure
 // Represents Image resurce used during rendering (texture)
@@ -72,7 +73,9 @@ public:
 	void Execute(
 		vk::raii::CommandBuffer& CommandBuffer, 
 		vk::Queue Queue, 
-		FrameData& CurrentFrameData);
+		FrameData& CurrentFrameData,
+		GPUProfiler* Profiler = nullptr,
+		uint32_t FrameIndex = 0);
 
 	void TransitionResourceImageLayout(
 		vk::raii::CommandBuffer& CommandBuffer,

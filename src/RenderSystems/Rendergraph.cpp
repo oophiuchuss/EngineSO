@@ -14,6 +14,7 @@ import RenderPassBase;
 import VulkanUtils;
 import FrameData;
 import VulkanUtils;
+import GPUProfiler;
 
 void Rendergraph::Compile()
 {
@@ -84,7 +85,9 @@ void Rendergraph::Reset()
 void Rendergraph::Execute(
     vk::raii::CommandBuffer& CommandBuffer, 
     vk::Queue Queue, 
-    FrameData& CurrentFrameData)
+    FrameData& CurrentFrameData,
+    GPUProfiler* Profiler/* = nullptr*/,
+    uint32_t FrameIndex /*= 0*/)
 {
     if (bIsPassesDirty)
     {
@@ -142,7 +145,15 @@ void Rendergraph::Execute(
         // - vkCmdBeginRendering (with dynamic rendering)
         // - Draw calls
         // - vkCmdEndRendering
-        CurPass->Execute(CommandBuffer, *this, CurrentFrameData); 
+        if (Profiler)
+        {
+            auto ProfileScope = Profiler->BeginScope(CommandBuffer, FrameIndex, CurPass->GetName());
+            CurPass->Execute(CommandBuffer, *this, CurrentFrameData);
+        }
+        else
+        {
+            CurPass->Execute(CommandBuffer, *this, CurrentFrameData);
+        }
     }
 
     // Final layout transition

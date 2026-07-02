@@ -7,6 +7,7 @@ module;
 
 export module Renderer;
 
+import GPUProfiler;
 import Rendergraph;
 import CullingSystem;
 import CameraComponent;
@@ -97,6 +98,7 @@ private:
 	vk::raii::CommandPool CommandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer>  CommandBuffers;
 
+	std::unique_ptr<GPUProfiler>				ProfilerInstance;
 	std::unique_ptr<Rendergraph>				RendergraphInstance;
 	std::unique_ptr<CullingSystem>				CullingSystemInstance;
 	std::unique_ptr<CameraUniformBuffer>		CameraUBO;
