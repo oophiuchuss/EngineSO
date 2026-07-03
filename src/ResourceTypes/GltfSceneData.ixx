@@ -13,6 +13,7 @@ export module GltfSceneData;
 
 import SceneData;
 import ResourceManager;
+import MaterialProperties;
 
 export class GltfSceneData : public SceneData
 {
@@ -75,6 +76,9 @@ private:
 		int MetallicRoughnessTextureIndex = -1;
 		int OcclusionTextureIndex = -1;
 		int EmissiveTextureIndex = -1;
+
+		AlphaMode Mode = AlphaMode::Opaque;
+		float AlphaCutoff = 0.5f; // glTF spec default
 	};
 	
 	struct RawLight

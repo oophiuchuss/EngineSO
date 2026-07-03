@@ -6,9 +6,11 @@ export module MaterialProperties;
 
 import TextureSlots;
 
-// Must match PushConstants.slang exactly — same field order, same sizes
-// Total size: 64 (model mat) + 16 + 4 + 4 + 4 + (5*4) = 112 bytes
-// Vulkan guarantees minimum 128 bytes for push constants
+export enum class AlphaMode : uint32_t
+{
+    Opaque = 0, Mask = 1, Blend = 2
+};
+
 
 export struct MaterialProperties
 {
@@ -24,4 +26,7 @@ export struct MaterialProperties
     int MetallicRoughnessIndex = TextureSlots::DefaultWhite;
     int OcclusionIndex = TextureSlots::DefaultWhite;
     int EmissiveIndex = TextureSlots::DefaultBlack;
+
+    AlphaMode AlphaMode = AlphaMode::Opaque;
+    float AlphaCutoff = 0.5f;
 };

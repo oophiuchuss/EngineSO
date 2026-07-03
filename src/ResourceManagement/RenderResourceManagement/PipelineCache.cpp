@@ -6,6 +6,7 @@ module;
 #include <string>
 #include <stdexcept>
 #include <array>
+#include <filesystem>
 
 module PipelineCache;
 
@@ -99,15 +100,27 @@ void PipelineCache::EvictAll()
 void PipelineCache::SaveToDisk() const
 {
 	if (CacheFilePath.empty() || CurrentVkPipelineCache == nullptr)
+	{
 		return;
+	}
 
-	auto Data = CurrentVkPipelineCache.getData();
-	if (Data.empty()) return;
+    auto Data = CurrentVkPipelineCache.getData();
+    if (Data.empty())
+	{
+		return;
+	}
 
-	std::ofstream File(CacheFilePath, std::ios::binary | std::ios::trunc);
-	if (!File) return;
+    // Ensure the parent directory exists
+    std::filesystem::path FilePath(CacheFilePath);
+    std::filesystem::create_directories(FilePath.parent_path());
 
-	File.write(reinterpret_cast<const char*>(Data.data()), Data.size());
+    std::ofstream File(FilePath, std::ios::binary | std::ios::trunc);
+    if (!File) 
+	{
+		return;
+	}
+
+    File.write(reinterpret_cast<const char*>(Data.data()), Data.size());
 }
 
 PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)

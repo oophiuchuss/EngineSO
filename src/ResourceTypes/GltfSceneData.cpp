@@ -206,6 +206,17 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 			// TODO: what about emissiveStrength?
 		}
 
+		// Alpha mode / cutoff — new
+		switch (Mat.alphaMode)
+		{
+		case fastgltf::AlphaMode::Opaque: Raw.Mode = AlphaMode::Opaque; break;
+		case fastgltf::AlphaMode::Mask:   Raw.Mode = AlphaMode::Mask;   break;
+		case fastgltf::AlphaMode::Blend:  Raw.Mode = AlphaMode::Blend;  break;
+		}
+
+		Raw.AlphaCutoff = Mat.alphaCutoff; // fastgltf defaults this to 0.5 per spec when unset in the source file
+
+
 		RawMaterials.push_back(std::move(Raw));
 	}
 
@@ -447,6 +458,8 @@ std::vector<std::string> GltfSceneData::RegisterAllMaterials(const std::vector<s
 		MatProperties.Metallic = Raw.MetallicFactor;
 		MatProperties.Roughness = Raw.RoughnessFactor;
 		MatProperties.EmissiveStrength = glm::length(Raw.EmissiveFactor);
+		MatProperties.AlphaMode = Raw.Mode;
+		MatProperties.AlphaCutoff = Raw.AlphaCutoff;
 
 		// All data including textures passed to constructor — immutable after
 		ResourceManagerRef.Load<Material>(

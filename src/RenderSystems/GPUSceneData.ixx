@@ -28,5 +28,7 @@ export struct MaterialData
     uint32_t MetallicRoughnessIndex = 0;
     uint32_t OcclusionIndex = 0;
     uint32_t EmissiveIndex = 0;
+    uint32_t AlphaMode = 0;         // 0=Opaque, 1=Mask, 2=Blend
+    float AlphaCutoff = 0.5f;
 };
-// Size: 16 + 4*3 + 4*5 = 48 bytes
+// Size: 16 + 4*3 + 4*7 = 56  bytes

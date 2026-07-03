@@ -12,13 +12,15 @@ struct ObjectData
 
 struct MaterialData
 {
-    float4 AlbedoColor;
-    float  Metallic;
-    float  Roughness;
-    float  EmissiveStrength;
-    uint   AlbedoIndex;
-    uint   NormalIndex;
-    uint   MetallicRoughnessIndex;
-    uint   OcclusionIndex;
-    uint   EmissiveIndex;
+    float4  AlbedoColor;
+    float   Metallic;
+    float   Roughness;
+    float   EmissiveStrength;
+    uint    AlbedoIndex;
+    uint    NormalIndex;
+    uint    MetallicRoughnessIndex;
+    uint    OcclusionIndex;
+    uint    EmissiveIndex;
+    uint    AlphaMode;         // 0=Opaque, 1=Mask, 2=Blend
+    float   AlphaCutoff;
 };

@@ -291,6 +291,8 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			MatData.MetallicRoughnessIndex = static_cast<uint32_t>(Props.MetallicRoughnessIndex);
 			MatData.OcclusionIndex = static_cast<uint32_t>(Props.OcclusionIndex);
 			MatData.EmissiveIndex = static_cast<uint32_t>(Props.EmissiveIndex);
+			MatData.AlphaMode = static_cast<uint32_t>(Props.AlphaMode);
+			MatData.AlphaCutoff = Props.AlphaCutoff;
 
 			uint32_t MaterialIndex = static_cast<uint32_t>(FrameMaterials.size());
 			FrameMaterials.push_back(MatData);
