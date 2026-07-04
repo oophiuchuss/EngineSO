@@ -28,7 +28,8 @@ export struct MaterialData
     uint32_t MetallicRoughnessIndex = 0;
     uint32_t OcclusionIndex = 0;
     uint32_t EmissiveIndex = 0;
-    uint32_t AlphaMode = 0;         // 0=Opaque, 1=Mask, 2=Blend
+    uint32_t AlphaMode = 0;
     float AlphaCutoff = 0.5f;
+    uint32_t _Padding[2]; // pad 56 -> 64 bytes: std430 rounds struct-array stride 
 };
-// Size: 16 + 4*3 + 4*7 = 56  bytes
+// Size: 56 + 8 = 64 bytes — matches std430 array stride exactly
