@@ -21,8 +21,8 @@ public:
     // Automatically writes the light count header followed by the LightData entries.
     void Update(const std::vector<GPULightData>& Lights);
 
-    vk::DescriptorSet GetDescriptorSet() const { return *DescriptorSet; }
-    vk::DescriptorSetLayout GetDescriptorSetLayout() const { return *DescriptorLayout; }
+    const vk::raii::DescriptorSet& GetDescriptorSet() const { return DescriptorSet; }
+    const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorLayout; }
 
 private:
     void CreateBuffer();

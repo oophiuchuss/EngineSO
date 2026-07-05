@@ -18,7 +18,7 @@ PostProcessPass::PostProcessPass(
     InputDescSetPtr(InInputDescSet)
 {
     AddInput(InputResourceName);
-    AddOutput(OutputResourceName);
+    AddOutput(OutputResourceName, vk::ImageLayout::eColorAttachmentOptimal);
 }
 
 void PostProcessPass::BeginPass(
@@ -49,7 +49,7 @@ void PostProcessPass::ExecuteMainLogic(
     Key.ShaderPtr = ShaderPtr;
     Key.ColorFormats = { Res->Format };
     Key.DepthFormat = vk::Format::eUndefined;
-    Key.DescriptorSetLayouts = { InputDescSetPtr->GetDescriptorSetLayout() };
+    Key.DescriptorSetLayouts = { *InputDescSetPtr->GetDescriptorSetLayout() };
     Key.PushConstantRange = vk::PushConstantRange(
         vk::ShaderStageFlagBits::eFragment,
         0,
@@ -61,7 +61,7 @@ void PostProcessPass::ExecuteMainLogic(
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
     Cmd.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, PipelineLayout, 0,
-        { InputDescSetPtr->GetDescriptorSet() }, {});
+        { *InputDescSetPtr->GetDescriptorSet() }, {});
     Cmd.pushConstants<PostProcessPushConstants>(
         PipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, PushConstants);
 

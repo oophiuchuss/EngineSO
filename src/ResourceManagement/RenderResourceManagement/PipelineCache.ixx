@@ -22,6 +22,9 @@ export struct PipelineKey
     // False for fullscreen passes with no vertex buffer (e.g. LightingPass)
     bool bUseVertexInput = true;
 
+    bool bEnableBlending = false;
+    bool bDepthWriteEnable = true;
+
     bool operator==(const PipelineKey& Other) const
     {
         return ShaderPtr == Other.ShaderPtr
@@ -31,8 +34,9 @@ export struct PipelineKey
             && PushConstantRange.stageFlags == Other.PushConstantRange.stageFlags
             && PushConstantRange.size == Other.PushConstantRange.size
             && PushConstantRange.offset == Other.PushConstantRange.offset
-            && bUseVertexInput == Other.bUseVertexInput;
-
+            && bUseVertexInput == Other.bUseVertexInput
+            && bEnableBlending == Other.bEnableBlending
+            && bDepthWriteEnable == Other.bDepthWriteEnable;
     }
 };
 
@@ -70,6 +74,12 @@ export struct PipelineKeyHash
             + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
 
         Seed ^= std::hash<bool>{}(Key.bUseVertexInput)
+            + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+
+        Seed ^= std::hash<bool>{}(Key.bEnableBlending)
+            + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+
+        Seed ^= std::hash<bool>{}(Key.bDepthWriteEnable)
             + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
 
         return Seed;

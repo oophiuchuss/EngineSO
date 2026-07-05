@@ -19,5 +19,6 @@ export struct RenderableMesh
 export struct FrameData
 {
     std::vector<RenderableMesh> Renderables;
+    std::vector<RenderableMesh> TranslucentRenderables;
     CameraUniformData Camera;
 };

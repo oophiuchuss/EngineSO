@@ -108,43 +108,20 @@ void Rendergraph::Execute(
     for (const auto& CurPass: SortedPasses)
     {
         // Transition input resources to shader-readable layouts
-        for (const std::string& CurInput : CurPass->GetInputs())
+        for (const ResourceUsage& Usage : CurPass->GetInputs())
         {
-            Resource& CurResource = Resources[CurInput];
-
-            vk::ImageLayout TargetLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-			TransitionResourceImageLayout(CommandBuffer, &CurResource, CurrentLayouts[CurInput], TargetLayout);
+            Resource& CurResource = Resources[Usage.Name];
+            TransitionResourceImageLayout(CommandBuffer, &CurResource, CurrentLayouts[Usage.Name], Usage.RequiredLayout);
         }
 
         // Transition output resources to correct layouts based on the usage
-        for (const std::string& CurOutput : CurPass->GetOutputs())
+        for (const ResourceUsage& Usage : CurPass->GetOutputs())
         {
-            Resource& CurResource = Resources[CurOutput];
-
-            vk::ImageLayout TargetLayout;
-
-            if (CurResource.Usage & vk::ImageUsageFlagBits::eColorAttachment)
-            {
-                TargetLayout = vk::ImageLayout::eColorAttachmentOptimal; // Color Render target
-            }
-            else if(CurResource.Usage & vk::ImageUsageFlagBits::eDepthStencilAttachment)
-            {
-                TargetLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal; // Depth Buffer
-            }
-            else
-            {
-                TargetLayout = vk::ImageLayout::eGeneral; // Fallback (rarely used)
-            }
-
-            TransitionResourceImageLayout(CommandBuffer, &CurResource, CurrentLayouts[CurOutput], TargetLayout);
+            Resource& CurResource = Resources[Usage.Name];
+            TransitionResourceImageLayout(CommandBuffer, &CurResource, CurrentLayouts[Usage.Name], Usage.RequiredLayout);
         }
 
         // Pass execution of actual rendering logic
-        // This calls the user-provided function that contains:
-        // - vkCmdBeginRendering (with dynamic rendering)
-        // - Draw calls
-        // - vkCmdEndRendering
         if (Profiler)
         {
             auto ProfileScope = Profiler->BeginScope(CommandBuffer, FrameIndex, CurPass->GetName());
@@ -290,26 +267,33 @@ void Rendergraph::SortPasses()
     std::unordered_map<std::string, std::vector<std::string>> Dependencies;
     std::unordered_map<std::string, std::vector<std::string>> Dependents;   // optional, not used in sort
 
-    std::unordered_map<std::string, std::string> ResourceWriters;
+    std::unordered_map<std::string, std::vector<std::string>> ResourceWriters;
 
     // Analyze each pass to determine data flow relationships
     for (const auto& [CurName, CurPass] : Passes)
     {
-        for (const std::string& Output : CurPass->GetOutputs())
+        for (const ResourceUsage& Output : CurPass->GetOutputs())
         {
-            ResourceWriters[Output] = CurName;
+            ResourceWriters[Output.Name].push_back(CurName);
         }
     }
 
     for (const auto& [CurName, CurPass] : Passes)
     {
-        for (const std::string& Input : CurPass->GetInputs())
+        for (const ResourceUsage& Input : CurPass->GetInputs())
         {
-            auto it = ResourceWriters.find(Input);
-            if (it != ResourceWriters.end())
+            auto It = ResourceWriters.find(Input.Name);
+            if (It != ResourceWriters.end())
             {
-                Dependencies[CurName].push_back(it->second);
-                Dependents[it->second].push_back(CurName);
+                // A pass that both reads and writes the same resource must depend on every other writer of that resource
+                for (const std::string& Writer : It->second)
+                {
+                    if (Writer != CurName)
+                    {
+                        Dependencies[CurName].push_back(Writer);
+                        Dependents[Writer].push_back(CurName);
+                    }
+                }
             }
         }
     }

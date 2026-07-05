@@ -23,8 +23,8 @@ public:
 	void Update(const CameraUniformData& Data);
 
 	// Get the descriptor set layout - needed for creating pipeline layouts
-	const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }
 	const vk::raii::DescriptorSet& GetDescriptorSet() const { return DescriptorSet; }
+	const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }
 	
 	// Get the last updated camera data
 	const CameraUniformData& GetLastData() const { return LastData; }

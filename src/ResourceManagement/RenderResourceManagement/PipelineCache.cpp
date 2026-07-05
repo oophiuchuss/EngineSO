@@ -172,10 +172,10 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 	vk::PipelineMultisampleStateCreateInfo MultisampleInfo(
 		{}, vk::SampleCountFlagBits::e1, VK_FALSE);
 
-	// Depth test/write only meaningful if a depth attachment is actually bound
+	// Depth test/write only meaningful if a depth attachment is actually bound.
 	bool bHasDepth = (Key.DepthFormat != vk::Format::eUndefined);
 	vk::PipelineDepthStencilStateCreateInfo DepthStencilInfo(
-		{}, bHasDepth, bHasDepth, vk::CompareOp::eLess,
+		{}, bHasDepth, bHasDepth && Key.bDepthWriteEnable, vk::CompareOp::eLess,
 		VK_FALSE, VK_FALSE);
 
 	vk::PipelineColorBlendAttachmentState ColorBlendAttachment;
@@ -183,7 +183,17 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 		vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
 		vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 
-	ColorBlendAttachment.setBlendEnable(VK_FALSE);
+	ColorBlendAttachment.setBlendEnable(Key.bEnableBlending);
+	if (Key.bEnableBlending)
+	{
+		ColorBlendAttachment
+			.setSrcColorBlendFactor(vk::BlendFactor::eSrcAlpha)
+			.setDstColorBlendFactor(vk::BlendFactor::eOneMinusSrcAlpha)
+			.setColorBlendOp(vk::BlendOp::eAdd)
+			.setSrcAlphaBlendFactor(vk::BlendFactor::eOne)
+			.setDstAlphaBlendFactor(vk::BlendFactor::eZero)
+			.setAlphaBlendOp(vk::BlendOp::eAdd);
+	}
 
 	// One blend attachment state per color format — must match Key.ColorFormats.size()
 	std::vector<vk::PipelineColorBlendAttachmentState> ColorBlendAttachments(

@@ -25,8 +25,8 @@ public:
    
     void ResetDescriptorSet();
 
-    vk::DescriptorSet GetDescriptorSet() const { return *DescriptorSet; }
-    vk::DescriptorSetLayout GetDescriptorSetLayout() const { return *Layout; }
+    const vk::raii::DescriptorSet& GetDescriptorSet() const { return DescriptorSet; }
+    const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return Layout; }
 
 private:
     const vk::raii::Device& Device;

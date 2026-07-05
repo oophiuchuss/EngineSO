@@ -10,6 +10,13 @@ import FrameData;
 
 export class Rendergraph;
 
+// Pairs a resource name with the layout this pass requires it in
+export struct ResourceUsage
+{
+	std::string Name;
+	vk::ImageLayout RequiredLayout;
+};
+
 // Base render pass representation within the graph structure
 // Each pass represents an operation with distinct inputs and outputs
 export class RenderPassBase
@@ -20,13 +27,19 @@ public:
 
 	inline const std::string& GetName() const { return Name; } 
 
-	void AddInput(const std::string& NewInput) { Inputs.push_back(NewInput); }
+	void AddInput(const std::string& NewInput, vk::ImageLayout RequiredLayout = vk::ImageLayout::eShaderReadOnlyOptimal)
+	{
+		Inputs.push_back({ NewInput, RequiredLayout });
+	}
 
-	inline const std::vector<std::string>& GetInputs() const { return Inputs; }
+	void AddOutput(const std::string& NewOutput, vk::ImageLayout RequiredLayout)
+	{
+		Outputs.push_back({ NewOutput, RequiredLayout });
+	}
 
-	void AddOutput(const std::string& NewOutput) { Outputs.push_back(NewOutput); }
+	inline const std::vector<ResourceUsage>& GetInputs() const { return Inputs; }
 	
-	inline const std::vector<std::string>& GetOutputs() const { return Outputs; }
+	inline const std::vector<ResourceUsage>& GetOutputs() const { return Outputs; }
 
 	void SetEnabled(bool bNewEnabled) { bIsEnabled = bNewEnabled; }
 	
@@ -51,7 +64,7 @@ protected:
 
 private:
 	std::string Name;					// Human-readable name
-	std::vector<std::string> Inputs;	// Resources this pass will read (dependencies)
-	std::vector<std::string> Outputs;	// Resources this pass will write to (products)
+	std::vector<ResourceUsage> Inputs;	// Resources this pass will read (dependencies)
+	std::vector<ResourceUsage> Outputs;	// Resources this pass will write to (products)
 	bool bIsEnabled = true;				// Is current pass enabled
 };

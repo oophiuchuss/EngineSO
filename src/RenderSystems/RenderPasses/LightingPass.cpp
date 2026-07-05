@@ -46,7 +46,7 @@ LightingPass::LightingPass(
     AddInput(GBufferDepthResourceName);
 
     // Declare output (lit result)
-    AddOutput(OutputColorResourceName);
+    AddOutput(OutputColorResourceName, vk::ImageLayout::eColorAttachmentOptimal);
 }
 
 void LightingPass::BeginPass(
@@ -96,9 +96,9 @@ void LightingPass::ExecuteMainLogic(
     Key.ColorFormats = { OutputColor->Format };
     Key.DepthFormat = vk::Format::eUndefined;          // no depth attachment
     Key.DescriptorSetLayouts = {
-        CameraUBOPtr ? *CameraUBOPtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{},
-        GBufferDescSetPtr ? GBufferDescSetPtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{},
-        LightBufferPtr ? LightBufferPtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{}
+        *CameraUBOPtr->GetDescriptorSetLayout(),
+        *GBufferDescSetPtr->GetDescriptorSetLayout(),
+        *LightBufferPtr->GetDescriptorSetLayout()
     };
     Key.PushConstantRange = vk::PushConstantRange{};   // no push constants in lighting pass
     Key.bUseVertexInput = false;                       // full‑screen triangle, no vertex buffer
@@ -109,9 +109,9 @@ void LightingPass::ExecuteMainLogic(
 
     // Bind all descriptor sets at once
     std::array<vk::DescriptorSet, 3> DescriptorSets = {
-        CameraUBOPtr ? CameraUBOPtr->GetDescriptorSet() : vk::DescriptorSet{},
-        GBufferDescSetPtr ? GBufferDescSetPtr->GetDescriptorSet() : vk::DescriptorSet{},
-        LightBufferPtr ? LightBufferPtr->GetDescriptorSet() : vk::DescriptorSet{}
+        *CameraUBOPtr->GetDescriptorSet(),
+        *GBufferDescSetPtr->GetDescriptorSet(),
+        *LightBufferPtr->GetDescriptorSet()
     };
 
     Cmd.bindDescriptorSets(

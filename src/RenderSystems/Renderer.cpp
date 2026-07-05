@@ -18,6 +18,7 @@ import CullingSystem;
 import Entity;
 import GeometryRenderPass;
 import LightingPass;
+import ForwardTranslucencyPass;
 import PostProcessPass;
 import CameraUniform;
 import Scene;
@@ -214,12 +215,13 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		auto FrameScope = ProfilerInstance->BeginScope(Cmd, CurrentFrame, "TotalFrame");
 
 		CameraComponent* CamComp = SceneToRender->GetActiveCameraComponent();
+		TransformComponent* CamTrans = nullptr;
 
 		if (CamComp)
 		{
 			SetActiveCamera(CamComp);
 
-			TransformComponent* CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
+			CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
 
 			CameraUniformData Data;
 			Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
@@ -316,14 +318,31 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			BoundingBox WorldBounds = MD->GetBoundingBox();
 			WorldBounds.Transform(WorldTransform);
 
-			// RenderableMesh no longer needs PushData — GeometryRenderPass only needs GPUMesh now,
-			// since transform/material live in the SSBOs indexed by ObjectIndex
-			CurrentFrameData.Renderables.push_back({
-				GPUMesh,
-				WorldBounds,
-				ObjectIndex
-				});
+			RenderableMesh NewRenderable = RenderableMesh(GPUMesh, WorldBounds, ObjectIndex);
+
+			if (Props.AlphaMode == AlphaMode::Blend)
+			{
+				CurrentFrameData.TranslucentRenderables.push_back(NewRenderable);
+			}
+			else
+			{
+				CurrentFrameData.Renderables.push_back(NewRenderable);
+			}
 		}
+
+		glm::vec3 CamPos = CamTrans ? CamTrans->GetWorldPosition() : glm::vec3(0.0f);
+		std::sort(CurrentFrameData.TranslucentRenderables.begin(), CurrentFrameData.TranslucentRenderables.end(),
+			[&CamPos](const RenderableMesh& A, const RenderableMesh& B)
+			{
+				glm::vec3 CenterA = (A.WorldBounds.Min + A.WorldBounds.Max) * 0.5f;
+				glm::vec3 CenterB = (B.WorldBounds.Min + B.WorldBounds.Max) * 0.5f;
+				glm::vec3 DeltaA = CenterA - CamPos;
+				glm::vec3 DeltaB = CenterB - CamPos;
+				float DistA = glm::dot(DeltaA, DeltaA);
+				float DistB = glm::dot(DeltaB, DeltaB);
+				return DistA > DistB; // farthest first
+			});
+
 
 		GPUSceneInstance->Update(FrameObjects, FrameMaterials);
 
@@ -958,6 +977,19 @@ void Renderer::SetupRenderPasses()
 		GBufferDescSet.get(),
 		LightingShader,
 		PipelineCacheInstance.get());
+
+	Shader* TranslucencyShader = LoadShader("forward_translucency");
+
+	auto TranslucencyPass = RendergraphInstance->AddRenderPass<ForwardTranslucencyPass>(
+		"ForwardTranslucency",
+		"Main_Color",
+		"Main_Depth",
+		TranslucencyShader,
+		PipelineCacheInstance.get(),
+		CameraUBO.get(),
+		DescriptorHeapInstance.get(),
+		GPUSceneInstance.get(),
+		LightBufferInstance.get());
 
 	Shader* PostProcessShader = LoadShader("post_process");
 

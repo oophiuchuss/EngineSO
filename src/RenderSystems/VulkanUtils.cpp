@@ -197,6 +197,46 @@ void VulkanUtils::TransitionImageLayout(
         SrcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;   // After all colour writes
         DstStage = vk::PipelineStageFlagBits::eBottomOfPipe;            // Before presentation
     }
+    // DepthAttachment-to-DepthReadOnly layout transition
+	// Used when a depth texture that was written to in a previous pass needs to be read-only in a subsequent pass
+    else if (OldLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal && NewLayout == vk::ImageLayout::eDepthStencilReadOnlyOptimal)
+    {
+        // Memory permissions
+        SrcAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Wait for depth stencil writes to finish
+        DstAccess = vk::AccessFlagBits::eDepthStencilAttachmentRead;    // Enable depth-test reads
+
+        // Pipeline stage synchronisation
+        SrcStage = vk::PipelineStageFlagBits::eLateFragmentTests;       // After late fragment tests (depth writes)
+        DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests |
+            vk::PipelineStageFlagBits::eLateFragmentTests;              // Depth testing can occur at either stage
+    }
+    // ShaderRead-to-DepthReadOnly layout transition
+    // Used when a depth texture that was sampled in a shader is reused as a read-only depth attachment
+    else if (OldLayout == vk::ImageLayout::eShaderReadOnlyOptimal && NewLayout == vk::ImageLayout::eDepthStencilReadOnlyOptimal)
+    {
+        // Memory permissions
+        SrcAccess = vk::AccessFlagBits::eShaderRead;                    // Wait for previoues shader reads to complete 
+        DstAccess = vk::AccessFlagBits::eDepthStencilAttachmentRead;    // Enable depth-test reads
+
+        // Pipeline stage synchronisation
+        SrcStage = vk::PipelineStageFlagBits::eFragmentShader;          // After shader reads complete
+        DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests |
+            vk::PipelineStageFlagBits::eLateFragmentTests;              // Depth testing can occur at either stage
+    }
+    // DepthReadOnly-to-DepthStencilAttachment layout transition
+    // Used when a read-only depth attachment is reused as a writable depth attachment
+    else if (OldLayout == vk::ImageLayout::eDepthStencilReadOnlyOptimal && NewLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
+    {
+        // Memory permissions
+        SrcAccess = vk::AccessFlagBits::eDepthStencilAttachmentRead;    // Wait for depth reads to finish
+        DstAccess = vk::AccessFlagBits::eDepthStencilAttachmentWrite;   // Will write to depth stencil attachment
+
+        // Pipeline stage synchronisation
+        SrcStage = vk::PipelineStageFlagBits::eEarlyFragmentTests |
+            vk::PipelineStageFlagBits::eLateFragmentTests;              // After depth testing
+        DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests |
+            vk::PipelineStageFlagBits::eLateFragmentTests;              // Before depth writes
+    }
     // TODO: Add more transitions as needed:
     // - Shader Read -> Transfer Src (for reading back textures to CPU)
     else

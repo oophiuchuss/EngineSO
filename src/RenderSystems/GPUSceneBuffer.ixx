@@ -23,8 +23,8 @@ public:
     // Throws if Objects.size() > MaxObjects or Materials.size() > MaxMaterials
     void Update(const std::vector<ObjectData>& Objects, const std::vector<MaterialData>& Materials);
 
-    const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }
     const vk::raii::DescriptorSet& GetDescriptorSet() const { return DescriptorSet; }
+    const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }
 
     uint32_t GetMaxObjects() const { return MaxObjects; }
     uint32_t GetMaxMaterials() const { return MaxMaterials; }

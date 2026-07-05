@@ -39,11 +39,11 @@ GeometryRenderPass::GeometryRenderPass(
 	DescriptorHeapPtr(InDescriptorHeap),
 	GPUScenePtr(InGPUScene)
 {
-	AddOutput(GBufferAlbedoResourceName);
-	AddOutput(GBufferNormalResourceName);
-	AddOutput(GBufferMetalRoughResourceName);
-	AddOutput(GBufferEmissiveResourceName);
-	AddOutput(GBufferDepthResourceName);
+	AddOutput(GBufferAlbedoResourceName, vk::ImageLayout::eColorAttachmentOptimal);
+	AddOutput(GBufferNormalResourceName, vk::ImageLayout::eColorAttachmentOptimal);
+	AddOutput(GBufferMetalRoughResourceName, vk::ImageLayout::eColorAttachmentOptimal);
+	AddOutput(GBufferEmissiveResourceName, vk::ImageLayout::eColorAttachmentOptimal);
+	AddOutput(GBufferDepthResourceName, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 }
 
 void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
@@ -85,7 +85,6 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 	vk::RenderingInfoKHR RenderingInfo;
 	RenderingInfo.setRenderArea(vk::Rect2D({ 0, 0 }, { Albedo->Extent.width, Albedo->Extent.height }))
 		.setLayerCount(1)
-		.setColorAttachmentCount(1)
 		.setColorAttachmentCount(static_cast<uint32_t>(ColorAttachments.size()))
 		.setPColorAttachments(ColorAttachments.data())
 		.setPDepthAttachment(&DepthAttachment);
@@ -136,9 +135,9 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	Key.DepthFormat = Depth->Format;
 
 	Key.DescriptorSetLayouts = {
-		CameraUBOPtr ? *CameraUBOPtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{},
-		DescriptorHeapPtr ? DescriptorHeapPtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{},
-		GPUScenePtr ? GPUScenePtr->GetDescriptorSetLayout() : vk::DescriptorSetLayout{}
+		*CameraUBOPtr->GetDescriptorSetLayout(),
+		*DescriptorHeapPtr->GetDescriptorSetLayout(),
+		*GPUScenePtr->GetDescriptorSetLayout()
 	};
 
 	Key.PushConstantRange = vk::PushConstantRange(
@@ -157,9 +156,9 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 
 	// Bind descriptor sets (set 0 = camera UBO, set 1 = texture heap, set 2 = GPU scene buffer)
 	std::array<vk::DescriptorSet, 3> DescriptorSets = {
-		CameraUBOPtr ? *CameraUBOPtr->GetDescriptorSet() : vk::DescriptorSet{},
-		DescriptorHeapPtr ? *DescriptorHeapPtr->GetDescriptorSet() : vk::DescriptorSet{},
-		GPUScenePtr ? *GPUScenePtr->GetDescriptorSet() : vk::DescriptorSet{}
+		*CameraUBOPtr->GetDescriptorSet(),
+		*DescriptorHeapPtr->GetDescriptorSet(),
+		*GPUScenePtr->GetDescriptorSet()
 	};
 
 	Cmd.bindDescriptorSets(
