@@ -352,6 +352,13 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		{
 			GPass->SetRenderArea(SwapchainExtent);
 		}
+		
+		// TODO: make better handling of this
+		ForwardTranslucencyPass* TransPass = dynamic_cast<ForwardTranslucencyPass*>(RendergraphInstance->GetRenderPass("ForwardTranslucencyPass"));
+		if (TransPass)
+		{
+			TransPass->SetRenderArea(SwapchainExtent);
+		}
 
 		// Collect light data from scene
 		// TODO: make better gathering, maybe throuhg registration
@@ -981,7 +988,7 @@ void Renderer::SetupRenderPasses()
 	Shader* TranslucencyShader = LoadShader("forward_translucency");
 
 	auto TranslucencyPass = RendergraphInstance->AddRenderPass<ForwardTranslucencyPass>(
-		"ForwardTranslucency",
+		"ForwardTranslucencyPass",
 		"Main_Color",
 		"Main_Depth",
 		TranslucencyShader,
