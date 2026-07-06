@@ -289,6 +289,16 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 					});
 			}
 
+			// Normal generation — applied after both Normals and Indices are available
+			bool bShouldGenerate =
+				(ImportSettings.NormalMode == GltfImportSettings::NormalGenerationMode::AlwaysRegenerate) ||
+				(ImportSettings.NormalMode == GltfImportSettings::NormalGenerationMode::RegenerateIfMissing && RawPrim.Normals.empty());
+
+			if (bShouldGenerate && !RawPrim.Positions.empty() && !RawPrim.Indices.empty())
+			{
+				RawPrim.Normals = GenerateSmoothNormals(RawPrim.Positions, RawPrim.Indices);
+			}
+
 			Raw.Primitives.push_back(std::move(RawPrim));
 		}
 

@@ -87,7 +87,8 @@ void VulkanUtils::TransitionImageLayout(
 
         // Pipeline stage syncronization
         SrcStage = vk::PipelineStageFlagBits::eTopOfPipe;               // Don't wait for anything
-        DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;      // Wait until early fragment tests
+        DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests |
+            vk::PipelineStageFlagBits::eLateFragmentTests;              // Wait until early fragment tests
     }
     // ColorAttachment-to-ShaderRead layout transition
     // After rendering to G-buffer, now want to sample it as texture in lighting pass

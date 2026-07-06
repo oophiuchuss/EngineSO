@@ -15,14 +15,28 @@ import SceneData;
 import ResourceManager;
 import MaterialProperties;
 
+export struct GltfImportSettings
+{
+	enum class NormalGenerationMode
+	{
+		UseAuthored,
+		AlwaysRegenerate,
+		RegenerateIfMissing
+	};
+
+	NormalGenerationMode NormalMode = NormalGenerationMode::RegenerateIfMissing;
+};
+
 export class GltfSceneData : public SceneData
 {
 public:
 	explicit GltfSceneData(
 		const std::string& ID,
-		ResourceManager& RM) :
+		ResourceManager& RM,
+		GltfImportSettings InSettings = {}) :
 		SceneData(ID),
-		ResourceManagerRef(RM)
+		ResourceManagerRef(RM),
+		ImportSettings(InSettings)
 	{}
 
 	void Instantiate() override;
@@ -125,5 +139,6 @@ private:
 	std::vector<RawLight> RawLights;
 	std::vector<RawNode> RawNodes;
 
+	GltfImportSettings ImportSettings;
 	ResourceManager& ResourceManagerRef;
 };
