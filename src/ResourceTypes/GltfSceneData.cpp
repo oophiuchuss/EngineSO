@@ -296,7 +296,7 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 
 			if (bShouldGenerate && !RawPrim.Positions.empty() && !RawPrim.Indices.empty())
 			{
-				RawPrim.Normals = GenerateSmoothNormals(RawPrim.Positions, RawPrim.Indices);
+				RawPrim.Normals = GenerateNormals(RawPrim.Positions, RawPrim.Indices);
 			}
 
 			Raw.Primitives.push_back(std::move(RawPrim));
