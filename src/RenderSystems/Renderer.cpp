@@ -906,7 +906,7 @@ void Renderer::SetupRenderPasses()
 	// Lighting pass output + swapchain target
 	RendergraphInstance->AddResource(
 		"Main_Color",
-		vk::Format::eB8G8R8A8Unorm,
+		vk::Format::eR16G16B16A16Sfloat,
 		SwapchainExtent,
 		vk::ImageUsageFlagBits::eColorAttachment |	// lighting pass writes here
 		vk::ImageUsageFlagBits::eTransferSrc |		// keep for potential blit / other use

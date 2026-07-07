@@ -15,13 +15,14 @@ export enum PostProcessFlags : uint32_t
 {
     PP_ToneMapping = 1u << 0,
     PP_GammaCorrect = 1u << 1,
-    // reserved for later: PP_FXAA = 1u << 2, PP_DebugViewRaw = 1u << 3, ...
+    PP_Dithering = 1u << 2,
+    // reserved for later: PP_FXAA = 1u << 3, PP_DebugViewRaw = 1u << 4, ...
 };
 
 export struct PostProcessPushConstants
 {
     float Exposure = 1.0f;
-    uint32_t Flags = PP_ToneMapping | PP_GammaCorrect;
+    uint32_t Flags = PP_ToneMapping | PP_GammaCorrect | PP_Dithering;
 };
 
 export class PostProcessPass : public RenderPassBase
