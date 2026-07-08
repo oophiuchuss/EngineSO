@@ -75,7 +75,7 @@ struct Vec3Equal
     bool operator()(const glm::vec3& A, const glm::vec3& B) const { return A == B; }
 };
 
-export std::vector<glm::vec3> GenerateNormals(
+export std::vector<glm::vec3> GenerateNormalsAreaWeighted(
     const std::vector<glm::vec3>& Positions,
     const std::vector<uint32_t>& Indices)
 {

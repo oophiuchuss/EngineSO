@@ -30,7 +30,7 @@ VulkanEngine::VulkanEngine()
 
     TaskSchedulerInstance = std::make_unique<TaskScheduler>();
 
-    ResourceManagerInstance = std::make_unique<ResourceManager>(*TaskSchedulerInstance);
+    ResourceManagerInstance = std::make_unique<ResourceManager>(*TaskSchedulerInstance, *EventSystemInstance);
 
     // Context should be create with default constructor
     // Initialize all needed resources for vulkan and GLFW  
@@ -45,7 +45,8 @@ VulkanEngine::VulkanEngine()
 
     EventSystemInstance->AddListener(RendererInstance.get(),
         static_cast<int>(EventCategory::Window) | 
-        static_cast<int>(EventCategory::Scene));
+        static_cast<int>(EventCategory::Scene)  |
+        static_cast<int>(EventCategory::Resource) );
 
     LastFrameTime = 0.0;
 }

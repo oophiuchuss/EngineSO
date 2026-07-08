@@ -39,6 +39,7 @@ import EventDispatcher;
 import WindowResizeEvent;
 import SceneBulkChangedEvent;
 import SceneEntityChangedEvent;
+import ResourceReprocessedEvent;
 
 import MeshComponent;
 import TransformComponent;
@@ -1207,5 +1208,13 @@ void Renderer::OnEvent(const EventBase& Event)
 		{
 			PreloadEntityResources(*E.GetEntity());
 		}
+	});
+
+	Dispatcher.Dispatch<ResourceReprocessedEvent>([this](const ResourceReprocessedEvent& E)
+	{
+		// Meshes: next RenderFrame's GetOrUploadMesh call for this ID naturally re-uploads
+		RenderCacheInstance->Evict(E.GetResourceID());
+
+		// TODO: Handle shaders here too
 	});
 }

@@ -9,8 +9,12 @@ module;
 export module ResourceManager;
 
 import TaskScheduler;
+import EventSystem;
+import ResourceReprocessedEvent;
+
 import ResourceHandle;
 import ResourceBase;
+import ReprocessOptions;
 import TextureData;
 import Material;
 import MeshData;
@@ -32,13 +36,16 @@ struct ResourceData
 export class ResourceManager
 {
 public:
-	ResourceManager(TaskScheduler& Scheduler) : TaskSchedulerRef(Scheduler) {}
+	ResourceManager(TaskScheduler& Scheduler, EventSystem& EventSystem) : TaskSchedulerRef(Scheduler), EventSystemRef(EventSystem) {}
 
 	template<typename T, typename ...Args>
 	ResourceHandle<T> Load(const std::string& ResourceID, Args && ...args);
 	
 	template<typename T>
 	ResourceHandle<T> LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data);
+
+	template<typename T>
+	bool Reprocess(const std::string& ID, const ReprocessOptions& Options);
 
 	template<typename T, typename ...Args>
 	ResourceHandle<T> PrepareAsync(const std::string& ResourceID, Args && ...args);
@@ -76,6 +83,8 @@ protected:
 	std::string GetResourceFilePath(const std::string& ResourceID) const;
 
 	TaskScheduler& TaskSchedulerRef;
+
+	EventSystem& EventSystemRef;
 
 	std::unordered_map<std::type_index,
 		std::unordered_map<std::string, ResourceData>> Resources;
@@ -145,6 +154,23 @@ ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID,
 
 	TypeResources[ResourceID] = { Resource, 1 };
 	return ResourceHandle<T>(Resource);
+}
+
+template<typename T>
+bool ResourceManager::Reprocess(const std::string& ID, const ReprocessOptions& Options)
+{
+	T* Existing = GetResource<T>(ID);
+	if (!Existing)
+	{
+		return false;
+	}
+
+	bool bChanged = Existing->Reprocess(Options);
+	if (bChanged)
+	{
+		EventSystemRef.PublishEvent(ResourceReprocessedEvent(ID));
+	}
+	return bChanged;
 }
 
 template<typename T, typename ...Args>

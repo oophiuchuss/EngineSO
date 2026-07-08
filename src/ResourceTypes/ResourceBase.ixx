@@ -6,6 +6,7 @@ module;
 export module ResourceBase;
 
 import Paths;
+import ReprocessOptions;
 
 export class ResourceBase
 {
@@ -45,6 +46,8 @@ public:
 		UnloadResource();
 		bIsLoaded = false;
 	}
+
+	virtual bool Reprocess(const ReprocessOptions& Options) { return false; }
 
 	// Subclasses override to declare where they live
 	// Non-virtual intentional — called via T:: in ResourceManager template

@@ -296,7 +296,8 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 
 			if (bShouldGenerate && !RawPrim.Positions.empty() && !RawPrim.Indices.empty())
 			{
-				RawPrim.Normals = GenerateNormals(RawPrim.Positions, RawPrim.Indices);
+				// TODO: make method configurable 
+				RawPrim.Normals = GenerateNormalsAreaWeighted(RawPrim.Positions, RawPrim.Indices);
 			}
 
 			Raw.Primitives.push_back(std::move(RawPrim));
