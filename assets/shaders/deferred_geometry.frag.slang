@@ -36,6 +36,12 @@ PSOutput main(PSInput input)
     float4 Albedo = TextureHeap[NonUniformResourceIndex(material.AlbedoIndex)]
                         .Sample(input.inUV) * material.AlbedoColor;
 
+    // Alpha-mask discard — only applies to AlphaMode::Mask (value 1)
+    if (material.AlphaMode == 1u && Albedo.a < material.AlphaCutoff)
+    {
+        discard;
+    }
+
     // Sample metallic/roughness — glTF packs: G=roughness, B=metallic
     float4 MetallicRoughness = TextureHeap[NonUniformResourceIndex(material.MetallicRoughnessIndex)]
                                     .Sample(input.inUV);
