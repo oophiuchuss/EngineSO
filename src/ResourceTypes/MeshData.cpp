@@ -8,6 +8,32 @@ module MeshData;
 
 import Geometry;
 
+bool MeshData::Reprocess(const ReprocessOptions& Options)
+{
+	const auto* MeshOpts = dynamic_cast<const MeshReprocessOptions*>(&Options);
+	if (!MeshOpts || MeshOpts->bFullReconstruct || !MeshOpts->bRegenerateNormals)
+	{
+		return false;
+	}
+
+	std::vector<glm::vec3> Positions;
+	Positions.reserve(Vertices.size());
+
+	for (const Vertex& V : Vertices)
+	{
+		Positions.push_back(V.Position);
+	}
+
+	std::vector<glm::vec3> NewNormals = GenerateNormals(MeshOpts->Technique, Positions, Indices);
+
+	for (size_t i = 0; i < Vertices.size(); ++i)
+	{
+		Vertices[i].Normal = NewNormals[i];
+	}
+
+	return true;
+}
+
 bool MeshData::LoadResource(const std::string& FilePath)
 {
 	// Already populated via programmatic constructor

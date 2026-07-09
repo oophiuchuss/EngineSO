@@ -60,6 +60,26 @@ export BoundingBox ComputeBoundingBox(const std::vector<Vertex>& Vertices)
     return Bounds;
 }
 
+export enum class NormalGenerationMode
+{
+    UseAuthored,
+    AlwaysRegenerate,
+    RegenerateIfMissing
+};
+
+export enum class NormalGenerationTechnique
+{
+    AreaWeighted,
+    // AngleWeighted,       // future
+    // HardEdgePreserving,  // future
+};
+
+export struct NormalGenerationSettings
+{
+    NormalGenerationMode Mode = NormalGenerationMode::RegenerateIfMissing;
+    NormalGenerationTechnique Technique = NormalGenerationTechnique::AreaWeighted;
+};
+
 struct Vec3Hash
 {
     size_t operator()(const glm::vec3& V) const
@@ -75,58 +95,31 @@ struct Vec3Equal
     bool operator()(const glm::vec3& A, const glm::vec3& B) const { return A == B; }
 };
 
-export std::vector<glm::vec3> GenerateNormalsAreaWeighted(
+std::vector<glm::vec3> GenerateNormalsAreaWeighted(
     const std::vector<glm::vec3>& Positions,
     const std::vector<uint32_t>& Indices)
 {
     std::vector<glm::vec3> Normals(Positions.size(), glm::vec3(0.0f));
 
-    // Group indices sharing the same position — exporters commonly duplicate a
-    // vertex (same position, different index) at UV seams or patch boundaries.
-    // Accumulating by index alone fails to smooth across these, producing
-    // visible facet boundaries exactly at those seams.
     std::unordered_map<glm::vec3, std::vector<uint32_t>, Vec3Hash, Vec3Equal> PositionToIndices;
     for (uint32_t i = 0; i < Positions.size(); ++i)
     {
         PositionToIndices[Positions[i]].push_back(i);
     }
 
-    if (!Indices.empty())
+    for (size_t i = 0; i + 2 < Indices.size(); i += 3)
     {
-        for (size_t i = 0; i + 2 < Indices.size(); i += 3)
+        uint32_t i0 = Indices[i], i1 = Indices[i + 1], i2 = Indices[i + 2];
+        const glm::vec3& p0 = Positions[i0];
+        const glm::vec3& p1 = Positions[i1];
+        const glm::vec3& p2 = Positions[i2];
+
+        glm::vec3 n = glm::cross(p1 - p0, p2 - p0);
+        if (glm::dot(n, n) > 1e-12f)
         {
-            const uint32_t i0 = Indices[i + 0];
-            const uint32_t i1 = Indices[i + 1];
-            const uint32_t i2 = Indices[i + 2];
-
-            const glm::vec3& p0 = Positions[i0];
-            const glm::vec3& p1 = Positions[i1];
-            const glm::vec3& p2 = Positions[i2];
-
-            glm::vec3 n = glm::cross(p1 - p0, p2 - p0);
-            if (glm::dot(n, n) > 1e-12f)
-            {
-                for (uint32_t Idx : PositionToIndices[p0]) Normals[Idx] += n;
-                for (uint32_t Idx : PositionToIndices[p1]) Normals[Idx] += n;
-                for (uint32_t Idx : PositionToIndices[p2]) Normals[Idx] += n;
-            }
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i + 2 < Positions.size(); i += 3)
-        {
-            const glm::vec3& p0 = Positions[i];
-            const glm::vec3& p1 = Positions[i + 1];
-            const glm::vec3& p2 = Positions[i + 2];
-
-            glm::vec3 n = glm::cross(p1 - p0, p2 - p0);
-            if (glm::dot(n, n) > 1e-12f)
-            {
-                for (uint32_t Idx : PositionToIndices[p0]) Normals[Idx] += n;
-                for (uint32_t Idx : PositionToIndices[p1]) Normals[Idx] += n;
-                for (uint32_t Idx : PositionToIndices[p2]) Normals[Idx] += n;
-            }
+            for (uint32_t Idx : PositionToIndices[p0]) Normals[Idx] += n;
+            for (uint32_t Idx : PositionToIndices[p1]) Normals[Idx] += n;
+            for (uint32_t Idx : PositionToIndices[p2]) Normals[Idx] += n;
         }
     }
 
@@ -136,4 +129,18 @@ export std::vector<glm::vec3> GenerateNormalsAreaWeighted(
     }
 
     return Normals;
+}
+
+export std::vector<glm::vec3> GenerateNormals(
+    NormalGenerationTechnique Technique,
+    const std::vector<glm::vec3>& Positions,
+    const std::vector<uint32_t>& Indices)
+{
+    switch (Technique)
+    {
+    case NormalGenerationTechnique::AreaWeighted:
+        return GenerateNormalsAreaWeighted(Positions, Indices);
+    default:
+        return GenerateNormalsAreaWeighted(Positions, Indices); // safe fallback
+    }
 }

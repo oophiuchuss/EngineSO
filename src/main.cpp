@@ -34,7 +34,7 @@ int main() {
             SunComp->SetIntensity(1.5f);
             SunComp->SetColor(glm::vec3(1.0f, 0.95f, 0.85f));*/
 
-            auto SceneDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("main_sponza/NewSponza_Main_glTF_003.gltf", *Engine.GetResourceManager(), GltfImportSettings( GltfImportSettings::NormalGenerationMode::RegenerateIfMissing));
+            auto SceneDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("main_sponza/NewSponza_Main_glTF_003.gltf", *Engine.GetResourceManager(), GltfImportSettings(NormalGenerationSettings(NormalGenerationMode::RegenerateIfMissing)));
 
             if (SceneDataHandle.Get())
             {

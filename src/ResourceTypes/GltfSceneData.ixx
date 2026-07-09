@@ -12,19 +12,13 @@ module;
 export module GltfSceneData;
 
 import SceneData;
+import Geometry;
 import ResourceManager;
 import MaterialProperties;
 
 export struct GltfImportSettings
 {
-	enum class NormalGenerationMode
-	{
-		UseAuthored,
-		AlwaysRegenerate,
-		RegenerateIfMissing
-	};
-
-	NormalGenerationMode NormalMode = NormalGenerationMode::RegenerateIfMissing;
+	NormalGenerationSettings NormalSettings;
 };
 
 export class GltfSceneData : public SceneData
