@@ -144,10 +144,11 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 	// Vertex input — empty for fullscreen passes with no vertex buffer
 	vk::VertexInputBindingDescription BindingDesc(0, sizeof(Vertex), vk::VertexInputRate::eVertex);
 
-	std::array<vk::VertexInputAttributeDescription, 3> AttribDescs = { {
-		{ 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, Position) },
-		{ 1, 0, vk::Format::eR32G32Sfloat,     offsetof(Vertex, UV) },
-		{ 2, 0, vk::Format::eR32G32B32Sfloat,  offsetof(Vertex, Normal) },
+	std::array<vk::VertexInputAttributeDescription, 4> AttribDescs = { {
+		{ 0, 0, vk::Format::eR32G32B32Sfloat,		offsetof(Vertex, Position) },
+		{ 1, 0, vk::Format::eR32G32Sfloat,			offsetof(Vertex, UV) },
+		{ 2, 0, vk::Format::eR32G32B32Sfloat,		offsetof(Vertex, Normal) },
+		{ 3, 0, vk::Format::eR32G32B32A32Sfloat,	offsetof(Vertex, Tangent) },
 	} };
 
 	vk::PipelineVertexInputStateCreateInfo VertexInputInfo;

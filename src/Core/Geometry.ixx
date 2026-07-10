@@ -43,6 +43,7 @@ export struct Vertex
 	glm::vec3 Position;
 	glm::vec2 UV = glm::vec2(0.0f);
 	glm::vec3 Normal = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec4 Tangent = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f); // xyz direction, w = handedness (+1/-1)
 };
 
 export BoundingBox ComputeBoundingBox(const std::vector<Vertex>& Vertices)

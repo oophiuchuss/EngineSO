@@ -46,6 +46,7 @@ private:
 		std::vector<glm::vec3> Positions;
 		std::vector<glm::vec2> UVs;
 		std::vector<glm::vec3> Normals;
+		std::vector<glm::vec4> Tangents;
 		std::vector<uint32_t> Indices;
 		int MaterialIndex = -1; // -1 if no material
 

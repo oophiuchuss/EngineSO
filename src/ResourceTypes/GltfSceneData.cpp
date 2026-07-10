@@ -275,6 +275,19 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 						RawPrim.Normals[i++] = glm::vec3(V.x(), V.y(), V.z());
 					});
 			}
+			
+			// Tangents — optional
+			if (auto* Attr = Primitive.findAttribute("TANGENT"); Attr != Primitive.attributes.end())
+			{
+				auto& Accessor = Asset.accessors[Attr->accessorIndex];
+				RawPrim.Tangents.resize(Accessor.count);
+				fastgltf::iterateAccessor<fastgltf::math::fvec4>(
+					Asset, Accessor,
+					[&, i = 0](fastgltf::math::fvec4 V) mutable
+					{
+						RawPrim.Tangents[i++] = glm::vec4(V.x(), V.y(), V.z(), V.w());
+					});
+			}
 
 			// Indices — optional (non-indexed geometry is valid)
 			if (Primitive.indicesAccessor.has_value())
@@ -301,6 +314,15 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 
 			Raw.Primitives.push_back(std::move(RawPrim));
 		}
+
+		for (const auto& Prim : Raw.Primitives)
+		{
+			if (Prim.Tangents.empty())
+			{
+				std::cerr << "[GltfSceneData] Warning: Mesh '" << Raw.Name << "' has a primitive with no tangents. This primitive will be skipped.\n";
+			}
+		}
+
 
 		RawMeshes.push_back(std::move(Raw));
 	}
@@ -515,6 +537,14 @@ void GltfSceneData::RegisterAllNodes(const std::vector<std::string>& MaterialIDs
 				if (v < Prim.Normals.size())
 				{
 					Vertices[v].Normal = Prim.Normals[v];
+				}
+				if (v < Prim.Tangents.size())
+				{
+					Vertices[v].Tangent = Prim.Tangents[v];
+				}
+				else
+				{
+					throw std::runtime_error("MeshData primitive missing TANGENT data: " + MeshID);
 				}
 			}
 
