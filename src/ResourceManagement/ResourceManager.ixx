@@ -41,8 +41,8 @@ public:
 	template<typename T, typename ...Args>
 	ResourceHandle<T> Load(const std::string& ResourceID, Args && ...args);
 	
-	template<typename T>
-	ResourceHandle<T> LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data);
+	template<typename T, typename ...Args>
+	ResourceHandle<T> LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, Args && ...args);
 
 	template<typename T>
 	bool Reprocess(const std::string& ID, const ReprocessOptions& Options);
@@ -51,8 +51,8 @@ public:
 	ResourceHandle<T> PrepareAsync(const std::string& ResourceID, Args && ...args);
 	
 	// Schedule a CPU‑only load from raw bytes on a background thread.
-	template<typename T>
-	ResourceHandle<T> PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data);
+	template<typename T, typename ...Args>
+	ResourceHandle<T> PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, Args && ...args);
 	
 	void Release(const std::string& ResourceID, const std::type_index& ResourceType);
 
@@ -129,8 +129,8 @@ ResourceHandle<T> ResourceManager::Load(const std::string& ResourceID, Args&&...
 	return ResourceHandle<T>(Resource);
 }
 
-template<typename T>
-ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data)
+template<typename T, typename... Args>
+ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, Args&&... args)
 {
 	static_assert(std::is_base_of_v<ResourceBase, T>, "T must derive from ResourceBase");
 
@@ -144,7 +144,7 @@ ResourceHandle<T> ResourceManager::LoadFromMemory(const std::string& ResourceID,
 	}
 
 	// Create new resource
-	auto Resource = std::make_shared<T>(ResourceID);
+	auto Resource = std::make_shared<T>(ResourceID, std::forward<Args>(args)...);
 	if (!Resource->LoadFromMemory(Data)) 
 	{
 
@@ -189,7 +189,7 @@ ResourceHandle<T> ResourceManager::PrepareAsync(const std::string& ResourceID, A
 	}
 
 	// Create the entry now, but don't load yet.
-	auto Resource = std::make_shared<T>(ResourceID);
+	auto Resource = std::make_shared<T>(ResourceID, std::forward<Args>(args)...);
 	TypeResources[ResourceID] = { Resource, 1 };
 
 	std::string FilePath = GetResourceFilePath<T>(ResourceID);
@@ -207,8 +207,8 @@ ResourceHandle<T> ResourceManager::PrepareAsync(const std::string& ResourceID, A
 	return ResourceHandle<T>(Resource);
 }
 
-template<typename T>
-ResourceHandle<T> ResourceManager::PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data)
+template<typename T, typename... Args>
+ResourceHandle<T> ResourceManager::PrepareAsyncFromMemory(const std::string& ResourceID, const std::vector<uint8_t>& Data, Args&&... args)
 {
 	static_assert(std::is_base_of_v<ResourceBase, T>,
 		"T must derive from ResourceBase");
@@ -222,7 +222,7 @@ ResourceHandle<T> ResourceManager::PrepareAsyncFromMemory(const std::string& Res
 		return ResourceHandle<T>(std::static_pointer_cast<T>(It->second.Resource));
 	}
 
-	auto Resource = std::make_shared<T>(ResourceID);
+	auto Resource = std::make_shared<T>(ResourceID, std::forward<Args>(args)...);
 	TypeResources[ResourceID] = { Resource, 1 };
 
 	TaskSchedulerRef.RunAsync([Resource, Data]()

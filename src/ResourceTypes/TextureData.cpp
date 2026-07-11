@@ -36,7 +36,10 @@ bool TextureData::LoadResourceFromMemory(const std::vector<uint8_t>& Data)
 void TextureData::UnloadResource()
 {
 	Pixels.clear();
-	Info = TextureInfo();
+	Info.Width = 0;
+	Info.Height = 0;
+	Info.Channels = 0;
+	// ColorSpace and Sampler intentionally preserved since those are import-time decisions
 }
 
 bool TextureData::DecodePixels(const uint8_t* Data, int DataSize)

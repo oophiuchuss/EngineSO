@@ -7,6 +7,18 @@ struct VSInput
     [[vk::location(0)]] float3 inPosition;
     [[vk::location(1)]] float2 inUV;
     [[vk::location(2)]] float3 inNormal;
+    [[vk::location(3)]] float4 inTangent; // xyz = direction, w = handedness sign
+};
+
+struct VSOutput
+{
+    [[vk::location(0)]] float2 outUV;
+    [[vk::location(1)]] float3 outNormal;
+    [[vk::location(2)]] float3 outWorldPos;
+    [[vk::location(3)]] nointerpolation uint outMaterialIndex;
+    [[vk::location(4)]] float4 outTangent; // world-space xyz, w = handedness sign
+
+    float4 position : SV_Position;
 };
 
 // Set 0, Binding 0 — Camera UBO
@@ -27,16 +39,6 @@ StructuredBuffer<MaterialData> gMaterials;
 [[vk::push_constant]]
 PushConstants Push;
 
-struct VSOutput
-{
-    [[vk::location(0)]] float2 outUV;
-    [[vk::location(1)]] float3 outNormal;
-    [[vk::location(2)]] float3 outWorldPos;
-    [[vk::location(3)]] nointerpolation uint outMaterialIndex;
-
-    float4 position : SV_Position;
-};
-
 [shader("vertex")]
 VSOutput main(VSInput input)
 {
@@ -55,6 +57,13 @@ VSOutput main(VSInput input)
     // Only upper-left 3x3 of NormalMatrix is used — avoids mat3 alignment issues on CPU
     float3x3 NormalMat = (float3x3)object.NormalMatrix;
     output.outNormal = normalize(mul(NormalMat, input.inNormal));
+
+    // Tangent transforms like a regular direction vector (model matrix upper-left 3x3,
+    // NOT the inverse-transpose normal matrix — tangents follow the surface, not its normal
+    // transform rule). Handedness sign passes through unchanged.
+    float3x3 ModelMat3 = (float3x3)object.ModelMatrix;
+    float3 WorldTangent = normalize(mul(ModelMat3, input.inTangent.xyz));
+    output.outTangent = float4(WorldTangent, input.inTangent.w);
 
     // Pass material index to fragment shader
     output.outMaterialIndex = object.MaterialIndex;

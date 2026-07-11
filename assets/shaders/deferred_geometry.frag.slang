@@ -6,6 +6,7 @@ struct PSInput
     [[vk::location(1)]] float3 inNormal;
     [[vk::location(2)]] float3 inWorldPos;
     [[vk::location(3)]] nointerpolation uint inMaterialIndex;
+    [[vk::location(4)]] float4 inTangent; // world-space xyz, w = handedness sign
 };
 
 struct PSOutput
@@ -23,6 +24,23 @@ Sampler2D TextureHeap[];
 // Set 2, Binding 1 — Material data
 [[vk::binding(1, 2)]]
 StructuredBuffer<MaterialData> gMaterials;
+
+float3 ApplyNormalMap(float3 GeoNormal, float4 Tangent, float3 SampledNormalTS)
+{
+    // Reconstruct orthonormal TBN. Re-orthogonalize tangent against normal
+    // (Gram-Schmidt) since interpolation across a triangle can leave them
+    // not-quite-perpendicular even if they started that way per-vertex.
+    float3 N = normalize(GeoNormal);
+    float3 T = normalize(Tangent.xyz - N * dot(N, Tangent.xyz));
+    float3 B = cross(N, T) * Tangent.w; // handedness sign flips B for mirrored UVs
+
+    float3x3 TBN = float3x3(T, B, N);
+
+    // Normal map texel is [0,1]-encoded; remap to [-1,1] tangent-space direction
+    float3 TangentSpaceNormal = SampledNormalTS * 2.0 - 1.0;
+
+    return normalize(mul(TangentSpaceNormal, TBN));
+}
 
 [shader("fragment")]
 PSOutput main(PSInput input)
@@ -56,9 +74,16 @@ PSOutput main(PSInput input)
     float3 Emissive = TextureHeap[NonUniformResourceIndex(material.EmissiveIndex)]
                           .Sample(input.inUV).rgb * material.EmissiveStrength;
 
+    // Normal mapping — sample and apply via TBN, falling back cleanly to the
+    // geometric vertex normal when a material has no normal texture 
+    float3 SampledNormalTS = TextureHeap[NonUniformResourceIndex(material.NormalIndex)]
+                                  .Sample(input.inUV).rgb;
+
+    float3 FinalNormal = ApplyNormalMap(normalize(input.inNormal), input.inTangent, SampledNormalTS);
+
     // Write G‑buffer attachments
     output.Albedo     = float4(Albedo.rgb, Occlusion);          // pack occlusion into alpha
-    output.Normal     = float4(normalize(input.inNormal), 0.0); // world‑space normal
+    output.Normal     = float4(FinalNormal, 0.0);               // world‑space normal
     output.MetalRough = float4(Metallic, Roughness, 0.0, 0.0);  // metallic, roughness
     output.Emissive   = float4(Emissive, 0.0);                  // HDR emissive
 

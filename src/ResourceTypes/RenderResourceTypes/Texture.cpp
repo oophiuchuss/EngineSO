@@ -20,17 +20,22 @@ Texture::Texture(vk::raii::Image&& InImage,
 
 std::unique_ptr<Texture> Texture::CreateFromTextureData(const vk::raii::Device& Device, VulkanUploader& Uploader, const TextureData& Data)
 {
+	// TODO: potentially support other formats in the future
+    vk::Format Format = (Data.GetColorSpace() == TextureColorSpace::SRGB)
+        ? vk::Format::eR8G8B8A8Srgb
+        : vk::Format::eR8G8B8A8Unorm;
+
     auto Result = Uploader.UploadImage(
         Data.GetPixels().data(),
         Data.GetWidth(),
         Data.GetHeight(),
-        vk::Format::eR8G8B8A8Unorm);
+        Format);
 
     vk::ImageViewCreateInfo ViewInfo(
         {},
         *Result.Image,
         vk::ImageViewType::e2D,
-        vk::Format::eR8G8B8A8Unorm,
+        Format,   // must match the image's actual format
         {},
         { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
 
@@ -53,11 +58,16 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
 
     for (const TextureData* Data : DataList)
     {
+        // TODO: potentially support other formats in the future
+        vk::Format Format = (Data->GetColorSpace() == TextureColorSpace::SRGB)
+            ? vk::Format::eR8G8B8A8Srgb
+            : vk::Format::eR8G8B8A8Unorm;
+
         VulkanUploader::ImageUploadInfo Info;
         Info.PixelData = Data->GetPixels().data();
         Info.Width = Data->GetWidth();
         Info.Height = Data->GetHeight();
-        Info.Format = vk::Format::eR8G8B8A8Unorm; // TODO: respect color space later
+        Info.Format = Format;
         UploadInfos.push_back(Info);
     }
 
@@ -66,13 +76,16 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
         Uploader.UploadImageBatch(UploadInfos);
 
     // Wrap each uploaded image into a Texture (creates the ImageView)
-    for (auto& Result : UploadResults)
+    for (size_t i = 0; i < UploadResults.size(); i++)
     {
+		auto& Result = UploadResults[i];
+		const auto& UploadInfo = UploadInfos[i];
+
         vk::ImageViewCreateInfo ViewInfo(
             {},
             *Result.Image,
             vk::ImageViewType::e2D,
-            vk::Format::eR8G8B8A8Unorm,
+            UploadInfo.Format,
             {},
             { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
 

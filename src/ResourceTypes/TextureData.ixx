@@ -27,7 +27,15 @@ export struct TextureInfo
 export class TextureData : public ResourceBase
 {
 public:
-	explicit TextureData(const std::string& ID) : ResourceBase(ID) {};
+	explicit TextureData(
+		const std::string& ID,
+		TextureColorSpace InColorSpace = TextureColorSpace::SRGB,
+		SamplerDesc InSampler = PresetSamplerDesc::SamplerLinearRepeat):
+		ResourceBase(ID)
+	{
+		Info.ColorSpace = InColorSpace;
+		Info.Sampler = InSampler;
+	}
 
 	// Accessors
 	inline const std::vector<uint8_t>& GetPixels()   const { return Pixels; }

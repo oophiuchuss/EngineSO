@@ -436,22 +436,39 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 {
 	std::cout << "[GltfSceneData] Registering " << RawTextures.size() << " textures (parallel decode)......\n";
 
+	// Scan RawMaterials to determine each texture's intended color space
+	std::vector<TextureColorSpace> TextureColorSpaces(RawTextures.size(), TextureColorSpace::Linear);
+	for (const auto& Mat : RawMaterials)
+	{
+		if (Mat.AlbedoTextureIndex >= 0 && Mat.AlbedoTextureIndex < static_cast<int>(TextureColorSpaces.size()))
+		{
+			TextureColorSpaces[Mat.AlbedoTextureIndex] = TextureColorSpace::SRGB;
+		}
+		if (Mat.EmissiveTextureIndex >= 0 && Mat.EmissiveTextureIndex < static_cast<int>(TextureColorSpaces.size()))
+		{
+			TextureColorSpaces[Mat.EmissiveTextureIndex] = TextureColorSpace::SRGB;
+		}
+		// NormalTextureIndex, MetallicRoughnessTextureIndex, OcclusionTextureIndex
+		// are data textures — left as Linear (the vector's default), not touched here.
+	}
+
 	std::vector<std::string> TextureIDs;
 	TextureIDs.reserve(RawTextures.size());
 
 	for (size_t i = 0; i < RawTextures.size(); i++)
 	{
 		auto& Raw = RawTextures[i];
+		TextureColorSpace CS = TextureColorSpaces[i];
 
 		if (Raw.bIsEmbedded)
 		{
 			std::string TexID = GetResourceID() + "_tex_" + std::to_string(i);
-			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData);
+			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData, CS);
 			TextureIDs.push_back(TexID);
 		}
 		else
 		{
-			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath);
+			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath, CS);
 			TextureIDs.push_back(Raw.FilePath);
 		}
 	}

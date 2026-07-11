@@ -8,6 +8,7 @@ struct PSInput
     [[vk::location(1)]] float3 inNormal;
     [[vk::location(2)]] float3 inWorldPos;
     [[vk::location(3)]] nointerpolation uint inMaterialIndex;
+    [[vk::location(4)]] float4 inTangent; // world-space xyz, w = handedness sign
 };
 
 struct PSOutput
@@ -91,6 +92,23 @@ float3 ApplySpotLight(GPULightData Light, float3 WorldPos, float3 Normal, float3
     return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness, ViewDir, Light.Color_Intensity.rgb, Light.Color_Intensity.a, NdotL) * DistanceAtten * ConeAtten;
 }
 
+float3 ApplyNormalMap(float3 GeoNormal, float4 Tangent, float3 SampledNormalTS)
+{
+    // Reconstruct orthonormal TBN. Re-orthogonalize tangent against normal
+    // (Gram-Schmidt) since interpolation across a triangle can leave them
+    // not-quite-perpendicular even if they started that way per-vertex.
+    float3 N = normalize(GeoNormal);
+    float3 T = normalize(Tangent.xyz - N * dot(N, Tangent.xyz));
+    float3 B = cross(N, T) * Tangent.w; // handedness sign flips B for mirrored UVs
+
+    float3x3 TBN = float3x3(T, B, N);
+
+    // Normal map texel is [0,1]-encoded; remap to [-1,1] tangent-space direction
+    float3 TangentSpaceNormal = SampledNormalTS * 2.0 - 1.0;
+
+    return normalize(mul(TangentSpaceNormal, TBN));
+}
+
 [shader("fragment")]
 PSOutput main(PSInput input)
 {
@@ -105,7 +123,11 @@ PSOutput main(PSInput input)
     float Occlusion = TextureHeap[NonUniformResourceIndex(material.OcclusionIndex)].Sample(input.inUV).r;
     float3 Emissive = TextureHeap[NonUniformResourceIndex(material.EmissiveIndex)].Sample(input.inUV).rgb * material.EmissiveStrength;
 
-    float3 Normal = normalize(input.inNormal);
+    // Normal mapping — sample and apply via TBN, falling back cleanly to the
+    // geometric vertex normal when a material has no normal texture 
+    float3 SampledNormalTS = TextureHeap[NonUniformResourceIndex(material.NormalIndex)].Sample(input.inUV).rgb;
+    float3 Normal = ApplyNormalMap(normalize(input.inNormal), input.inTangent, SampledNormalTS);
+
     float3 ViewDir = normalize(uCamera.CameraPos.xyz - input.inWorldPos);
 
     float3 LitColor = float3(0.0);
