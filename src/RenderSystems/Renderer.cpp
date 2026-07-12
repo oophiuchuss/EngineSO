@@ -98,6 +98,7 @@ Renderer::Renderer(
 		GraphicsQueue);
 	
 	DescriptorHeapInstance = std::make_unique<DescriptorHeap>(
+		PhysicalDevice,
 		Device,
 		1024,						// TODO: Max textures hard-coded for now
 		*UploaderInstance);	
@@ -655,8 +656,10 @@ void Renderer::CreateLogicalDevice()
 		QueueCreateInfos.push_back(TransferQueueCreateInfo);
 	}
 
-	vk::DeviceCreateInfo DeviceCreateInfo({}, QueueCreateInfos, {}, DeviceExtensions);
+	vk::PhysicalDeviceFeatures EnabledFeatures{};
+	EnabledFeatures.samplerAnisotropy = VK_TRUE;
 
+	vk::DeviceCreateInfo DeviceCreateInfo({}, QueueCreateInfos, {}, DeviceExtensions, &EnabledFeatures);
 
 	// Enable dynamic rendering feature
 	vk::PhysicalDeviceDynamicRenderingFeatures DynamicRenderingFeature;
@@ -1129,6 +1132,12 @@ int Renderer::ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk:
 {
 	auto Props = Dev.getProperties();
 	auto Features = Dev.getFeatures();
+
+	// Hard requirement — a device without this feature can't run the engine's texture pipeline correctly (anisotropic filtering assumed available).
+	if (!Features.samplerAnisotropy)
+	{
+		return -1; // disqualify this device entirely, same effect as missing graphics/present support
+	}
 
 	// Memory size (device local)
 	auto MemProps = Dev.getMemoryProperties();

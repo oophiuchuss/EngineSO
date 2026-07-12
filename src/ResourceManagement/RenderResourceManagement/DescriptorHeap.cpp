@@ -7,9 +7,11 @@ module DescriptorHeap;
 import VulkanUploader;
 
 DescriptorHeap::DescriptorHeap(
+	const vk::raii::PhysicalDevice& InPhysicalDevice,
 	const vk::raii::Device& InDevice,
 	uint32_t InMaxTextures,
 	VulkanUploader& InUploader) :
+	PhysicalDevice(InPhysicalDevice),
 	Device(InDevice),
 	MaxTextures(InMaxTextures),
 	Uploader(InUploader)
@@ -159,6 +161,10 @@ vk::raii::Sampler& DescriptorHeap::GetOrCreateSampler(const SamplerDesc& Desc)
 			return Sampler;
 	}
 
+	float ClampedMaxAniso = Desc.Anisotropy
+		? (std::min)(Desc.MaxAniso, PhysicalDevice.getProperties().limits.maxSamplerAnisotropy)
+		: 1.0f;
+
 	vk::SamplerCreateInfo SamplerInfo;
 	SamplerInfo
 		.setMagFilter(ToVkFilter(Desc.MagFilter))
@@ -169,7 +175,7 @@ vk::raii::Sampler& DescriptorHeap::GetOrCreateSampler(const SamplerDesc& Desc)
 		.setAddressModeW(ToVkAddressMode(Desc.AddressW))
 		.setMipLodBias(Desc.MipLodBias)
 		.setAnisotropyEnable(Desc.Anisotropy)
-		.setMaxAnisotropy(Desc.MaxAniso)
+		.setMaxAnisotropy(ClampedMaxAniso)
 		.setMinLod(Desc.MinLod)
 		.setMaxLod(Desc.MaxLod)
 		.setBorderColor(vk::BorderColor::eIntOpaqueBlack)

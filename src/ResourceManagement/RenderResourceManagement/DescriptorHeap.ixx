@@ -12,7 +12,7 @@ import VulkanUploader;
 export class DescriptorHeap
 {
 public:
-    DescriptorHeap(const vk::raii::Device& InDevice, uint32_t InMaxTextures, VulkanUploader& InUploader);
+    DescriptorHeap(const vk::raii::PhysicalDevice& InPhysicalDevice, const vk::raii::Device& InDevice, uint32_t InMaxTextures, VulkanUploader& InUploader);
     ~DescriptorHeap() = default;
 
     int AllocateSlot();
@@ -45,6 +45,7 @@ private:
         vk::raii::ImageView View = nullptr;
     };
 
+    const vk::raii::PhysicalDevice& PhysicalDevice;
     const vk::raii::Device& Device;
     uint32_t MaxTextures;
 

@@ -28,7 +28,7 @@ export namespace PresetSamplerDesc
     constexpr SamplerDesc SamplerLinearRepeat = {
         FilterMode::Linear, FilterMode::Linear, MipmapMode::Linear,
         WrapMode::Repeat, WrapMode::Repeat, WrapMode::Repeat,
-        0.0f, false, 1.0f, 0.0f, 1000.0f
+        0.0f, true, 16.0f, 0.0f, 1000.0f
     };
 
     constexpr SamplerDesc SamplerLinearClamp = {
