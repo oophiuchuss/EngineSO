@@ -37,7 +37,7 @@ std::unique_ptr<Texture> Texture::CreateFromTextureData(const vk::raii::Device& 
         vk::ImageViewType::e2D,
         Format,   // must match the image's actual format
         {},
-        { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
+        { vk::ImageAspectFlagBits::eColor, 0, Result.MipLevels, 0, 1 });
 
     vk::raii::ImageView View = Device.createImageView(ViewInfo);
 
@@ -87,7 +87,7 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
             vk::ImageViewType::e2D,
             UploadInfo.Format,
             {},
-            { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
+            { vk::ImageAspectFlagBits::eColor, 0, Result.MipLevels, 0, 1 });
 
         vk::raii::ImageView View = Device.createImageView(ViewInfo);
 

@@ -15,7 +15,8 @@ public:
 		const vk::raii::PhysicalDevice& PhysicalDevice,
 		uint32_t TransferQueueFamilyIndex,
 		uint32_t GraphicsQueueFamilyIndex,
-		const vk::raii::Queue& TransferQueue);
+		const vk::raii::Queue& TransferQueue,
+		const vk::raii::Queue& GraphicsQueue);
 
 	~VulkanUploader() = default;
 
@@ -34,6 +35,7 @@ public:
 	{
 		vk::raii::Image        Image;
 		vk::raii::DeviceMemory Memory;
+		uint32_t MipLevels;
 	};
 
 	// Descriptor for a single buffer in a batch upload
@@ -84,16 +86,23 @@ private:
 	// Image helpers
 	UploadImageResult CreateDeviceLocalImage(uint32_t Width, uint32_t Height, vk::Format Format);
 
+	void GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels);
+
 	// Submit a one‑time command buffer and wait for completion
 	void SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> RecordCommands);
+
+	// Submit a one‑time command buffer for graphics work and wait for completion
+	void SubmitGraphicsWork(std::function<void(vk::raii::CommandBuffer&)> RecordCommands);
 	
 	const vk::raii::Device& Device;
 	const vk::raii::PhysicalDevice& PhysicalDevice;
 	const vk::raii::Queue& TransferQueue;
+	const vk::raii::Queue& GraphicsQueue;
 	uint32_t TransferQueueFamilyIndex;
 	uint32_t GraphicsQueueFamilyIndex;
 	bool bSameQueueFamily;
 
 	vk::raii::CommandPool TransferCommandPool = nullptr;
+	vk::raii::CommandPool GraphicsCommandPool = nullptr;
 	vk::raii::Fence UploadFence = nullptr;
 };

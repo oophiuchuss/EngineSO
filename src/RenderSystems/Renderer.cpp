@@ -94,7 +94,8 @@ Renderer::Renderer(
 		PhysicalDevice,
 		TransferQueueFamilyIndex,
 		GraphicsQueueFamilyIndex,
-		TransferQueue);
+		TransferQueue,
+		GraphicsQueue);
 	
 	DescriptorHeapInstance = std::make_unique<DescriptorHeap>(
 		Device,

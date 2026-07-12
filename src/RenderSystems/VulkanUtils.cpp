@@ -262,17 +262,19 @@ void VulkanUtils::TransitionImageLayout(
     vk::PipelineStageFlags SrcStage,
     vk::PipelineStageFlags DstStage,
     vk::AccessFlags SrcAccess,
-    vk::AccessFlags DstAccess)
+    vk::AccessFlags DstAccess,
+    uint32_t BaseMipLevel /*= 0*/,
+    uint32_t LevelCount /*= 1*/)
 {
     // Configure image barrier strcture to coordinate memory access
 
     vk::ImageMemoryBarrier Barrier;
-    Barrier.setOldLayout(OldLayout)                         // Current resource layuout
-        .setNewLayout(NewLayout)                            // Final resource layuout
-        .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)    // No queue family transfer
+    Barrier.setOldLayout(OldLayout)                                         // Current resource layuout
+        .setNewLayout(NewLayout)                                            // Final resource layuout
+        .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)                    // No queue family transfer
         .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-        .setImage(Image)                                    // Target Image
-        .setSubresourceRange({ Aspect, 0, 1, 0, 1 })        // Full Image range
+        .setImage(Image)                                                    // Target Image
+        .setSubresourceRange({ Aspect, BaseMipLevel, LevelCount, 0, 1 })
         .setSrcAccessMask(SrcAccess)
         .setDstAccessMask(DstAccess);
 
@@ -282,4 +284,9 @@ void VulkanUtils::TransitionImageLayout(
         vk::DependencyFlagBits::eByRegion,  // Enable region-local optimization
         {}, {}, { Barrier }                 // Apply image barrier
     );
+}
+
+uint32_t VulkanUtils::ComputeMipLevels(uint32_t Width, uint32_t Height)
+{
+    return static_cast<uint32_t>(std::floor(std::log2((std::max)(Width, Height)))) + 1;
 }

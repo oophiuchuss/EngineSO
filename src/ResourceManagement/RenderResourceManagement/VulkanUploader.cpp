@@ -12,10 +12,12 @@ VulkanUploader::VulkanUploader(
 	const vk::raii::PhysicalDevice& PhysicalDevice, 
 	uint32_t TransferQueueFamilyIndex, 
 	uint32_t GraphicsQueueFamilyIndex, 
-	const vk::raii::Queue& TransferQueue) : 
+	const vk::raii::Queue& TransferQueue,
+	const vk::raii::Queue& GraphicsQueue) :
 	Device(Device),
 	PhysicalDevice(PhysicalDevice),
 	TransferQueue(TransferQueue),
+	GraphicsQueue(GraphicsQueue),
 	TransferQueueFamilyIndex(TransferQueueFamilyIndex),
 	GraphicsQueueFamilyIndex(GraphicsQueueFamilyIndex),
 	bSameQueueFamily(TransferQueueFamilyIndex == GraphicsQueueFamilyIndex)
@@ -27,6 +29,14 @@ VulkanUploader::VulkanUploader(
 		TransferQueueFamilyIndex);
 
 	TransferCommandPool = Device.createCommandPool(PoolInfo);
+
+	// Create command pool for graphics operations
+	// eTransient hints driver these buffers are short-lived
+	vk::CommandPoolCreateInfo GraphicsPoolInfo(
+		vk::CommandPoolCreateFlagBits::eTransient,
+		GraphicsQueueFamilyIndex);
+
+	GraphicsCommandPool = Device.createCommandPool(GraphicsPoolInfo);
 
 	// Reusable fence for synchronizing uploads
 	UploadFence = Device.createFence(vk::FenceCreateFlags{});
@@ -63,15 +73,15 @@ VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelD
 	// Create the target device‑local image
 	UploadImageResult Result = CreateDeviceLocalImage(Width, Height, Format);
 
-	// Record and submit the copy + layout transitions
 	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
 		{
-			// First transition - from undefined to transfer dst (transfer queue compatible)
 			VulkanUtils::TransitionImageLayout(
 				Cmd, *Result.Image,
 				vk::ImageAspectFlagBits::eColor,
-				vk::ImageLayout::eUndefined,
-				vk::ImageLayout::eTransferDstOptimal);
+				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+				vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
+				vk::AccessFlagBits::eNone, vk::AccessFlagBits::eTransferWrite,
+				0, 1);
 
 			vk::BufferImageCopy Region(
 				0, 0, 0,
@@ -80,19 +90,15 @@ VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelD
 				{ Width, Height, 1 });
 
 			Cmd.copyBufferToImage(
-				*Staging.Buffer, *Result.Image,
-				vk::ImageLayout::eTransferDstOptimal, Region);
-
-			// Second transition - explicit, transfer queue doesn't support eFragmentShader
-			VulkanUtils::TransitionImageLayout(
-				Cmd, *Result.Image,
-				vk::ImageAspectFlagBits::eColor,
+				*Staging.Buffer,
+				*Result.Image,
 				vk::ImageLayout::eTransferDstOptimal,
-				vk::ImageLayout::eShaderReadOnlyOptimal,
-				vk::PipelineStageFlagBits::eTransfer,
-				vk::PipelineStageFlagBits::eBottomOfPipe,
-				vk::AccessFlagBits::eTransferWrite,
-				vk::AccessFlagBits::eNone);
+				Region);
+		});
+
+	SubmitGraphicsWork([&](vk::raii::CommandBuffer& Cmd)
+		{
+			GenerateMipChain(Cmd, *Result.Image, Width, Height, Result.MipLevels);
 		});
 
 	return Result;
@@ -145,7 +151,6 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format));
 	}
 
-	// Record all copies into one command buffer, submit once, wait once.
 	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
 		{
 			for (size_t i = 0; i < Images.size(); ++i)
@@ -153,8 +158,10 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 				VulkanUtils::TransitionImageLayout(
 					Cmd, *Results[i].Image,
 					vk::ImageAspectFlagBits::eColor,
-					vk::ImageLayout::eUndefined,
-					vk::ImageLayout::eTransferDstOptimal);
+					vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+					vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
+					vk::AccessFlagBits::eNone, vk::AccessFlagBits::eTransferWrite,
+					0, 1);
 
 				vk::BufferImageCopy Region(
 					0, 0, 0,
@@ -167,16 +174,14 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 					*Results[i].Image,
 					vk::ImageLayout::eTransferDstOptimal,
 					Region);
+			}
+		});
 
-				VulkanUtils::TransitionImageLayout(
-					Cmd, *Results[i].Image,
-					vk::ImageAspectFlagBits::eColor,
-					vk::ImageLayout::eTransferDstOptimal,
-					vk::ImageLayout::eShaderReadOnlyOptimal,
-					vk::PipelineStageFlagBits::eTransfer,
-					vk::PipelineStageFlagBits::eBottomOfPipe,
-					vk::AccessFlagBits::eTransferWrite,
-					vk::AccessFlagBits::eNone);
+	SubmitGraphicsWork([&](vk::raii::CommandBuffer& Cmd)
+		{
+			for (size_t i = 0; i < Images.size(); ++i)
+			{
+				GenerateMipChain(Cmd, *Results[i].Image, Images[i].Width, Images[i].Height, Results[i].MipLevels);
 			}
 		});
 
@@ -253,14 +258,23 @@ VulkanUploader::UploadBufferResult VulkanUploader::CreateDeviceLocalBuffer(vk::D
 
 VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(uint32_t Width, uint32_t Height, vk::Format Format)
 {
+	uint32_t MipLevels = VulkanUtils::ComputeMipLevels(Width, Height);
+
+	std::array<uint32_t, 2> QueueFamilies = { TransferQueueFamilyIndex, GraphicsQueueFamilyIndex };
+	bool bNeedsConcurrent = !bSameQueueFamily;
+
 	vk::ImageCreateInfo ImageInfo(
 		{}, vk::ImageType::e2D, Format,
 		vk::Extent3D(Width, Height, 1),
-		1, 1,
+		MipLevels, 1,
 		vk::SampleCountFlagBits::e1,
 		vk::ImageTiling::eOptimal,
-		vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-		vk::SharingMode::eExclusive);
+		vk::ImageUsageFlagBits::eTransferDst |
+		vk::ImageUsageFlagBits::eTransferSrc |	// for generating mipmaps
+		vk::ImageUsageFlagBits::eSampled,
+		bNeedsConcurrent ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+		bNeedsConcurrent ? static_cast<uint32_t>(QueueFamilies.size()) : 0,
+		bNeedsConcurrent ? QueueFamilies.data() : nullptr);
 
 	vk::raii::Image Image = Device.createImage(ImageInfo);
 	auto MemReqs = Image.getMemoryRequirements();
@@ -275,9 +289,67 @@ VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(uint32_
 
 	Image.bindMemory(*Memory, 0);
 
-	return { std::move(Image), std::move(Memory) };
+	return { std::move(Image), std::move(Memory), MipLevels };
 }
 
+void VulkanUploader::GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels)
+{
+	int32_t MipWidth = static_cast<int32_t>(Width);
+	int32_t MipHeight = static_cast<int32_t>(Height);
+
+	for (uint32_t Level = 1; Level < MipLevels; ++Level)
+	{
+		VulkanUtils::TransitionImageLayout(
+			Cmd, Image,
+			vk::ImageAspectFlagBits::eColor,
+			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal,
+			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer,
+			vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferRead,
+			Level - 1, 1);
+
+		VulkanUtils::TransitionImageLayout(
+			Cmd, Image, vk::ImageAspectFlagBits::eColor,
+			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+			vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
+			vk::AccessFlagBits::eNone, vk::AccessFlagBits::eTransferWrite,
+			Level, 1);
+
+		int32_t NextWidth = (std::max)(MipWidth / 2, 1);
+		int32_t NextHeight = (std::max)(MipHeight / 2, 1);
+
+		vk::ImageBlit Blit;
+		Blit.srcSubresource = { vk::ImageAspectFlagBits::eColor, Level - 1, 0, 1 };
+		Blit.srcOffsets[0] = vk::Offset3D(0, 0, 0);
+		Blit.srcOffsets[1] = vk::Offset3D(MipWidth, MipHeight, 1);
+		Blit.dstSubresource = { vk::ImageAspectFlagBits::eColor, Level, 0, 1 };
+		Blit.dstOffsets[0] = vk::Offset3D(0, 0, 0);
+		Blit.dstOffsets[1] = vk::Offset3D(NextWidth, NextHeight, 1);
+
+		Cmd.blitImage(
+			Image, vk::ImageLayout::eTransferSrcOptimal,
+			Image, vk::ImageLayout::eTransferDstOptimal,
+			Blit, vk::Filter::eLinear);
+
+		VulkanUtils::TransitionImageLayout(
+			Cmd, Image,
+			vk::ImageAspectFlagBits::eColor,
+			vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eBottomOfPipe,
+			vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eNone,
+			Level - 1, 1);
+
+		MipWidth = NextWidth;
+		MipHeight = NextHeight;
+	}
+
+	// Last level was only ever a blit destination, never read from — transition separately.
+	VulkanUtils::TransitionImageLayout(
+		Cmd, Image, vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eBottomOfPipe,
+		vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eNone,
+		MipLevels - 1, 1);
+}
 
 void VulkanUploader::SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> RecordCommands)
 {
@@ -313,7 +385,6 @@ void VulkanUploader::SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> Re
 	TransferQueue.submit(SubmitInfo, *UploadFence);
 
 	// Wait for transfer to complete before returning
-	// TODO: maybe to batch multiple uploads together and wait on a single fence later
 	auto WaitResult = Device.waitForFences(*UploadFence, VK_TRUE, UINT64_MAX);
 
 	if (WaitResult != vk::Result::eSuccess)
@@ -322,4 +393,39 @@ void VulkanUploader::SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> Re
 	}
 
 	// CmdBuffers goes out of scope here — RAII frees it automatically
+}
+
+void VulkanUploader::SubmitGraphicsWork(std::function<void(vk::raii::CommandBuffer&)> RecordCommands)
+{
+	// Allocate temporary command buffer for this work
+	vk::CommandBufferAllocateInfo AllocInfo(
+		*GraphicsCommandPool,
+		vk::CommandBufferLevel::ePrimary,
+		1);
+
+	auto CmdBuffers = Device.allocateCommandBuffers(AllocInfo);
+	auto& Cmd = CmdBuffers.front();
+
+	// Record graphics commands
+	Cmd.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+	RecordCommands(Cmd);
+
+	Cmd.end();
+
+	vk::SubmitInfo SubmitInfo;
+	SubmitInfo.setCommandBufferCount(1);
+	SubmitInfo.setPCommandBuffers(&*Cmd);
+
+	// Reset fence before using
+	Device.resetFences(*UploadFence);
+
+	GraphicsQueue.submit(SubmitInfo, *UploadFence);
+
+	// Wait for graphics work to complete before returning
+	auto WaitResult = Device.waitForFences(*UploadFence, VK_TRUE, UINT64_MAX);
+	if (WaitResult != vk::Result::eSuccess)
+	{
+		throw std::runtime_error("Failed to wait for graphics upload fence");
+	}
 }

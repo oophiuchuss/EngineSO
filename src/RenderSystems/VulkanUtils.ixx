@@ -31,5 +31,11 @@ export namespace VulkanUtils
 		vk::PipelineStageFlags SrcStage,
 		vk::PipelineStageFlags DstStage,
 		vk::AccessFlags SrcAccess,
-		vk::AccessFlags DstAccess);
+		vk::AccessFlags DstAccess,
+		uint32_t BaseMipLevel = 0,
+		uint32_t LevelCount = 1);
+
+	uint32_t ComputeMipLevels(
+		uint32_t Width,
+		uint32_t Height);
 }
