@@ -67,8 +67,9 @@ float3 ComputePBRLighting(
     float3 F0   = lerp(float3(0.04), Albedo, Metallic);
     float  NdotV = max(dot(Normal, ViewDir),  0.0);
     float  NdotH = max(dot(Normal, HalfVec),  0.0);
+    float  VdotH = max(dot(ViewDir, HalfVec), 0.0);
 
-    float3 F = F0 + (1.0 - F0) * pow(1.0 - NdotH, 5.0);
+    float3 F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
 
     float Alpha  = Roughness * Roughness;
     float Alpha2 = Alpha * Alpha;

@@ -2,6 +2,8 @@
 #include <iostream>
 #include <vulkan/vulkan_raii.hpp>
 #include <glm/glm.hpp>
+#include <glm/ext/quaternion_trigonometric.hpp>
+#include <glm/gtc/quaternion.hpp>   // for quaternion multiplication and angleAxis
 
 import VulkanEngine;
 import HotReloadResourceManager;
@@ -17,6 +19,7 @@ import Material;
 import FlyCameraControllerComponent;
 import ResourceHandle;
 import GltfSceneData;
+import LightComponentBase;
 
 int main() {
     VulkanEngine Engine;
@@ -49,6 +52,31 @@ int main() {
 
                 Engine.GetResourceManager()->Reprocess<MeshData>(Mesh1ID, Options);
                 Engine.GetResourceManager()->Reprocess<MeshData>(Mesh2ID, Options);
+
+				// Collect light data from scene
+				for (Entity* E : Engine.GetMainScene()->GetAllEntities())
+				{
+					auto* TC = E->GetComponent<TransformComponent>();
+					if (!TC)
+					{
+						continue;
+					}
+
+					auto LightComponents = E->GetComponentsOfBaseType<DirectionalLightComponent>();
+
+                    if (LightComponents.size() > 0)
+                    {
+                       
+                        glm::quat CurrentRot = TC->GetWorldRotation();
+
+                        // Build a 90‑degree yaw quaternion (rotation around world Y)
+                        glm::quat YawDelta = glm::angleAxis(glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+                        // Combine: apply yaw to the current rotation
+                        TC->SetRotation(YawDelta * CurrentRot);
+
+                    }
+				}
             }
 
             /*auto SceneLightsDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("pkg_d_10k_candles/NewSponza_4_Combined_glTF.gltf", *Engine.GetResourceManager());
