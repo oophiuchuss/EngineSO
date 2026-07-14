@@ -509,6 +509,7 @@ std::vector<std::string> GltfSceneData::RegisterAllMaterials(const std::vector<s
 		MatProperties.EmissiveStrength = glm::length(Raw.EmissiveFactor);
 		MatProperties.AlphaMode = Raw.Mode;
 		MatProperties.AlphaCutoff = Raw.AlphaCutoff;
+		MatProperties.NormalScale = Raw.NormalScale;	
 
 		// All data including textures passed to constructor — immutable after
 		ResourceManagerRef.Load<Material>(

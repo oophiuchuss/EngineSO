@@ -46,7 +46,6 @@ public:
 		vk::BufferUsageFlags TargetUsage = {};
 	};
 
-	// Descriptor for a single image in a batch upload
 	struct ImageUploadInfo
 	{
 		const void* PixelData = nullptr;
@@ -66,6 +65,8 @@ public:
 		uint32_t Height, 
 		vk::Format Format);
 
+	UploadImageResult UploadImage(const ImageUploadInfo& Image);
+
 	// Upload many buffers in a single command buffer — one submit, one fence wait.
 	std::vector<UploadBufferResult> UploadBufferBatch(std::span<const BufferUploadInfo> Infos);
 
@@ -84,7 +85,11 @@ private:
 	UploadBufferResult CreateDeviceLocalBuffer(vk::DeviceSize Size, vk::BufferUsageFlags Usage);
 
 	// Image helpers
-	UploadImageResult CreateDeviceLocalImage(uint32_t Width, uint32_t Height, vk::Format Format);
+	UploadImageResult CreateDeviceLocalImage(
+		uint32_t Width,
+		uint32_t Height,
+		vk::Format Format,
+		uint32_t MipLevels);
 
 	void GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels);
 

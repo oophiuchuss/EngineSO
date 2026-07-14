@@ -38,12 +38,16 @@ float3 ComputePBRLighting(
     float3 LightDir, float3 Normal, float3 Albedo, float Metallic, float Roughness,
     float3 ViewDir, float3 LightColor, float LightIntensity, float NdotL)
 {
-    float3 HalfVec = normalize(LightDir + ViewDir);
+    float3 HalfVectorSum = LightDir + ViewDir;
+    float HalfVectorLengthSq = dot(HalfVectorSum, HalfVectorSum);
+    float HalfVectorValid = step(1.0e-6, HalfVectorLengthSq);
+    float3 HalfVec = HalfVectorSum * rsqrt(max(HalfVectorLengthSq, 1.0e-6));
     float3 F0 = lerp(float3(0.04), Albedo, Metallic);
     float NdotV = max(dot(Normal, ViewDir), 0.0);
-    float NdotH = max(dot(Normal, HalfVec), 0.0);
+    float NdotH = max(dot(Normal, HalfVec), 0.0) * HalfVectorValid;
+    float VdotH = sqrt(saturate(0.5 + 0.5 * dot(LightDir, ViewDir)));
 
-    float3 F = F0 + (1.0 - F0) * pow(1.0 - NdotH, 5.0);
+    float3 F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
 
     float Alpha = Roughness * Roughness;
     float Alpha2 = Alpha * Alpha;
@@ -92,7 +96,11 @@ float3 ApplySpotLight(GPULightData Light, float3 WorldPos, float3 Normal, float3
     return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness, ViewDir, Light.Color_Intensity.rgb, Light.Color_Intensity.a, NdotL) * DistanceAtten * ConeAtten;
 }
 
-float3 ApplyNormalMap(float3 GeoNormal, float4 Tangent, float3 SampledNormalTS)
+float3 ApplyNormalMap(
+    float3 GeoNormal,
+    float4 Tangent,
+    float3 SampledNormalTS,
+    float NormalScale)
 {
     // Reconstruct orthonormal TBN. Re-orthogonalize tangent against normal
     // (Gram-Schmidt) since interpolation across a triangle can leave them
@@ -103,8 +111,14 @@ float3 ApplyNormalMap(float3 GeoNormal, float4 Tangent, float3 SampledNormalTS)
 
     float3x3 TBN = float3x3(T, B, N);
 
-    // Normal map texel is [0,1]-encoded; remap to [-1,1] tangent-space direction
+    // Normal-map RGB is [0,1]-encoded; remap it to a signed tangent-space vector.
     float3 TangentSpaceNormal = SampledNormalTS * 2.0 - 1.0;
+
+    TangentSpaceNormal.xy *= NormalScale;
+    float ScaledLength = length(TangentSpaceNormal);
+    TangentSpaceNormal = ScaledLength > 0.0001
+        ? TangentSpaceNormal / ScaledLength
+        : float3(0.0, 0.0, 1.0);
 
     return normalize(mul(TangentSpaceNormal, TBN));
 }
@@ -126,7 +140,8 @@ PSOutput main(PSInput input)
     // Normal mapping — sample and apply via TBN, falling back cleanly to the
     // geometric vertex normal when a material has no normal texture 
     float3 SampledNormalTS = TextureHeap[NonUniformResourceIndex(material.NormalIndex)].Sample(input.inUV).rgb;
-    float3 Normal = ApplyNormalMap(normalize(input.inNormal), input.inTangent, SampledNormalTS);
+
+    float3 Normal = ApplyNormalMap(normalize(input.inNormal), input.inTangent, SampledNormalTS, material.NormalScale);
 
     float3 ViewDir = normalize(uCamera.CameraPos.xyz - input.inWorldPos);
 

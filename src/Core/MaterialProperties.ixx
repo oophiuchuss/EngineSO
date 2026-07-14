@@ -19,6 +19,7 @@ export struct MaterialProperties
     float     Metallic = 0.0f;
     float     Roughness = 1.0f;
     float     EmissiveStrength = 0.0f;
+    float     NormalScale = 1.0f;
 
     // Texture heap indices (defaults point to default textures)
     int AlbedoIndex = TextureSlots::DefaultWhite;

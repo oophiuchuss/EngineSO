@@ -62,12 +62,19 @@ float3 ComputePBRLighting(
     float     LightIntensity,
     float     NdotL)
 {
-    float3 HalfVec = normalize(LightDir + ViewDir);
+    // H = normalize(L + V) is undefined when the light and view directions
+    // nearly oppose each other. A raw normalize there magnifies tiny per-pixel
+    // differences into structured lighting artifacts. Keep H finite for the
+    // NDF and compute V.H analytically from the two unit directions.
+    float3 HalfVectorSum = LightDir + ViewDir;
+    float HalfVectorLengthSq = dot(HalfVectorSum, HalfVectorSum);
+    float HalfVectorValid = step(1.0e-6, HalfVectorLengthSq);
+    float3 HalfVec = HalfVectorSum * rsqrt(max(HalfVectorLengthSq, 1.0e-6));
 
     float3 F0   = lerp(float3(0.04), Albedo, Metallic);
     float  NdotV = max(dot(Normal, ViewDir),  0.0);
-    float  NdotH = max(dot(Normal, HalfVec),  0.0);
-    float  VdotH = max(dot(ViewDir, HalfVec), 0.0);
+    float  NdotH = max(dot(Normal, HalfVec), 0.0) * HalfVectorValid;
+    float  VdotH = sqrt(saturate(0.5 + 0.5 * dot(LightDir, ViewDir)));
 
     float3 F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
 

@@ -16,6 +16,7 @@ struct MaterialData
     float   Metallic;
     float   Roughness;
     float   EmissiveStrength;
+    float   NormalScale;
     uint    AlbedoIndex;
     uint    NormalIndex;
     uint    MetallicRoughnessIndex;
@@ -24,5 +25,4 @@ struct MaterialData
     uint    AlphaMode;         // 0=Opaque, 1=Mask, 2=Blend
     float   AlphaCutoff;
     uint    _Padding0;
-    uint    _Padding1;
 };

@@ -291,6 +291,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			MatData.Metallic = Props.Metallic;
 			MatData.Roughness = Props.Roughness;
 			MatData.EmissiveStrength = Props.EmissiveStrength;
+			MatData.NormalScale = Props.NormalScale;
 			MatData.AlbedoIndex = static_cast<uint32_t>(Props.AlbedoIndex);
 			MatData.NormalIndex = static_cast<uint32_t>(Props.NormalIndex);
 			MatData.MetallicRoughnessIndex = static_cast<uint32_t>(Props.MetallicRoughnessIndex);

@@ -66,42 +66,22 @@ VulkanUploader::UploadBufferResult VulkanUploader::UploadBuffer(const void* Data
 
 VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelData, uint32_t Width, uint32_t Height, vk::Format Format)
 {
-	// Stage the raw pixel data
-	vk::DeviceSize DataSize = Width * Height * 4;   // TODO: RGBA for now. Should be changed in the future
-	StagingBuffer Staging = CreateStagingBuffer(PixelData, DataSize);
+	ImageUploadInfo Info;
+	Info.PixelData = PixelData;
+	Info.Width = Width;
+	Info.Height = Height;
+	Info.Format = Format;
+	return UploadImage(Info);
+}
 
-	// Create the target device‑local image
-	UploadImageResult Result = CreateDeviceLocalImage(Width, Height, Format);
-
-	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
-		{
-			VulkanUtils::TransitionImageLayout(
-				Cmd, *Result.Image,
-				vk::ImageAspectFlagBits::eColor,
-				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
-				vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
-				vk::AccessFlagBits::eNone, vk::AccessFlagBits::eTransferWrite,
-				0, 1);
-
-			vk::BufferImageCopy Region(
-				0, 0, 0,
-				{ vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
-				{ 0, 0, 0 },
-				{ Width, Height, 1 });
-
-			Cmd.copyBufferToImage(
-				*Staging.Buffer,
-				*Result.Image,
-				vk::ImageLayout::eTransferDstOptimal,
-				Region);
-		});
-
-	SubmitGraphicsWork([&](vk::raii::CommandBuffer& Cmd)
-		{
-			GenerateMipChain(Cmd, *Result.Image, Width, Height, Result.MipLevels);
-		});
-
-	return Result;
+VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const ImageUploadInfo& Image)
+{
+	auto Results = UploadImageBatch(std::span<const ImageUploadInfo>(&Image, 1));
+	if (Results.empty())
+	{
+		throw std::runtime_error("UploadImageBatch returned no result for a single image");
+	}
+	return std::move(Results.front());
 }
 
 std::vector<VulkanUploader::UploadBufferResult> VulkanUploader::UploadBufferBatch(std::span<const BufferUploadInfo> Infos)
@@ -146,12 +126,18 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 
 	for (const auto& Info : Images)
 	{
-		vk::DeviceSize DataSize = Info.Width * Info.Height * 4;   // TODO: for now always RGBA
+		vk::DeviceSize DataSize = static_cast<vk::DeviceSize>(Info.Width) * Info.Height * 4;
+		uint32_t MipLevelCount = VulkanUtils::ComputeMipLevels(Info.Width, Info.Height);
+
 		Stagings.push_back(CreateStagingBuffer(Info.PixelData, DataSize));
-		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format));
+		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format, MipLevelCount));
 	}
 
-	SubmitCopy([&](vk::raii::CommandBuffer& Cmd)
+	// Image uploads stay on the graphics queue because mip generation and final
+	// shader-read transitions also execute there. This keeps the transfer writes
+	// and their consuming barriers on one queue and avoids an otherwise-required
+	// cross-queue semaphore dependency.
+	SubmitGraphicsWork([&](vk::raii::CommandBuffer& Cmd)
 		{
 			for (size_t i = 0; i < Images.size(); ++i)
 			{
@@ -165,9 +151,9 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 
 				vk::BufferImageCopy Region(
 					0, 0, 0,
-					{ vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
-					{ 0, 0, 0 },
-					{ Images[i].Width, Images[i].Height, 1 });
+					vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1),
+					vk::Offset3D(0, 0, 0),
+					vk::Extent3D(Images[i].Width, Images[i].Height, 1));
 
 				Cmd.copyBufferToImage(
 					*Stagings[i].Buffer,
@@ -189,6 +175,7 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 	// The created device‑local images are returned to the caller.
 	return Results;
 }
+
 VulkanUploader::StagingBuffer VulkanUploader::CreateStagingBuffer(const void* Data, vk::DeviceSize Size)
 {
 	vk::BufferCreateInfo BufferInfo(
@@ -256,10 +243,12 @@ VulkanUploader::UploadBufferResult VulkanUploader::CreateDeviceLocalBuffer(vk::D
 	return { std::move(Buffer), std::move(Memory) };
 }
 
-VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(uint32_t Width, uint32_t Height, vk::Format Format)
+VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(
+	uint32_t Width,
+	uint32_t Height,
+	vk::Format Format,
+	uint32_t MipLevels)
 {
-	uint32_t MipLevels = VulkanUtils::ComputeMipLevels(Width, Height);
-
 	std::array<uint32_t, 2> QueueFamilies = { TransferQueueFamilyIndex, GraphicsQueueFamilyIndex };
 	bool bNeedsConcurrent = !bSameQueueFamily;
 
@@ -334,8 +323,8 @@ void VulkanUploader::GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Im
 			Cmd, Image,
 			vk::ImageAspectFlagBits::eColor,
 			vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
-			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eBottomOfPipe,
-			vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eNone,
+			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader,
+			vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderRead,
 			Level - 1, 1);
 
 		MipWidth = NextWidth;
@@ -346,8 +335,8 @@ void VulkanUploader::GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Im
 	VulkanUtils::TransitionImageLayout(
 		Cmd, Image, vk::ImageAspectFlagBits::eColor,
 		vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
-		vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eBottomOfPipe,
-		vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eNone,
+		vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader,
+		vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
 		MipLevels - 1, 1);
 }
 

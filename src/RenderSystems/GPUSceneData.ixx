@@ -23,6 +23,7 @@ export struct MaterialData
     float Metallic = 0.0f;
     float Roughness = 1.0f;
     float EmissiveStrength = 0.0f;
+    float NormalScale = 1.0f;
     uint32_t AlbedoIndex = 0;
     uint32_t NormalIndex = 0;
     uint32_t MetallicRoughnessIndex = 0;
@@ -30,6 +31,7 @@ export struct MaterialData
     uint32_t EmissiveIndex = 0;
     uint32_t AlphaMode = 0;
     float AlphaCutoff = 0.5f;
-    uint32_t _Padding[2]; // pad 56 -> 64 bytes: std430 rounds struct-array stride 
+    uint32_t _Padding = 0; // pad 60 -> 64 bytes: std430 rounds struct-array stride
 };
-// Size: 56 + 8 = 64 bytes — matches std430 array stride exactly
+// Size: 60 + 4 = 64 bytes; matches the std430 array stride exactly.
+static_assert(sizeof(MaterialData) == 64);
