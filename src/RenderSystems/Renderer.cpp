@@ -326,7 +326,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 			if (Props.AlphaMode == AlphaMode::Blend)
 			{
-				CurrentFrameData.TranslucentRenderables.push_back(NewRenderable);
+				//CurrentFrameData.TranslucentRenderables.push_back(NewRenderable);
 			}
 			else
 			{
@@ -389,6 +389,8 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 				case LightType::Directional:
 					LightData.Direction = glm::vec4(Forward, 0.0f);
 					LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
+					Lights.push_back(LightData);
+
 					break;
 
 				case LightType::Point:
@@ -410,7 +412,6 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 					break;
 				}
 
-				Lights.push_back(LightData);
 			}
 		}
 

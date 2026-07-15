@@ -171,10 +171,17 @@ PSOutput main(PSInput input)
 
     // Sample G‑buffer
     float4 Albedo       = GBuffer_Albedo.Sample(input.uv);
-    float3 Normal       = normalize(GBuffer_Normal.Sample(input.uv).xyz);
+    float4 PackedNormal = GBuffer_Normal.Sample(input.uv);
     float4 MetalRough   = GBuffer_MetalRough.Sample(input.uv);
     float3 Emissive     = GBuffer_Emissive.Sample(input.uv).rgb;
     float  Depth        = Main_Depth.Sample(input.uv).r;
+
+    float3 Normal = normalize(PackedNormal.xyz);
+    float FilteredNormalLength = PackedNormal.a;
+
+    float NormalVariance = (1.0 - FilteredNormalLength) / max(FilteredNormalLength, 1.0e-4);
+
+    float VisibleVariance = saturate(NormalVariance * 8.0);
 
     float Metallic      = MetalRough.x;
     float Roughness     = max(MetalRough.y, 0.04);
@@ -213,7 +220,7 @@ PSOutput main(PSInput input)
     // Ambient term
     float3 Ambient = Albedo.rgb * 0.03 * Occlusion;
 
-    output.outColor = float4(LitColor + Emissive + Ambient, 1.0);
+    output.outColor = float4(VisibleVariance.xxx, 1.0);
 
     return output;
 }

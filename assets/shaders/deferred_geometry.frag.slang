@@ -84,18 +84,25 @@ PSOutput main(PSInput input)
     float3 Emissive = TextureHeap[NonUniformResourceIndex(material.EmissiveIndex)]
                           .Sample(input.inUV).rgb * material.EmissiveStrength;
 
+    uint NormalTextureIndex = NonUniformResourceIndex(material.NormalIndex);
+
     // Normal mapping — sample and apply via TBN, falling back cleanly to the
     // geometric vertex normal when a material has no normal texture 
-    float3 SampledNormalTS = TextureHeap[NonUniformResourceIndex(material.NormalIndex)]
-                                 .Sample(input.inUV).rgb;
+    float3 SampledNormalTS = TextureHeap[NormalTextureIndex].SampleLevel(input.inUV, 0.0).rgb;
 
-    float3 FinalNormal = ApplyNormalMap(normalize(input.inNormal), input.inTangent, SampledNormalTS, material.NormalScale);
+    float3 DecodedNormalTS = SampledNormalTS * 2.0 - 1.0;
+
+    float FilteredNormalLength = length(DecodedNormalTS);
+
+    float3 GeometricNormal = normalize(input.inNormal);
+
+    float3 FinalNormal = ApplyNormalMap(GeometricNormal, input.inTangent, SampledNormalTS, material.NormalScale);
 
     // Write G‑buffer attachments
-    output.Albedo     = float4(Albedo.rgb, Occlusion);          // pack occlusion into alpha
-    output.Normal     = float4(FinalNormal, 0.0);               // world-space normal
-    output.MetalRough = float4(Metallic, Roughness, 0.0, 0.0);  // metallic, roughness
-    output.Emissive   = float4(Emissive, 0.0);                  // HDR emissive
+    output.Albedo       = float4(Albedo.rgb, Occlusion);                        // pack occlusion into alpha
+    output.Normal       = float4(FinalNormal, saturate(FilteredNormalLength));  // world-space normal
+    output.MetalRough   = float4(Metallic, Roughness, 0.0, 0.0);                // metallic, roughness
+    output.Emissive     = float4(Emissive, 0.0);                                // HDR emissive
 
     return output;
 }
