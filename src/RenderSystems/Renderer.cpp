@@ -602,9 +602,13 @@ void Renderer::CreateLogicalDevice()
 	{
 		for (uint32_t i = 0; i < QueueFamilies.size(); i++)
 		{
-			if(QueueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics && PhysicalDevice.getSurfaceSupportKHR(i, *Surface))
+			const vk::QueueFlags RequiredFlags =
+				vk::QueueFlagBits::eGraphics |
+				vk::QueueFlagBits::eCompute;
+
+			if((QueueFamilies[i].queueFlags & RequiredFlags) == RequiredFlags && PhysicalDevice.getSurfaceSupportKHR(i, *Surface))
 			{
-				return i; // Found a queue family that supports both graphics and present
+				return i; // Found a queue family that supports both graphics, present and compute
 			}
 		}
 		return {};
@@ -635,7 +639,7 @@ void Renderer::CreateLogicalDevice()
 
 	if (!GraphicsAndPresentFamily.has_value())
 	{
-		throw std::runtime_error("Failed to find a queue family that supports both graphics and present");
+		throw std::runtime_error("Failed to find a queue family that supports both graphics, present and compute");
 	}
 
 	std::vector<const char*> DeviceExtensions = {

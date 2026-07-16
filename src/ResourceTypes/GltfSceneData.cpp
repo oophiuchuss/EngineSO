@@ -436,8 +436,9 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 {
 	std::cout << "[GltfSceneData] Registering " << RawTextures.size() << " textures (parallel decode)......\n";
 
-	// Scan RawMaterials to determine each texture's intended color space
+	// Scan RawMaterials to determine each texture's intended color space and mip filters
 	std::vector<TextureColorSpace> TextureColorSpaces(RawTextures.size(), TextureColorSpace::Linear);
+	std::vector<TextureMipFilter> TextureMipFilters(RawTextures.size(), TextureMipFilter::Standard);
 	for (const auto& Mat : RawMaterials)
 	{
 		if (Mat.AlbedoTextureIndex >= 0 && Mat.AlbedoTextureIndex < static_cast<int>(TextureColorSpaces.size()))
@@ -448,8 +449,11 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 		{
 			TextureColorSpaces[Mat.EmissiveTextureIndex] = TextureColorSpace::SRGB;
 		}
-		// NormalTextureIndex, MetallicRoughnessTextureIndex, OcclusionTextureIndex
-		// are data textures — left as Linear (the vector's default), not touched here.
+		if (Mat.NormalTextureIndex >= 0 && Mat.NormalTextureIndex < static_cast<int>(TextureColorSpaces.size()))
+		{
+			TextureMipFilters[Mat.NormalTextureIndex] = TextureMipFilter::NormalMap;
+		}
+		
 	}
 
 	std::vector<std::string> TextureIDs;
@@ -459,16 +463,17 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 	{
 		auto& Raw = RawTextures[i];
 		TextureColorSpace CS = TextureColorSpaces[i];
+		TextureMipFilter MF = TextureMipFilters[i];
 
 		if (Raw.bIsEmbedded)
 		{
 			std::string TexID = GetResourceID() + "_tex_" + std::to_string(i);
-			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData, CS);
+			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData, CS, MF);
 			TextureIDs.push_back(TexID);
 		}
 		else
 		{
-			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath, CS);
+			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath, CS, MF);
 			TextureIDs.push_back(Raw.FilePath);
 		}
 	}

@@ -65,7 +65,31 @@ PSOutput main(PSInput input)
 
     float3 color = InputTexture.Sample(input.uv).rgb;
 
+    // Exposure
+    color *= pc.Exposure;
 
+    // HDR -> SDR compression
+    if ((pc.Flags & PP_ToneMapping) != 0)
+    {
+        color = ACESFilm(color);
+    }
+
+    // Linear -> display space
+    if ((pc.Flags & PP_GammaCorrect) != 0)
+    {
+        color = LinearToSRGB(color);
+    }
+
+    // Remove 8-bit quantization banding
+    if ((pc.Flags & PP_Dithering) != 0)
+    {
+        float noise = DitherNoise(input.position.xy);
+
+        color += (noise - 0.5) / 255.0;
+    }
+
+    // Final clamp before UNORM framebuffer
+    color = saturate(color);
 
     output.outColor = float4(color, 1.0);
 

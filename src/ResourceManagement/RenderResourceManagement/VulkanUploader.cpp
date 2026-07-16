@@ -64,16 +64,6 @@ VulkanUploader::UploadBufferResult VulkanUploader::UploadBuffer(const void* Data
 	return Result;
 }
 
-VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const void* PixelData, uint32_t Width, uint32_t Height, vk::Format Format)
-{
-	ImageUploadInfo Info;
-	Info.PixelData = PixelData;
-	Info.Width = Width;
-	Info.Height = Height;
-	Info.Format = Format;
-	return UploadImage(Info);
-}
-
 VulkanUploader::UploadImageResult VulkanUploader::UploadImage(const ImageUploadInfo& Image)
 {
 	auto Results = UploadImageBatch(std::span<const ImageUploadInfo>(&Image, 1));

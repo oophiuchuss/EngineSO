@@ -91,7 +91,11 @@ float3 ComputePBRLighting(
     float3 Specular = (D * G * F) / max(4.0 * NdotV * NdotL, 0.001);
     float3 KD = (1.0 - F) * (1.0 - Metallic);
 
-    return (KD * Albedo / PI + Specular) * LightColor * LightIntensity * NdotL;
+    float3 Diffuse = KD * Albedo / PI;
+
+    float3 LightScale = LightColor * LightIntensity * NdotL;
+
+    return (Diffuse + Specular) * LightScale;
 }
 
 float3 ApplyDirectionalLight(
@@ -181,11 +185,15 @@ PSOutput main(PSInput input)
 
     float NormalVariance = (1.0 - FilteredNormalLength) / max(FilteredNormalLength, 1.0e-4);
 
-    float VisibleVariance = saturate(NormalVariance * 8.0);
-
     float Metallic      = MetalRough.x;
     float Roughness     = max(MetalRough.y, 0.04);
     float Occlusion     = Albedo.a;
+
+    float BaseAlpha  = Roughness * Roughness;
+
+    float FilteredAlpha2 = saturate(BaseAlpha * BaseAlpha + NormalVariance);
+
+    float FilteredRoughness = sqrt(sqrt(FilteredAlpha2));
 
     // Reconstruct world position
     float3 WorldPos     = ReconstructWorldPosition(input.uv, Depth);
@@ -203,24 +211,26 @@ PSOutput main(PSInput input)
         if (Type == LightType_Directional)
         {
             LitColor += ApplyDirectionalLight(L, WorldPos, Normal, Albedo.rgb,
-                                              Metallic, Roughness, ViewDir);
+                                              Metallic, FilteredRoughness, ViewDir);
         }
         else if (Type == LightType_Point)
         {
             LitColor += ApplyPointLight(L, WorldPos, Normal, Albedo.rgb,
-                                            Metallic, Roughness, ViewDir);
+                                            Metallic, FilteredRoughness, ViewDir);
         }
         else if (Type == LightType_Spot)
         {
             LitColor += ApplySpotLight(L, WorldPos, Normal, Albedo.rgb,
-                                       Metallic, Roughness, ViewDir);
+                                       Metallic, FilteredRoughness, ViewDir);
         }
     }
 
     // Ambient term
     float3 Ambient = Albedo.rgb * 0.03 * Occlusion;
 
-    output.outColor = float4(VisibleVariance.xxx, 1.0);
+    float3 FinalColor = Ambient + LitColor + Emissive;
+
+    output.outColor = float4(FinalColor, 1.0);
 
     return output;
 }

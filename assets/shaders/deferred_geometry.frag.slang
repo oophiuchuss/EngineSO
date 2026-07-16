@@ -88,7 +88,7 @@ PSOutput main(PSInput input)
 
     // Normal mapping — sample and apply via TBN, falling back cleanly to the
     // geometric vertex normal when a material has no normal texture 
-    float3 SampledNormalTS = TextureHeap[NormalTextureIndex].SampleLevel(input.inUV, 0.0).rgb;
+    float3 SampledNormalTS = TextureHeap[NormalTextureIndex].Sample(input.inUV).rgb;
 
     float3 DecodedNormalTS = SampledNormalTS * 2.0 - 1.0;
 

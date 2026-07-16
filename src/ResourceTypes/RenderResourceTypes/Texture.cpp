@@ -25,11 +25,16 @@ std::unique_ptr<Texture> Texture::CreateFromTextureData(const vk::raii::Device& 
         ? vk::Format::eR8G8B8A8Srgb
         : vk::Format::eR8G8B8A8Unorm;
 
-    auto Result = Uploader.UploadImage(
-        Data.GetPixels().data(),
-        Data.GetWidth(),
-        Data.GetHeight(),
-        Format);
+    VulkanUploader::ImageUploadInfo Info;
+    Info.PixelData = Data.GetPixels().data();
+    Info.Width = Data.GetWidth();
+    Info.Height = Data.GetHeight();
+    Info.Format = Format;
+    Info.MipGeneration = Data.GetMipFilter() == TextureMipFilter::NormalMap
+        ? VulkanUploader::ImageMipGeneration::NormalMapCompute
+        : VulkanUploader::ImageMipGeneration::LinearBlit;
+
+    auto Result = Uploader.UploadImage(Info);
 
     vk::ImageViewCreateInfo ViewInfo(
         {},
@@ -63,11 +68,16 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
             ? vk::Format::eR8G8B8A8Srgb
             : vk::Format::eR8G8B8A8Unorm;
 
+        VulkanUploader::ImageMipGeneration MipGeneration = Data->GetMipFilter() == TextureMipFilter::NormalMap
+            ? VulkanUploader::ImageMipGeneration::NormalMapCompute
+            : VulkanUploader::ImageMipGeneration::LinearBlit;
+
         VulkanUploader::ImageUploadInfo Info;
         Info.PixelData = Data->GetPixels().data();
         Info.Width = Data->GetWidth();
         Info.Height = Data->GetHeight();
         Info.Format = Format;
+        Info.MipGeneration = MipGeneration;
         UploadInfos.push_back(Info);
     }
 

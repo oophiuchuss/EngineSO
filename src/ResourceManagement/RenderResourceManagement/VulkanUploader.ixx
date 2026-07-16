@@ -46,24 +46,25 @@ public:
 		vk::BufferUsageFlags TargetUsage = {};
 	};
 
+	enum class ImageMipGeneration
+	{
+		LinearBlit,
+		NormalMapCompute
+	};
+
 	struct ImageUploadInfo
 	{
 		const void* PixelData = nullptr;
 		uint32_t    Width = 0;
 		uint32_t    Height = 0;
 		vk::Format  Format = vk::Format::eR8G8B8A8Unorm;
+		ImageMipGeneration MipGeneration = ImageMipGeneration::LinearBlit;
 	};
 
 	UploadBufferResult UploadBuffer(
 		const void* Data,
 		vk::DeviceSize Size,
 		vk::BufferUsageFlags TargetUsage);
-
-	UploadImageResult UploadImage(
-		const void* PixelData, 
-		uint32_t Width, 
-		uint32_t Height, 
-		vk::Format Format);
 
 	UploadImageResult UploadImage(const ImageUploadInfo& Image);
 
