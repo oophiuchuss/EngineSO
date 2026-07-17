@@ -40,7 +40,21 @@ Shader* RenderResourceCache::GetOrCompileShader(const std::string& ID, const Sha
         return it->second.get();
     }
 
-    auto NewShader = Shader::CreateFromBytecode(Device, Data.VertexBytecode, Data.FragmentBytecode);
+    std::unique_ptr<Shader> NewShader;
+    
+    if (Data.GetProgramType() == ShaderProgramType::Compute)
+    {
+        NewShader = Shader::CreateComputeFromBytecode(Device, Data.ComputeBytecode);
+    }
+	else if (Data.GetProgramType() == ShaderProgramType::Graphics)
+    {
+        NewShader = Shader::CreateFromBytecode(Device, Data.VertexBytecode, Data.FragmentBytecode);
+    }
+    else
+    {
+		throw std::runtime_error("GetOrCompileShader: Unsupported shader program type");
+    }
+    
     if (!NewShader)
     {
         return nullptr;

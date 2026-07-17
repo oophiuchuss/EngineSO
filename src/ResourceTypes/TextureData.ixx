@@ -27,8 +27,8 @@ export struct TextureInfo
 	uint32_t Height = 0;
 	uint32_t Channels = 0;
 	TextureColorSpace ColorSpace = TextureColorSpace::SRGB;
-	SamplerDesc Sampler = PresetSamplerDesc::SamplerLinearRepeat;
 	TextureMipFilter MipFilter = TextureMipFilter::Standard;
+	SamplerDesc Sampler = PresetSamplerDesc::SamplerLinearRepeat;
 };
 
 export class TextureData : public ResourceBase
@@ -37,13 +37,13 @@ public:
 	explicit TextureData(
 		const std::string& ID,
 		TextureColorSpace InColorSpace = TextureColorSpace::SRGB,
-		SamplerDesc InSampler = PresetSamplerDesc::SamplerLinearRepeat,
-		TextureMipFilter InMipFilter = TextureMipFilter::Standard):
+		TextureMipFilter InMipFilter = TextureMipFilter::Standard,
+		SamplerDesc InSampler = PresetSamplerDesc::SamplerLinearRepeat):
 		ResourceBase(ID)
 	{
 		Info.ColorSpace = InColorSpace;
-		Info.Sampler = InSampler;
 		Info.MipFilter = InMipFilter;
+		Info.Sampler = InSampler;
 	}
 
 	// Accessors

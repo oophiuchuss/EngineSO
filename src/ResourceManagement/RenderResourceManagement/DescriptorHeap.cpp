@@ -190,8 +190,8 @@ void DescriptorHeap::CreateDefaultTextures()
 	auto UploadDefault = [&](std::array<uint8_t, 4> Pixels, int Slot) -> DefaultTexture
 		{
 			auto Result = Uploader.UploadImage(
-				Pixels.data(), 1, 1,
-				vk::Format::eR8G8B8A8Unorm);
+				{ Pixels.data(), 1, 1,
+				vk::Format::eR8G8B8A8Unorm });
 
 			vk::ImageViewCreateInfo ViewInfo(
 				{},

@@ -5,6 +5,7 @@ module;
 #include <vulkan/vulkan_raii.hpp>
 
 export module Shader;
+import ShaderData;
 
 export class ShaderModule
 {
@@ -35,6 +36,10 @@ public:
 		const vk::raii::Device& Device,
 		const std::vector<uint32_t>& VertexBytecode,
 		const std::vector<uint32_t>& FragmentBytecode);
+
+	static std::unique_ptr<Shader> CreateComputeFromBytecode(
+		const vk::raii::Device& Device,
+		const std::vector<uint32_t>& ComputeBytecode);
 	
 	Shader(const Shader&) = delete;					// Disable copy constructor
 	Shader& operator=(const Shader&) = delete;		// Disable copy assignment
@@ -45,12 +50,22 @@ public:
 	// Build a Vulkan pipeline shader stage create infos for this shader (vertex and fragment)
 	std::vector<vk::PipelineShaderStageCreateInfo> GetShaderStageInfos() const;
 
+	inline ShaderProgramType GetProgramType() const { return ProgramType; }
+
 private:
 	Shader(std::unique_ptr<ShaderModule> VertexShader,
-		std::unique_ptr<ShaderModule> FragmentShader)
-		: VertexShader(std::move(VertexShader)),
+		std::unique_ptr<ShaderModule> FragmentShader) :
+		ProgramType(ShaderProgramType::Graphics),
+		VertexShader(std::move(VertexShader)),
 		FragmentShader(std::move(FragmentShader)) {}
 
-	std::unique_ptr<ShaderModule> VertexShader;   // Vertex shader module
-	std::unique_ptr<ShaderModule> FragmentShader; // Fragment shader module
+	Shader(std::unique_ptr<ShaderModule> InComputeShader):
+		ProgramType(ShaderProgramType::Compute),
+		ComputeShader(std::move(InComputeShader)) {}
+
+	ShaderProgramType ProgramType = ShaderProgramType::Graphics;
+
+	std::unique_ptr<ShaderModule> VertexShader;		// Vertex shader module
+	std::unique_ptr<ShaderModule> FragmentShader;	// Fragment shader module
+	std::unique_ptr<ShaderModule> ComputeShader;	// Compute shader module
 };
