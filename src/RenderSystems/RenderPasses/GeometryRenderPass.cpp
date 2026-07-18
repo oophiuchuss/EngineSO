@@ -129,7 +129,7 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	Resource* Depth = Graph.GetResource(GBufferDepthResourceName);
 
 	// Build the base key from resource formats — same for every mesh this pass
-	PipelineKey Key;
+	GraphicsPipelineKey Key;
 	Key.ShaderPtr = GeometryShaderPtr;
 	Key.ColorFormats = { Albedo->Format, Normal->Format, MetalRough->Format, Emissive->Format };
 	Key.DepthFormat = Depth->Format;
@@ -149,7 +149,7 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 
 
 	// Optain pipeline and layout from cache based on shader
-	auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);
+	auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
 	// Bind pipeline
 	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);

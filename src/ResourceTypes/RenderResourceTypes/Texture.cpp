@@ -82,8 +82,7 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
     }
 
     // Single batched GPU upload — one submit, one fence wait for all textures
-    std::vector<VulkanUploader::UploadImageResult> UploadResults =
-        Uploader.UploadImageBatch(UploadInfos);
+    std::vector<VulkanUploader::UploadImageResult> UploadResults = Uploader.UploadImageBatch(UploadInfos);
 
     // Wrap each uploaded image into a Texture (creates the ImageView)
     for (size_t i = 0; i < UploadResults.size(); i++)

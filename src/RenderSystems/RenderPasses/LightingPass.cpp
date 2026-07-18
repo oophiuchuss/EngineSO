@@ -91,7 +91,7 @@ void LightingPass::ExecuteMainLogic(
     Resource* OutputColor = Graph.GetResource(OutputColorResourceName);
 
     // Build pipeline key for this pass
-    PipelineKey Key;
+    GraphicsPipelineKey Key;
     Key.ShaderPtr = LightingShaderPtr;
     Key.ColorFormats = { OutputColor->Format };
     Key.DepthFormat = vk::Format::eUndefined;          // no depth attachment
@@ -103,7 +103,7 @@ void LightingPass::ExecuteMainLogic(
     Key.PushConstantRange = vk::PushConstantRange{};   // no push constants in lighting pass
     Key.bUseVertexInput = false;                       // full‑screen triangle, no vertex buffer
 
-    auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);
+    auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 

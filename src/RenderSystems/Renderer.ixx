@@ -24,6 +24,7 @@ import GPUSceneBuffer;
 import GBufferDescriptorSet;
 import SingleTextureDescriptorSet;
 import LightBuffer;
+import Shader;
 
 import MeshData;
 import TextureData;
@@ -47,6 +48,8 @@ private:
 
 	void PreloadSceneResources(Scene& Scene);
 	void PreloadEntityResources(Entity& Entity);
+
+	Shader* LoadShader(const std::string& Name);
 
 	void CollectEntityResources(
 		Entity& Entity,

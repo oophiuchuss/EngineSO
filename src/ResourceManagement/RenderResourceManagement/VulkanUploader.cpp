@@ -6,6 +6,7 @@ module;
 module VulkanUploader;
 
 import VulkanUtils;
+import PushConstants;
 
 VulkanUploader::VulkanUploader(
 	const vk::raii::Device& Device, 
@@ -119,8 +120,22 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 		vk::DeviceSize DataSize = static_cast<vk::DeviceSize>(Info.Width) * Info.Height * 4;
 		uint32_t MipLevelCount = VulkanUtils::ComputeMipLevels(Info.Width, Info.Height);
 
+		vk::ImageUsageFlags Usage =
+			vk::ImageUsageFlagBits::eTransferDst |
+			vk::ImageUsageFlagBits::eSampled;
+
+		if (Info.MipGeneration == VulkanUploader::ImageMipGeneration::NormalMapCompute)
+		{
+			ValidateNormalMipUpload(Info);
+			Usage |= vk::ImageUsageFlagBits::eStorage;
+		}
+		else
+		{
+			Usage |= vk::ImageUsageFlagBits::eTransferSrc;
+		}
+
 		Stagings.push_back(CreateStagingBuffer(Info.PixelData, DataSize));
-		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format, MipLevelCount));
+		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format, MipLevelCount, Usage));
 	}
 
 	// Image uploads stay on the graphics queue because mip generation and final
@@ -153,17 +168,98 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 			}
 		});
 
+	std::vector<std::unique_ptr<NormalMipResources>>
+		NormalResources(Images.size());
+
+	for (size_t i = 0; i < Images.size(); ++i)
+	{
+		if (Images[i].MipGeneration == ImageMipGeneration::NormalMapCompute)
+		{
+			NormalResources[i] = CreateNormalMipResources(*Results[i].Image, Images[i].Format, Results[i].MipLevels);
+		}
+	}
+
 	SubmitGraphicsWork([&](vk::raii::CommandBuffer& Cmd)
 		{
 			for (size_t i = 0; i < Images.size(); ++i)
 			{
-				GenerateMipChain(Cmd, *Results[i].Image, Images[i].Width, Images[i].Height, Results[i].MipLevels);
+				if (Images[i].MipGeneration == ImageMipGeneration::NormalMapCompute)
+				{
+					GenerateNormalMipChain(Cmd, *Results[i].Image, Images[i].Width, Images[i].Height, Results[i].MipLevels, *NormalResources[i]);
+				}
+				else
+				{
+					GenerateMipChain(Cmd, *Results[i].Image, Images[i].Width, Images[i].Height, Results[i].MipLevels);
+				}
 			}
 		});
 
 	// Staging buffers go out of scope and are freed.
 	// The created device‑local images are returned to the caller.
 	return Results;
+}
+
+void VulkanUploader::InitializeNormalMipGeneration(Shader& InShader, PipelineCache& InPipelineCache)
+{
+	vk::FormatProperties Properties = PhysicalDevice.getFormatProperties(NormalMipFormat);
+
+	const vk::FormatFeatureFlags RequiredFeatures = vk::FormatFeatureFlagBits::eStorageImage;
+
+	if ((Properties.optimalTilingFeatures & RequiredFeatures) != RequiredFeatures)
+	{
+		throw std::runtime_error("R8G8B8A8_UNORM does not support storage images");
+	}
+
+	if (InShader.GetProgramType() !=ShaderProgramType::Compute)
+	{
+		throw std::invalid_argument("Normal mip generation requires a compute shader");
+	}
+
+	if (NormalMipDescriptorSetLayout != nullptr)
+	{
+		throw std::logic_error("Normal mip generation was already initialized");
+	}
+
+	std::array<vk::DescriptorSetLayoutBinding, 2> Bindings = { {
+			{
+				0,
+				vk::DescriptorType::eSampledImage,
+				1,
+				vk::ShaderStageFlagBits::eCompute
+			},
+			{
+				1,
+				vk::DescriptorType::eStorageImage,
+				1,
+				vk::ShaderStageFlagBits::eCompute
+			}
+		} };
+
+	vk::DescriptorSetLayoutCreateInfo LayoutInfo(
+		{},
+		Bindings);
+
+	NormalMipDescriptorSetLayout = Device.createDescriptorSetLayout(LayoutInfo);
+
+	ComputePipelineKey Key;
+	Key.ShaderPtr = &InShader;
+	Key.DescriptorSetLayouts = { *NormalMipDescriptorSetLayout};
+	Key.PushConstantRange = vk::PushConstantRange(
+		vk::ShaderStageFlagBits::eCompute,
+		0,
+		sizeof(NormalMipPushConstants)
+	);
+
+	PipelineHandles Handles = InPipelineCache.GetOrCreateCompute(Key);
+
+	if (Handles.Pipeline == nullptr || Handles.Layout == nullptr)
+	{
+		throw std::runtime_error("Failed to initialize normal mip pipeline");
+	}
+
+	NormalMipPipeline = Handles.Pipeline;
+	NormalMipPipelineLayout = Handles.Layout;
+	bNormalMipGenerationReady = true;
 }
 
 VulkanUploader::StagingBuffer VulkanUploader::CreateStagingBuffer(const void* Data, vk::DeviceSize Size)
@@ -237,7 +333,8 @@ VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(
 	uint32_t Width,
 	uint32_t Height,
 	vk::Format Format,
-	uint32_t MipLevels)
+	uint32_t MipLevels,
+	vk::ImageUsageFlags Usage)
 {
 	std::array<uint32_t, 2> QueueFamilies = { TransferQueueFamilyIndex, GraphicsQueueFamilyIndex };
 	bool bNeedsConcurrent = !bSameQueueFamily;
@@ -248,9 +345,7 @@ VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(
 		MipLevels, 1,
 		vk::SampleCountFlagBits::e1,
 		vk::ImageTiling::eOptimal,
-		vk::ImageUsageFlagBits::eTransferDst |
-		vk::ImageUsageFlagBits::eTransferSrc |	// for generating mipmaps
-		vk::ImageUsageFlagBits::eSampled,
+		Usage,
 		bNeedsConcurrent ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
 		bNeedsConcurrent ? static_cast<uint32_t>(QueueFamilies.size()) : 0,
 		bNeedsConcurrent ? QueueFamilies.data() : nullptr);
@@ -330,6 +425,106 @@ void VulkanUploader::GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Im
 		MipLevels - 1, 1);
 }
 
+void VulkanUploader::GenerateNormalMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels, const NormalMipResources& Resources)
+{
+	if (MipLevels <= 1)
+	{
+		VulkanUtils::TransitionImageLayout(
+			Cmd, Image, vk::ImageAspectFlagBits::eColor,
+			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader,
+			vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+			0, 1);
+
+		return;
+	}
+
+	if (Resources.DescriptorSets.size() != MipLevels - 1)
+	{
+		throw std::runtime_error("Normal mip descriptor count mismatch");
+	}
+
+	Cmd.bindPipeline(vk::PipelineBindPoint::eCompute, NormalMipPipeline);
+
+	uint32_t SourceWidth = Width;
+	uint32_t SourceHeight = Height;
+
+	for (uint32_t Level = 1; Level < MipLevels; ++Level)
+	{
+		const uint32_t DestinationWidth = (std::max)(SourceWidth / 2, 1u);
+
+		const uint32_t DestinationHeight = (std::max)(SourceHeight / 2, 1u);
+
+		// Mip zero was filled by the transfer upload.
+		if (Level == 1)
+		{
+			VulkanUtils::TransitionImageLayout(
+				Cmd, Image, vk::ImageAspectFlagBits::eColor,
+				vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+				vk::PipelineStageFlagBits::eTransfer, 
+				vk::PipelineStageFlagBits::eComputeShader |
+				vk::PipelineStageFlagBits::eFragmentShader,
+				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+				0, 1);
+		}
+
+		// This mip has not been used yet. Prepare it for storage writes.
+		VulkanUtils::TransitionImageLayout(
+			Cmd, Image, vk::ImageAspectFlagBits::eColor,
+			vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral,
+			vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eComputeShader,
+			vk::AccessFlagBits::eNone, vk::AccessFlagBits::eShaderWrite,
+			Level, 1);
+
+		std::array<vk::DescriptorSet, 1> DescriptorSets = {
+			*Resources.DescriptorSets[Level - 1]
+		};
+
+		Cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eCompute,
+			NormalMipPipelineLayout,
+			0,
+			DescriptorSets,
+			{});
+
+		NormalMipPushConstants Push = {
+			SourceWidth,
+			SourceHeight,
+			DestinationWidth,
+			DestinationHeight
+		};
+
+		Cmd.pushConstants<NormalMipPushConstants>(
+			NormalMipPipelineLayout,
+			vk::ShaderStageFlagBits::eCompute,
+			0,
+			Push);
+
+		constexpr uint32_t GroupSize = 8;
+
+		const uint32_t GroupCountX = (DestinationWidth + GroupSize - 1) / GroupSize;
+
+		const uint32_t GroupCountY = (DestinationHeight + GroupSize - 1) / GroupSize;
+
+		Cmd.dispatch(GroupCountX, GroupCountY, 1);
+
+		// Make this write available to:
+		// 1. the next compute dispatch, where it becomes the source;
+		// 2. later fragment-shader texture sampling.
+		VulkanUtils::TransitionImageLayout(
+			Cmd, Image, vk::ImageAspectFlagBits::eColor,
+			vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::PipelineStageFlagBits::eComputeShader,
+			vk::PipelineStageFlagBits::eComputeShader |
+			vk::PipelineStageFlagBits::eFragmentShader,
+			vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
+			Level, 1);
+
+		SourceWidth = DestinationWidth;
+		SourceHeight = DestinationHeight;
+	}
+}
+
 void VulkanUploader::SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> RecordCommands)
 {
 	// Allocate temporary command buffer for this upload
@@ -406,5 +601,108 @@ void VulkanUploader::SubmitGraphicsWork(std::function<void(vk::raii::CommandBuff
 	if (WaitResult != vk::Result::eSuccess)
 	{
 		throw std::runtime_error("Failed to wait for graphics upload fence");
+	}
+}
+
+std::unique_ptr<VulkanUploader::NormalMipResources> VulkanUploader::CreateNormalMipResources(vk::Image Image, vk::Format Format, uint32_t MipLevels)
+{
+	auto Resources = std::make_unique<NormalMipResources>();
+	if (MipLevels <= 1)
+	{
+		return Resources;
+	}
+
+	Resources->MipViews.reserve(MipLevels);
+
+	for (uint32_t Level = 0; Level < MipLevels; ++Level)
+	{
+		vk::ImageViewCreateInfo ViewInfo(
+			{},
+			Image,
+			vk::ImageViewType::e2D,
+			Format,
+			{},
+			{ vk::ImageAspectFlagBits::eColor, Level, 1, 0, 1 });
+
+		Resources->MipViews.push_back(Device.createImageView(ViewInfo));
+	}
+
+	const uint32_t GeneratedMipCount = MipLevels - 1;
+
+	std::array<vk::DescriptorPoolSize, 2> PoolSizes = { {
+		{
+			vk::DescriptorType::eSampledImage,
+			GeneratedMipCount
+		},
+		{
+			vk::DescriptorType::eStorageImage,
+			GeneratedMipCount
+		}
+	} };
+
+	vk::DescriptorPoolCreateInfo PoolInfo(
+		vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+		GeneratedMipCount,
+		PoolSizes);
+
+	Resources->DescriptorPool = Device.createDescriptorPool(PoolInfo);
+
+	std::vector<vk::DescriptorSetLayout> Layouts(
+		GeneratedMipCount,
+		*NormalMipDescriptorSetLayout);
+
+	vk::DescriptorSetAllocateInfo AllocateInfo(
+		*Resources->DescriptorPool,
+		Layouts);
+
+	Resources->DescriptorSets = Device.allocateDescriptorSets(AllocateInfo);
+
+	for (uint32_t Level = 1; Level < MipLevels; Level++)
+	{
+		vk::DescriptorImageInfo SourceInfo(
+			{},
+			*Resources->MipViews[Level - 1],
+			vk::ImageLayout::eShaderReadOnlyOptimal);
+
+		vk::DescriptorImageInfo DestinationInfo(
+			{},
+			*Resources->MipViews[Level],
+			vk::ImageLayout::eGeneral);
+
+		std::array<vk::WriteDescriptorSet, 2> Writes = { {
+			{
+				*Resources->DescriptorSets[Level - 1],
+				0,
+				0,
+				1,
+				vk::DescriptorType::eSampledImage,
+				&SourceInfo
+			},
+			{
+				*Resources->DescriptorSets[Level - 1],
+				1,
+				0,
+				1,
+				vk::DescriptorType::eStorageImage,
+				&DestinationInfo
+			}
+		} };
+
+		Device.updateDescriptorSets(Writes, {});
+	}
+
+	return Resources;
+}
+
+void VulkanUploader::ValidateNormalMipUpload(const ImageUploadInfo& Info) const
+{
+	if (!bNormalMipGenerationReady)
+	{
+		throw std::runtime_error("Normal mip generation is not initialized");
+	}
+
+	if (Info.Format != NormalMipFormat)
+	{
+		throw std::runtime_error("Normal mip generation requires R8G8B8A8_UNORM");
 	}
 }

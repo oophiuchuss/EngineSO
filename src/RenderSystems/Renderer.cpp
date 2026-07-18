@@ -125,6 +125,10 @@ Renderer::Renderer(
 		PhysicalDevice, 
 		Paths::GetCacheRoot() + "pipeline.bin");
 
+	Shader* NormalMipShader = LoadShader("normal_mip");
+
+	UploaderInstance->InitializeNormalMipGeneration(*NormalMipShader, *PipelineCacheInstance);
+
 	// Create command pool and buffers
 	vk::CommandPoolCreateInfo PoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, 
 									   GraphicsQueueFamilyIndex);
@@ -951,22 +955,6 @@ void Renderer::SetupRenderPasses()
 			"Main_Depth");
 	}
 
-	auto LoadShader = [&](const std::string& Name) -> Shader*
-		{
-			ResourceHandle<ShaderData> SD = ResourceManagerPtr->GetHandle<ShaderData>(Name);
-			if (!SD)
-			{ 
-				SD = ResourceManagerPtr->Load<ShaderData>(Name);
-
-				if (!SD)
-				{
-					throw std::runtime_error("Failed to load shader: " + Name);
-				}
-			}
-
-			return RenderCacheInstance->GetOrCompileShader(SD->GetResourceID(), *SD);
-		};
-
 	Shader* GeometryShader = LoadShader("deferred_geometry");
 	
 	// Geometry pass — writes all 4 G‑buffer attachments + depth
@@ -1074,6 +1062,23 @@ void Renderer::PreloadEntityResources(Entity& Entity)
 	{
 		RenderCacheInstance->GetOrUploadTextureBatch(TextureIDs, TextureDataPtrs);
 	}
+}
+
+Shader* Renderer::LoadShader(const std::string& Name)
+{
+	ResourceHandle<ShaderData> Data = ResourceManagerPtr->GetHandle<ShaderData>(Name);
+
+	if (!Data)
+	{
+		Data = ResourceManagerPtr->Load<ShaderData>(Name);
+	}
+
+	if (!Data)
+	{
+		throw std::runtime_error("Failed to load shader: " + Name);
+	}
+
+	return RenderCacheInstance->GetOrCompileShader(Data->GetResourceID(), *Data);
 }
 
 void Renderer::CollectEntityResources(

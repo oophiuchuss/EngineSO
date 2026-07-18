@@ -4,8 +4,12 @@ module;
 #include <vector>
 #include <functional>
 #include <span>
+#include <memory>
 
 export module VulkanUploader;
+
+import Shader;
+import PipelineCache;
 
 export class VulkanUploader
 {
@@ -74,11 +78,23 @@ public:
 	// Upload many images in a single command buffer — one submit, one fence wait.
 	std::vector<UploadImageResult> UploadImageBatch(std::span<const ImageUploadInfo> Images);
 
+	// Initialize the compute pipeline for normal map mip generation
+	void InitializeNormalMipGeneration(Shader& InShader, PipelineCache& InPipelineCache);
+
 private:
 	struct StagingBuffer
 	{
 		vk::raii::Buffer Buffer;
 		vk::raii::DeviceMemory Memory;
+	};
+
+	struct NormalMipResources
+	{
+		// Declaration order matters: destruction happens in reverse.
+		// Sets are therefore destroyed before their pool.
+		vk::raii::DescriptorPool DescriptorPool = nullptr;
+		std::vector<vk::raii::ImageView> MipViews;
+		std::vector<vk::raii::DescriptorSet> DescriptorSets;
 	};
 
 	StagingBuffer CreateStagingBuffer(const void* Data, vk::DeviceSize Size);
@@ -90,9 +106,12 @@ private:
 		uint32_t Width,
 		uint32_t Height,
 		vk::Format Format,
-		uint32_t MipLevels);
+		uint32_t MipLevels,
+		vk::ImageUsageFlags Usage);
 
 	void GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels);
+
+	void GenerateNormalMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels, const NormalMipResources& Resources);
 
 	// Submit a one‑time command buffer and wait for completion
 	void SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> RecordCommands);
@@ -100,6 +119,10 @@ private:
 	// Submit a one‑time command buffer for graphics work and wait for completion
 	void SubmitGraphicsWork(std::function<void(vk::raii::CommandBuffer&)> RecordCommands);
 	
+	std::unique_ptr<NormalMipResources> CreateNormalMipResources(vk::Image Image, vk::Format Format, uint32_t MipLevels);
+
+	void ValidateNormalMipUpload(const ImageUploadInfo& Info) const;
+
 	const vk::raii::Device& Device;
 	const vk::raii::PhysicalDevice& PhysicalDevice;
 	const vk::raii::Queue& TransferQueue;
@@ -111,4 +134,12 @@ private:
 	vk::raii::CommandPool TransferCommandPool = nullptr;
 	vk::raii::CommandPool GraphicsCommandPool = nullptr;
 	vk::raii::Fence UploadFence = nullptr;
+
+	// Normal map mip generation pipeline and layout
+	inline static constexpr vk::Format NormalMipFormat = vk::Format::eR8G8B8A8Unorm;
+
+	vk::raii::DescriptorSetLayout NormalMipDescriptorSetLayout = nullptr;
+	vk::Pipeline NormalMipPipeline = nullptr;
+	vk::PipelineLayout NormalMipPipelineLayout = nullptr;
+	bool bNormalMipGenerationReady = false;
 };

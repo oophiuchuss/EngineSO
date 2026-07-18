@@ -77,7 +77,7 @@ void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Ren
     Resource* ColorRes = Graph.GetResource(ColorResourceName);
     Resource* DepthRes = Graph.GetResource(DepthResourceName);
 
-    PipelineKey Key;
+    GraphicsPipelineKey Key;
     Key.ShaderPtr = ShaderPtr;
     Key.ColorFormats = { ColorRes->Format };
     Key.DepthFormat = DepthRes->Format;     // needed so depth test is enabled, even though write is off
@@ -93,7 +93,7 @@ void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Ren
     Key.bEnableBlending = true;
     Key.bDepthWriteEnable = false;
 
-    auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);
+    auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 

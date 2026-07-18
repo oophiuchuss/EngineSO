@@ -60,30 +60,61 @@ PipelineCache::~PipelineCache()
 	SaveToDisk();
 }
 
-PipelineHandles PipelineCache::GetOrCreate(const PipelineKey& Key)
+PipelineHandles PipelineCache::GetOrCreateGraphics(const GraphicsPipelineKey& Key)
 {
-	auto It = Cache.find(Key);
-	if (It != Cache.end())
+	auto It = GraphicCache.find(Key);
+	if (It != GraphicCache.end())
 	{
-		return { *(It->second->Pipeline), *(It->second->PipelineLayout) };
+		return { *It->second->Pipeline, *It->second->PipelineLayout };
 	}
 
-	PipelineCacheEntry* Entry = CreateCacheEntry(Key);
-	return { *(Entry->Pipeline), *(Entry->PipelineLayout) };
+	PipelineCacheEntry* Entry = CreateCacheGraphicsEntry(Key);
+	return { *Entry->Pipeline, *Entry->PipelineLayout };
 }
 
-void PipelineCache::Evict(const PipelineKey& Key)
+PipelineHandles PipelineCache::GetOrCreateCompute(const ComputePipelineKey& Key)
 {
-	Cache.erase(Key);
+	auto It = ComputeCache.find(Key);
+
+	if (It != ComputeCache.end())
+	{
+		return {*It->second->Pipeline, *It->second->PipelineLayout};
+	}
+
+	PipelineCacheEntry* Entry = CreateComputeCacheEntry(Key);
+
+	return { *Entry->Pipeline, *Entry->PipelineLayout };
+}
+
+void PipelineCache::EvictGraphics(const GraphicsPipelineKey& Key)
+{
+	GraphicCache.erase(Key);
+}
+
+void PipelineCache::EvictCompute(const ComputePipelineKey& Key)
+{
+	ComputeCache.erase(Key);
 }
 
 void PipelineCache::EvictAllForShader(Shader* ShaderPtr)
 {
-	for (auto It = Cache.begin(); It != Cache.end(); )
+	for (auto It = GraphicCache.begin(); It != GraphicCache.end(); )
 	{
 		if (It->first.ShaderPtr == ShaderPtr)
 		{
-			It = Cache.erase(It);
+			It = GraphicCache.erase(It);
+		}
+		else
+		{
+			++It;
+		}
+	}
+
+	for (auto It = ComputeCache.begin(); It != ComputeCache.end(); )
+	{
+		if (It->first.ShaderPtr == ShaderPtr)
+		{
+			It = ComputeCache.erase(It);
 		}
 		else
 		{
@@ -94,7 +125,8 @@ void PipelineCache::EvictAllForShader(Shader* ShaderPtr)
 
 void PipelineCache::EvictAll()
 {
-	Cache.clear();
+	GraphicCache.clear();
+	ComputeCache.clear();
 }
 
 void PipelineCache::SaveToDisk() const
@@ -123,21 +155,14 @@ void PipelineCache::SaveToDisk() const
     File.write(reinterpret_cast<const char*>(Data.data()), Data.size());
 }
 
-PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
+PipelineCacheEntry* PipelineCache::CreateCacheGraphicsEntry(const GraphicsPipelineKey& Key)
 {
-	std::vector<vk::PushConstantRange> PushRanges;
-	
-	if (Key.PushConstantRange.size > 0)
+	if (!Key.ShaderPtr || Key.ShaderPtr->GetProgramType() != ShaderProgramType::Graphics)
 	{
-		PushRanges.push_back(Key.PushConstantRange);
+		throw std::runtime_error("Graphics pipeline requires a graphics shader");
 	}
 
-	vk::PipelineLayoutCreateInfo PipelineLayoutInfo(
-		{},
-		Key.DescriptorSetLayouts,
-		PushRanges);
-
-	vk::raii::PipelineLayout PipelineLayout = vk::raii::PipelineLayout(Device, PipelineLayoutInfo);
+	vk::raii::PipelineLayout PipelineLayout = CreatePipelineLayout(Key.DescriptorSetLayouts, Key.PushConstantRange);
 
 	auto Stages = Key.ShaderPtr->GetShaderStageInfos();
 
@@ -238,7 +263,55 @@ PipelineCacheEntry* PipelineCache::CreateCacheEntry(const PipelineKey& Key)
 	auto Entry = std::make_unique<PipelineCacheEntry>(PipelineCacheEntry(std::move(Pipeline), std::move(PipelineLayout)));
 
 	PipelineCacheEntry* EntryRaw = Entry.get();
-	Cache[Key] = std::move(Entry);
+	GraphicCache[Key] = std::move(Entry);
 
 	return EntryRaw;
+}
+
+PipelineCacheEntry* PipelineCache::CreateComputeCacheEntry(const ComputePipelineKey& Key)
+{
+	if (!Key.ShaderPtr || Key.ShaderPtr->GetProgramType() != ShaderProgramType::Compute)
+	{
+		throw std::runtime_error("Compute pipeline requires a compute shader");
+	}
+
+	vk::raii::PipelineLayout PipelineLayout = CreatePipelineLayout(Key.DescriptorSetLayouts, Key.PushConstantRange);
+
+	auto Stages = Key.ShaderPtr->GetShaderStageInfos();
+
+	if (Stages.size() != 1 || Stages[0].stage != vk::ShaderStageFlagBits::eCompute)
+	{
+		throw std::runtime_error("Compute shader produced invalid stages");
+	}
+
+	vk::ComputePipelineCreateInfo PipelineInfo(
+		{},
+		Stages[0],
+		*PipelineLayout);
+
+	vk::raii::Pipeline Pipeline = Device.createComputePipeline(CurrentVkPipelineCache, PipelineInfo);
+
+	auto Entry = std::make_unique<PipelineCacheEntry>(PipelineCacheEntry(std::move(Pipeline), std::move(PipelineLayout)));
+
+	PipelineCacheEntry* EntryRaw = Entry.get();
+	ComputeCache[Key] = std::move(Entry);
+
+	return EntryRaw;
+}
+
+vk::raii::PipelineLayout PipelineCache::CreatePipelineLayout(const std::vector<vk::DescriptorSetLayout>& DescriptorSetLayouts, const vk::PushConstantRange& PushConstantRange)
+{
+	std::vector<vk::PushConstantRange> PushRanges;
+
+	if (PushConstantRange.size > 0)
+	{
+		PushRanges.push_back(PushConstantRange);
+	}
+
+	vk::PipelineLayoutCreateInfo LayoutInfo(
+		{},
+		DescriptorSetLayouts,
+		PushRanges);
+
+	return vk::raii::PipelineLayout(Device, LayoutInfo);
 }

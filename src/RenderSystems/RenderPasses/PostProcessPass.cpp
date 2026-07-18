@@ -45,7 +45,7 @@ void PostProcessPass::ExecuteMainLogic(
 {
     Resource* Res = Graph.GetResource(OutputResourceName);
 
-    PipelineKey Key;
+    GraphicsPipelineKey Key;
     Key.ShaderPtr = ShaderPtr;
     Key.ColorFormats = { Res->Format };
     Key.DepthFormat = vk::Format::eUndefined;
@@ -56,7 +56,7 @@ void PostProcessPass::ExecuteMainLogic(
         sizeof(PostProcessPushConstants));
     Key.bUseVertexInput = false;
 
-    auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreate(Key);
+    auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
     Cmd.bindDescriptorSets(

@@ -36,7 +36,11 @@ std::vector<vk::PipelineShaderStageCreateInfo> Shader::GetShaderStageInfos() con
 {
 	if (ProgramType == ShaderProgramType::Compute)
 	{
-		return { vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eCompute, ComputeShader->GetShaderModule(), "main") };
+		return { vk::PipelineShaderStageCreateInfo({},
+			vk::ShaderStageFlagBits::eCompute,
+			ComputeShader->GetShaderModule(),
+			"main")
+		};
 	}
 
 	std::vector<vk::PipelineShaderStageCreateInfo> ShaderStages(2);

@@ -9,3 +9,11 @@ export struct PushConstantData
 {
     uint32_t ObjectIndex = 0;
 };
+
+export struct NormalMipPushConstants
+{
+	uint32_t SourceWidth;
+	uint32_t SourceHeight;
+	uint32_t DestinationWidth;
+	uint32_t DestinationHeight;
+};
