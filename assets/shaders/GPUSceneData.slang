@@ -24,5 +24,5 @@ struct MaterialData
     uint    EmissiveIndex;
     uint    AlphaMode;         // 0=Opaque, 1=Mask, 2=Blend
     float   AlphaCutoff;
-    uint    _Padding0;
+    float   NormalLodBias;
 };

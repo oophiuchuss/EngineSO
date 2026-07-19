@@ -19,19 +19,19 @@ export struct ObjectData
 // Per-material data — indexed by ObjectData.MaterialIndex
 export struct MaterialData
 {
-    glm::vec4 AlbedoColor = glm::vec4(1.0f);
-    float Metallic = 0.0f;
-    float Roughness = 1.0f;
-    float EmissiveStrength = 0.0f;
-    float NormalScale = 1.0f;
-    uint32_t AlbedoIndex = 0;
-    uint32_t NormalIndex = 0;
-    uint32_t MetallicRoughnessIndex = 0;
-    uint32_t OcclusionIndex = 0;
-    uint32_t EmissiveIndex = 0;
-    uint32_t AlphaMode = 0;
-    float AlphaCutoff = 0.5f;
-    uint32_t _Padding = 0; // pad 60 -> 64 bytes: std430 rounds struct-array stride
+    glm::vec4   AlbedoColor = glm::vec4(1.0f);
+    float       Metallic = 0.0f;
+    float       Roughness = 1.0f;
+    float       EmissiveStrength = 0.0f;
+    float       NormalScale = 1.0f;
+    uint32_t    AlbedoIndex = 0;
+    uint32_t    NormalIndex = 0;
+    uint32_t    MetallicRoughnessIndex = 0;
+    uint32_t    OcclusionIndex = 0;
+    uint32_t    EmissiveIndex = 0;
+    uint32_t    AlphaMode = 0;
+    float       AlphaCutoff = 0.5f;
+    float       NormalLodBias = 0.0f;
 };
-// Size: 60 + 4 = 64 bytes; matches the std430 array stride exactly.
+// Size 64 bytes; matches the std430 array stride exactly.
 static_assert(sizeof(MaterialData) == 64);

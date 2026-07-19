@@ -9,6 +9,7 @@ import ResourceBase;
 import MaterialProperties;
 import TextureData;
 import ResourceHandle;
+import ReprocessOptions;
 
 // Forward declaration
 export template<typename T> class ResourceHandle;
@@ -20,12 +21,22 @@ export enum MaterialType
 	Unlit,		// Debug, UI, skybox
 };
 
+export struct MaterialReprocessOptions final : public ReprocessOptions
+{
+	explicit MaterialReprocessOptions(
+		const MaterialProperties& InProperties)
+		: Properties(InProperties)
+	{
+	}
+
+	MaterialProperties Properties;
+};
+
 export class Material : public ResourceBase
 {
 public:
 	explicit Material(const std::string& InResourceID) : ResourceBase(InResourceID) {}
 
-	// Programmatic constructor - fully immutable after construction
 	Material(
 		const std::string& ID,
 		MaterialType                InType,
@@ -59,6 +70,8 @@ public:
 
 	static std::string_view AssetFolder() { return "materials"; }
 	static std::string_view FileExtension() { return ".mat"; }
+
+	bool Reprocess(const ReprocessOptions& Options) override;
 
 protected:
 	virtual bool LoadResource(const std::string& FilePath);

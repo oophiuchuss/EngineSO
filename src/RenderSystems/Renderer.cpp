@@ -5,6 +5,7 @@ module;
 #include <glm/gtc/quaternion.hpp>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 #include <optional>
 #include <memory>
 #include <iostream>
@@ -55,6 +56,7 @@ import Mesh;
 import Texture;
 import TextureSlots;
 import Material;
+import MaterialProperties;
 import Geometry;
 
 Renderer::Renderer(
@@ -249,8 +251,63 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 
 		std::vector<ObjectData> FrameObjects;
 		std::vector<MaterialData> FrameMaterials;
+		std::unordered_map<const Material*, uint32_t> FrameMaterialIndices;
 		FrameObjects.reserve(VisibleEntities.size());
 		FrameMaterials.reserve(VisibleEntities.size());
+		FrameMaterialIndices.reserve(VisibleEntities.size());
+
+		auto GetOrCreateMaterialIndex = [&](const Material* Mat) -> uint32_t
+			{
+				auto Existing = FrameMaterialIndices.find(Mat);
+				if (Existing != FrameMaterialIndices.end())
+				{
+					return Existing->second;
+				}
+
+				MaterialProperties Props = Mat ? Mat->GetMaterialProperties() : MaterialProperties{};
+
+				if (Mat)
+				{
+					auto ResolveTexture = [&](const ResourceHandle<TextureData>& Handle, int DefaultIndex) -> int
+						{
+							if (const TextureData* TextureDataPtr = Handle.Get())
+							{
+								return RenderCacheInstance->GetOrUploadTexture(TextureDataPtr->GetResourceID(), *TextureDataPtr);
+							}
+
+							return DefaultIndex;
+						};
+
+					Props.AlbedoIndex = ResolveTexture(Mat->GetAlbedoTexture(), TextureSlots::DefaultWhite);
+					Props.NormalIndex = ResolveTexture(Mat->GetNormalTexture(), TextureSlots::DefaultNormal);
+					Props.MetallicRoughnessIndex = ResolveTexture(Mat->GetMetallicRoughnessTexture(), TextureSlots::DefaultWhite);
+					Props.OcclusionIndex = ResolveTexture(Mat->GetOcclusionTexture(), TextureSlots::DefaultWhite);
+					Props.EmissiveIndex = ResolveTexture(Mat->GetEmissiveTexture(), TextureSlots::DefaultBlack);
+				}
+
+				MaterialData Data;
+				Data.AlbedoColor = Props.AlbedoColor;
+				Data.Metallic = Props.Metallic;
+				Data.Roughness = Props.Roughness;
+				Data.EmissiveStrength = Props.EmissiveStrength;
+				Data.NormalScale = Props.NormalScale;
+				Data.AlbedoIndex = static_cast<uint32_t>(Props.AlbedoIndex);
+				Data.NormalIndex = static_cast<uint32_t>(Props.NormalIndex);
+				Data.MetallicRoughnessIndex = static_cast<uint32_t>(Props.MetallicRoughnessIndex);
+				Data.OcclusionIndex = static_cast<uint32_t>(Props.OcclusionIndex);
+				Data.EmissiveIndex = static_cast<uint32_t>(Props.EmissiveIndex);
+				Data.AlphaMode = static_cast<uint32_t>(Props.AlphaMode);
+				Data.AlphaCutoff = Props.AlphaCutoff;
+				Data.NormalLodBias = Props.NormalLodBias;
+
+				uint32_t NewIndex = static_cast<uint32_t>(FrameMaterials.size());
+
+				FrameMaterials.push_back(Data);
+				FrameMaterialIndices.emplace(Mat, NewIndex);
+
+				return NewIndex;
+			};
+
 
 		for (Entity* E : VisibleEntities)
 		{
@@ -266,46 +323,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
 			if (!GPUMesh) continue;
 
-			MaterialProperties Props = MC->GetEffectiveMaterialProperties();
-
-			// If this entity has a material, resolve its textures
-			if (const Material* Mat = MC->GetMaterial())
-			{
-				auto ResolveTexture = [&](const ResourceHandle<TextureData>& Handle,
-					int DefaultIndex) -> int
-					{
-						if (const TextureData* TexData = Handle.Get())
-						{
-							return RenderCacheInstance->GetOrUploadTexture(TexData->GetResourceID(), *TexData);
-						}
-						return DefaultIndex;
-					};
-
-				Props.AlbedoIndex = ResolveTexture(Mat->GetAlbedoTexture(), TextureSlots::DefaultWhite);
-				Props.NormalIndex = ResolveTexture(Mat->GetNormalTexture(), TextureSlots::DefaultNormal);
-				Props.MetallicRoughnessIndex = ResolveTexture(Mat->GetMetallicRoughnessTexture(), TextureSlots::DefaultWhite);
-				Props.OcclusionIndex = ResolveTexture(Mat->GetOcclusionTexture(), TextureSlots::DefaultWhite);
-				Props.EmissiveIndex = ResolveTexture(Mat->GetEmissiveTexture(), TextureSlots::DefaultBlack);
-			}
-
-			// Build material data for this renderable
-			// TODO: make so there is no duplicates
-			MaterialData MatData;
-			MatData.AlbedoColor = Props.AlbedoColor;
-			MatData.Metallic = Props.Metallic;
-			MatData.Roughness = Props.Roughness;
-			MatData.EmissiveStrength = Props.EmissiveStrength;
-			MatData.NormalScale = Props.NormalScale;
-			MatData.AlbedoIndex = static_cast<uint32_t>(Props.AlbedoIndex);
-			MatData.NormalIndex = static_cast<uint32_t>(Props.NormalIndex);
-			MatData.MetallicRoughnessIndex = static_cast<uint32_t>(Props.MetallicRoughnessIndex);
-			MatData.OcclusionIndex = static_cast<uint32_t>(Props.OcclusionIndex);
-			MatData.EmissiveIndex = static_cast<uint32_t>(Props.EmissiveIndex);
-			MatData.AlphaMode = static_cast<uint32_t>(Props.AlphaMode);
-			MatData.AlphaCutoff = Props.AlphaCutoff;
-
-			uint32_t MaterialIndex = static_cast<uint32_t>(FrameMaterials.size());
-			FrameMaterials.push_back(MatData);
+			uint32_t MaterialIndex = GetOrCreateMaterialIndex(MC->GetMaterial());
 
 			// Build ObjectData for this renderable 
 			glm::mat4 WorldTransform = TC->GetWorldTransformMatrix();
@@ -322,15 +340,19 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			uint32_t ObjectIndex = static_cast<uint32_t>(FrameObjects.size());
 			FrameObjects.push_back(Obj);
 
-			// ---- World-space bounds for culling ----
+			// World-space bounds for culling
 			BoundingBox WorldBounds = MD->GetBoundingBox();
 			WorldBounds.Transform(WorldTransform);
 
 			RenderableMesh NewRenderable = RenderableMesh(GPUMesh, WorldBounds, ObjectIndex);
 
-			if (Props.AlphaMode == AlphaMode::Blend)
+			const Material* CurrentMaterial = MC->GetMaterial();
+
+			AlphaMode CurrentAlphaMode = CurrentMaterial? CurrentMaterial->GetMaterialProperties().AlphaMode : AlphaMode::Opaque;
+
+			if (CurrentAlphaMode == AlphaMode::Blend)
 			{
-				//CurrentFrameData.TranslucentRenderables.push_back(NewRenderable);
+				CurrentFrameData.TranslucentRenderables.push_back(NewRenderable);
 			}
 			else
 			{
@@ -393,8 +415,6 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 				case LightType::Directional:
 					LightData.Direction = glm::vec4(Forward, 0.0f);
 					LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
-					Lights.push_back(LightData);
-
 					break;
 
 				case LightType::Point:
@@ -416,6 +436,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 					break;
 				}
 
+				Lights.push_back(LightData);
 			}
 		}
 

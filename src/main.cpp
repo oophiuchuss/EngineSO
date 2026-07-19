@@ -16,6 +16,7 @@ import CameraComponent;
 import DirectionalLightComponent;
 import MeshData;
 import Material;
+import MaterialProperties;
 import FlyCameraControllerComponent;
 import ResourceHandle;
 import GltfSceneData;
@@ -54,7 +55,7 @@ int main() {
                 Engine.GetResourceManager()->Reprocess<MeshData>(Mesh2ID, Options);
 
 				// Collect light data from scene
-				for (Entity* E : Engine.GetMainScene()->GetAllEntities())
+/*				for (Entity* E : Engine.GetMainScene()->GetAllEntities())
 				{
 					auto* TC = E->GetComponent<TransformComponent>();
 					if (!TC)
@@ -76,7 +77,28 @@ int main() {
                         TC->SetRotation(YawDelta * CurrentRot);
 
                     }
-				}
+				}*/
+
+
+                Entity* StoneEntity = Engine.GetMainScene()->GetEntityByName("walls_1stfloor_01_prim_1");
+
+                if (StoneEntity)
+                {
+                    MeshComponent* StoneMesh = StoneEntity->GetComponent<MeshComponent>();
+
+                    const Material* StoneMaterial = StoneMesh ? StoneMesh->GetMaterial() : nullptr;
+
+                    if (StoneMaterial)
+                    {
+                        MaterialProperties Properties = StoneMaterial->GetMaterialProperties();
+
+                        Properties.NormalLodBias = 0.5f;
+
+                        MaterialReprocessOptions Options(Properties);
+
+                        Engine.GetResourceManager()->Reprocess<Material>(StoneMaterial->GetResourceID(),Options);
+                    }
+                }
             }
 
             /*auto SceneLightsDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("pkg_d_10k_candles/NewSponza_4_Combined_glTF.gltf", *Engine.GetResourceManager());

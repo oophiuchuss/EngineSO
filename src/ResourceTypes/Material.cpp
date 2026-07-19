@@ -5,6 +5,19 @@ module;
 
 module Material;
 
+bool Material::Reprocess(const ReprocessOptions& Options)
+{
+    const auto* MaterialOptions = dynamic_cast<const MaterialReprocessOptions*>(&Options);
+
+    if (!MaterialOptions || MaterialOptions->bFullReconstruct)
+    {
+        return false;
+    }
+
+    Properties = MaterialOptions->Properties;
+    return true;
+}
+
 bool Material::LoadResource(const std::string& FilePath)
 {
     // Already populated via programmatic constructor
