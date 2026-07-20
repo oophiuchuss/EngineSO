@@ -4,6 +4,7 @@
 import GPULightData;
 import CameraUBO;
 import NormalFiltering;
+import DirectLighting;
 
 struct PSInput
 {
@@ -35,9 +36,6 @@ ConstantBuffer<uint> LightCountRaw;
 [[vk::binding(1, 2)]]
 StructuredBuffer<GPULightData> gLights;
 
-// Constnats
-static const float PI = 3.14159265;
-
 // Helpers
 
 float3 ReconstructWorldPosition(float2 UV, float Depth)
@@ -50,121 +48,6 @@ float3 ReconstructWorldPosition(float2 UV, float Depth)
 
     float4 WorldPos = mul(uCamera.InverseViewProj, ClipPos);
     return WorldPos.xyz / WorldPos.w;
-}
-
-float3 ComputePBRLighting(
-    float3    LightDir,
-    float3    Normal,
-    float3    Albedo,
-    float     Metallic,
-    float     Roughness,
-    float3    ViewDir,
-    float3    LightColor,
-    float     LightIntensity,
-    float     NdotL)
-{
-    // H = normalize(L + V) is undefined when the light and view directions
-    // nearly oppose each other. A raw normalize there magnifies tiny per-pixel
-    // differences into structured lighting artifacts. Keep H finite for the
-    // NDF and compute V.H analytically from the two unit directions.
-    float3 HalfVectorSum = LightDir + ViewDir;
-    float HalfVectorLengthSq = dot(HalfVectorSum, HalfVectorSum);
-    float HalfVectorValid = step(1.0e-6, HalfVectorLengthSq);
-    float3 HalfVec = HalfVectorSum * rsqrt(max(HalfVectorLengthSq, 1.0e-6));
-
-    float3 F0   = lerp(float3(0.04), Albedo, Metallic);
-    float  NdotV = max(dot(Normal, ViewDir),  0.0);
-    float  NdotH = max(dot(Normal, HalfVec), 0.0) * HalfVectorValid;
-    float  VdotH = sqrt(saturate(0.5 + 0.5 * dot(LightDir, ViewDir)));
-
-    float3 F = F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
-
-    float Alpha  = Roughness * Roughness;
-    float Alpha2 = Alpha * Alpha;
-    float Denom  = NdotH * NdotH * (Alpha2 - 1.0) + 1.0;
-    float D      = Alpha2 / (PI * Denom * Denom);
-
-    float K  = (Roughness + 1.0) * (Roughness + 1.0) / 8.0;
-    float G1V = NdotV / (NdotV * (1.0 - K) + K);
-    float G1L = NdotL / (NdotL * (1.0 - K) + K);
-    float G   = G1V * G1L;
-
-    float3 Specular = (D * G * F) / max(4.0 * NdotV * NdotL, 0.001);
-    float3 KD = (1.0 - F) * (1.0 - Metallic);
-
-    float3 Diffuse = KD * Albedo / PI;
-
-    float3 LightScale = LightColor * LightIntensity * NdotL;
-
-    return (Diffuse + Specular) * LightScale;
-}
-
-float3 ApplyDirectionalLight(
-    GPULightData Light,
-    float3       WorldPos,
-    float3       Normal,
-    float3       Albedo,
-    float        Metallic,
-    float        Roughness,
-    float3       ViewDir)
-{
-    float3 LightDir = normalize(-Light.Direction.xyz);
-    float  NdotL    = max(dot(Normal, LightDir), 0.0);
-    return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness,
-                              ViewDir, Light.Color_Intensity.rgb,
-                              Light.Color_Intensity.a, NdotL);
-}
-
-float3 ApplyPointLight(
-    GPULightData Light,
-    float3       WorldPos,
-    float3       Normal,
-    float3       Albedo,
-    float        Metallic,
-    float        Roughness,
-    float3       ViewDir)
-{
-    float3 LightVec = Light.Position.xyz - WorldPos;
-    float  Distance = length(LightVec);
-    float3 LightDir = LightVec / Distance;
-
-    float NdotL       = max(dot(Normal, LightDir), 0.0);
-    float Attenuation = max(1.0 - (Distance / Light.Params.x), 0.0);
-    Attenuation      *= Attenuation;
-
-    return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness,
-                              ViewDir, Light.Color_Intensity.rgb,
-                              Light.Color_Intensity.a, NdotL)
-           * Attenuation;
-}
-
-float3 ApplySpotLight(
-    GPULightData Light,
-    float3       WorldPos,
-    float3       Normal,
-    float3       Albedo,
-    float        Metallic,
-    float        Roughness,
-    float3       ViewDir)
-{
-    float3 LightVec = Light.Position.xyz - WorldPos;
-    float  Distance = length(LightVec);
-    float3 LightDir = LightVec / Distance;
-
-    float NdotL = max(dot(Normal, LightDir), 0.0);
-
-    // Distance attenuation
-    float DistanceAtten = max(1.0 - (Distance / Light.Params.x), 0.0);
-    DistanceAtten *= DistanceAtten;
-
-    // Cone attenuation
-    float CosTheta   = dot(LightDir, -Light.Direction.xyz);
-    float ConeAtten  = smoothstep(Light.Params.z, Light.Params.y, CosTheta);
-
-    return ComputePBRLighting(LightDir, Normal, Albedo, Metallic, Roughness,
-                              ViewDir, Light.Color_Intensity.rgb,
-                              Light.Color_Intensity.a, NdotL)
-           * DistanceAtten * ConeAtten;
 }
 
 // Entry point
@@ -203,7 +86,7 @@ PSOutput main(PSInput input)
 
         if (Type == LightType_Directional)
         {
-            LitColor += ApplyDirectionalLight(L, WorldPos, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
+            LitColor += ApplyDirectionalLight(L, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
         }
         else if (Type == LightType_Point)
         {
