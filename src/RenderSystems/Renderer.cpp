@@ -89,7 +89,8 @@ Renderer::Renderer(
 
 	CameraUBO = std::make_unique<CameraUniformBuffer>(
 		Device, 
-		PhysicalDevice);
+		PhysicalDevice,
+		MAX_FRAMES_IN_FLIGHT);
 
 	UploaderInstance = std::make_unique<VulkanUploader>(
 		Device,
@@ -108,12 +109,14 @@ Renderer::Renderer(
 	GPUSceneInstance = std::make_unique<GPUSceneBuffer>(
 		Device,
 		PhysicalDevice,
+		MAX_FRAMES_IN_FLIGHT,
 		4096,   // TODO: MaxObjects — hardcoded for now, matches DescriptorHeap's pattern
 		512);   // TODO: MaxMaterials — hardcoded for now
 
 	LightBufferInstance = std::make_unique<LightBuffer>(
 		Device,
 		PhysicalDevice, 
+		MAX_FRAMES_IN_FLIGHT,
 		128);	// TODO: MaxLights should be handled better
 
 	RenderCacheInstance = std::make_unique<RenderResourceCache>(
@@ -237,7 +240,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			Data.InverseViewProj = glm::inverse(Data.ViewProj);
 			Data.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
 
-			CameraUBO->Update(Data);
+			CameraUBO->Update(static_cast<uint32_t>(CurrentFrame),Data);
 		}
 
 		// Cull scene and update per-frame data
@@ -247,6 +250,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		const auto& VisibleEntities = CullingSystemInstance->GetAllVisibleEntities();
 
 		FrameData CurrentFrameData;
+		CurrentFrameData.FrameIndex = static_cast<uint32_t>(CurrentFrame);
 		CurrentFrameData.Camera = CameraUBO->GetLastData();
 
 		std::vector<ObjectData> FrameObjects;
@@ -323,7 +327,9 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
 			if (!GPUMesh) continue;
 
-			uint32_t MaterialIndex = GetOrCreateMaterialIndex(MC->GetMaterial());
+			const Material* CurrentMaterial = MC->GetMaterial();
+
+			uint32_t MaterialIndex = GetOrCreateMaterialIndex(CurrentMaterial);
 
 			// Build ObjectData for this renderable 
 			glm::mat4 WorldTransform = TC->GetWorldTransformMatrix();
@@ -345,8 +351,6 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			WorldBounds.Transform(WorldTransform);
 
 			RenderableMesh NewRenderable = RenderableMesh(GPUMesh, WorldBounds, ObjectIndex);
-
-			const Material* CurrentMaterial = MC->GetMaterial();
 
 			AlphaMode CurrentAlphaMode = CurrentMaterial? CurrentMaterial->GetMaterialProperties().AlphaMode : AlphaMode::Opaque;
 
@@ -374,7 +378,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 			});
 
 
-		GPUSceneInstance->Update(FrameObjects, FrameMaterials);
+		GPUSceneInstance->Update(CurrentFrameData.FrameIndex, FrameObjects, FrameMaterials);
 
 		// TODO: make better handling of this
 		GeometryRenderPass* GPass = dynamic_cast<GeometryRenderPass*>(RendergraphInstance->GetRenderPass("GeometryPass"));
@@ -441,7 +445,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		}
 
 
-		LightBufferInstance->Update(Lights);
+		LightBufferInstance->Update(CurrentFrameData.FrameIndex, Lights);
 
 
 		// Record rendering commands into command buffer using rendergraph

@@ -1,6 +1,7 @@
 import GPUSceneData;
 import GPULightData;
 import CameraUBO;
+import NormalFiltering;
 
 struct PSInput
 {
@@ -140,6 +141,12 @@ PSOutput main(PSInput input)
     // Normal mapping — sample and apply via TBN, falling back cleanly to the
     // geometric vertex normal when a material has no normal texture 
     float3 SampledNormalTS = TextureHeap[NonUniformResourceIndex(material.NormalIndex)].SampleBias(input.inUV, material.NormalLodBias).rgb;
+
+    float3 DecodedNormalTS = SampledNormalTS * 2.0 - 1.0;
+
+    float NormalVariance = NormalLengthToVariance(length(DecodedNormalTS));
+    NormalVariance = ScaleNormalVariance(NormalVariance, material.NormalScale);
+    Roughness = ApplyNormalVarianceToRoughness(Roughness, NormalVariance);
 
     float3 Normal = ApplyNormalMap(normalize(input.inNormal), input.inTangent, SampledNormalTS, material.NormalScale);
 

@@ -16,4 +16,6 @@ export struct NormalMipPushConstants
 	uint32_t SourceHeight;
 	uint32_t DestinationWidth;
 	uint32_t DestinationHeight;
+	uint32_t AddressModeU;
+	uint32_t AddressModeV;
 };

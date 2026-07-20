@@ -98,10 +98,10 @@ void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Ren
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 
     std::array<vk::DescriptorSet, 4> DescriptorSets = {
-        *CameraUBOPtr->GetDescriptorSet(),
+        *CameraUBOPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
         *DescriptorHeapPtr->GetDescriptorSet(),
-        *GPUScenePtr->GetDescriptorSet(),
-        *LightBufferPtr->GetDescriptorSet()
+        *GPUScenePtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
+        *LightBufferPtr->GetDescriptorSet(CurrentFrameData.FrameIndex)
     };
 
     Cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, PipelineLayout, 0, DescriptorSets, {});

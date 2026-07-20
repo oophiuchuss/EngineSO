@@ -185,11 +185,24 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 			{
 				if (Images[i].MipGeneration == ImageMipGeneration::NormalMapCompute)
 				{
-					GenerateNormalMipChain(Cmd, *Results[i].Image, Images[i].Width, Images[i].Height, Results[i].MipLevels, *NormalResources[i]);
+					GenerateNormalMipChain(
+						Cmd,
+						*Results[i].Image,
+						Images[i].Width, 
+						Images[i].Height, 
+						Results[i].MipLevels, 
+						Images[i].AddressU, 
+						Images[i].AddressV, 
+						*NormalResources[i]);
 				}
 				else
 				{
-					GenerateMipChain(Cmd, *Results[i].Image, Images[i].Width, Images[i].Height, Results[i].MipLevels);
+					GenerateMipChain(
+						Cmd, 
+						*Results[i].Image, 
+						Images[i].Width,
+						Images[i].Height, 
+						Results[i].MipLevels);
 				}
 			}
 		});
@@ -260,6 +273,23 @@ void VulkanUploader::InitializeNormalMipGeneration(Shader& InShader, PipelineCac
 	NormalMipPipeline = Handles.Pipeline;
 	NormalMipPipelineLayout = Handles.Layout;
 	bNormalMipGenerationReady = true;
+}
+
+VulkanUploader::MipAddressMode VulkanUploader::ToMipAddressMode(WrapMode InMode)
+{
+	switch (InMode)
+	{
+	case WrapMode::Repeat:
+		return VulkanUploader::MipAddressMode::Repeat;
+
+	case WrapMode::Clamp:
+		return VulkanUploader::MipAddressMode::Clamp;
+
+	case WrapMode::Mirror:
+		return VulkanUploader::MipAddressMode::Mirror;
+	}
+
+	return VulkanUploader::MipAddressMode::Repeat;
 }
 
 VulkanUploader::StagingBuffer VulkanUploader::CreateStagingBuffer(const void* Data, vk::DeviceSize Size)
@@ -425,7 +455,15 @@ void VulkanUploader::GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Im
 		MipLevels - 1, 1);
 }
 
-void VulkanUploader::GenerateNormalMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels, const NormalMipResources& Resources)
+void VulkanUploader::GenerateNormalMipChain(
+	vk::raii::CommandBuffer& Cmd,
+	vk::Image Image, 
+	uint32_t Width, 
+	uint32_t Height, 
+	uint32_t MipLevels, 
+	MipAddressMode AddressU, 
+	MipAddressMode AddressV, 
+	const NormalMipResources& Resources)
 {
 	if (MipLevels <= 1)
 	{
@@ -491,7 +529,9 @@ void VulkanUploader::GenerateNormalMipChain(vk::raii::CommandBuffer& Cmd, vk::Im
 			SourceWidth,
 			SourceHeight,
 			DestinationWidth,
-			DestinationHeight
+			DestinationHeight,
+			static_cast<uint32_t>(AddressU),
+			static_cast<uint32_t>(AddressV)
 		};
 
 		Cmd.pushConstants<NormalMipPushConstants>(

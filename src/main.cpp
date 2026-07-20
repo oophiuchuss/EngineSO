@@ -92,11 +92,11 @@ int main() {
                     {
                         MaterialProperties Properties = StoneMaterial->GetMaterialProperties();
 
-                        Properties.NormalLodBias = 0.5f;
+                        Properties.NormalLodBias = 0.45f;
 
-                        MaterialReprocessOptions Options(Properties);
+                        MaterialReprocessOptions MaterialOptions(Properties);
 
-                        Engine.GetResourceManager()->Reprocess<Material>(StoneMaterial->GetResourceID(),Options);
+                        Engine.GetResourceManager()->Reprocess<Material>(StoneMaterial->GetResourceID(), MaterialOptions);
                     }
                 }
             }

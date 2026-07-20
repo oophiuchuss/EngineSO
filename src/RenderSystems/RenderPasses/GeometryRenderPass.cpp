@@ -156,9 +156,9 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 
 	// Bind descriptor sets (set 0 = camera UBO, set 1 = texture heap, set 2 = GPU scene buffer)
 	std::array<vk::DescriptorSet, 3> DescriptorSets = {
-		*CameraUBOPtr->GetDescriptorSet(),
+		*CameraUBOPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
 		*DescriptorHeapPtr->GetDescriptorSet(),
-		*GPUScenePtr->GetDescriptorSet()
+		*GPUScenePtr->GetDescriptorSet(CurrentFrameData.FrameIndex)
 	};
 
 	Cmd.bindDescriptorSets(

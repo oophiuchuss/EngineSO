@@ -109,9 +109,9 @@ void LightingPass::ExecuteMainLogic(
 
     // Bind all descriptor sets at once
     std::array<vk::DescriptorSet, 3> DescriptorSets = {
-        *CameraUBOPtr->GetDescriptorSet(),
+        *CameraUBOPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
         *GBufferDescSetPtr->GetDescriptorSet(),
-        *LightBufferPtr->GetDescriptorSet()
+        *LightBufferPtr->GetDescriptorSet(CurrentFrameData.FrameIndex)
     };
 
     Cmd.bindDescriptorSets(

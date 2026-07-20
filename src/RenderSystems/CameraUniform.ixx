@@ -1,5 +1,7 @@
 module;
 
+#include <cstdint>
+#include <vector>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -16,34 +18,47 @@ export struct CameraUniformData {
 export class CameraUniformBuffer
 {
 public:
-	CameraUniformBuffer(const vk::raii::Device& Device, const vk::raii::PhysicalDevice& PhysicalDevice);
-	~CameraUniformBuffer() = default;
+	CameraUniformBuffer(const vk::raii::Device& Device,
+		const vk::raii::PhysicalDevice& PhysicalDevice,
+		uint32_t FramesInFlight);
+
+	~CameraUniformBuffer();
 
 	// Call once per frame to update the uniform buffer with the latest camera data
-	void Update(const CameraUniformData& Data);
+	void Update(uint32_t FrameIndex, const CameraUniformData& Data);
 
 	// Get the descriptor set layout - needed for creating pipeline layouts
-	const vk::raii::DescriptorSet& GetDescriptorSet() const { return DescriptorSet; }
+	const vk::raii::DescriptorSet& GetDescriptorSet(uint32_t FrameIndex) const;
 	const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorSetLayout; }
 	
 	// Get the last updated camera data
 	const CameraUniformData& GetLastData() const { return LastData; }
 
 private:
+	struct FrameResources
+	{
+		vk::raii::DeviceMemory Memory = nullptr;
+		vk::raii::Buffer Buffer = nullptr;
+		void* MappedMemory = nullptr;
+
+		vk::raii::DescriptorSet DescriptorSet = nullptr;
+	};
+
 	void CreateBuffer();
 	void CreateDescriptor();
+
+	FrameResources& GetFrameResources(uint32_t FrameIndex);
+	const FrameResources& GetFrameResources(uint32_t FrameIndex) const;
 
 	const vk::raii::Device& Device;
 	const vk::raii::PhysicalDevice& PhysicalDevice;
 
-	vk::raii::Buffer Buffer = nullptr;
-	vk::raii::DeviceMemory Memory = nullptr;
+	uint32_t FramesInFlight;
 
-	void* MappedMemory = nullptr; // Pointer to the mapped memory for easy updates
-
-	vk::raii::DescriptorPool DescriptorPool = nullptr;
 	vk::raii::DescriptorSetLayout DescriptorSetLayout = nullptr;
-	vk::raii::DescriptorSet DescriptorSet = nullptr;
+	vk::raii::DescriptorPool DescriptorPool = nullptr;
+	std::vector<FrameResources> Frames;
 
-	CameraUniformData LastData; // Cache the last data for later retrieval if needed
+	// This is only a CPU-side copy. The GPU never receives a pointer to it.
+	CameraUniformData LastData{}; // Cache the last data for later retrieval if needed
 };

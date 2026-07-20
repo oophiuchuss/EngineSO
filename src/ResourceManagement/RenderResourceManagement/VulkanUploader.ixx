@@ -10,6 +10,7 @@ export module VulkanUploader;
 
 import Shader;
 import PipelineCache;
+import SamplerDesc;
 
 export class VulkanUploader
 {
@@ -56,6 +57,13 @@ public:
 		NormalMapCompute
 	};
 
+	enum class MipAddressMode : uint32_t
+	{
+		Repeat = 0,
+		Clamp = 1,
+		Mirror = 2
+	};
+
 	struct ImageUploadInfo
 	{
 		const void* PixelData = nullptr;
@@ -63,6 +71,8 @@ public:
 		uint32_t    Height = 0;
 		vk::Format  Format = vk::Format::eR8G8B8A8Unorm;
 		ImageMipGeneration MipGeneration = ImageMipGeneration::LinearBlit;
+		MipAddressMode AddressU = MipAddressMode::Repeat;
+		MipAddressMode AddressV = MipAddressMode::Repeat;
 	};
 
 	UploadBufferResult UploadBuffer(
@@ -80,6 +90,8 @@ public:
 
 	// Initialize the compute pipeline for normal map mip generation
 	void InitializeNormalMipGeneration(Shader& InShader, PipelineCache& InPipelineCache);
+
+	static MipAddressMode ToMipAddressMode(WrapMode InMode);
 
 private:
 	struct StagingBuffer
@@ -111,7 +123,15 @@ private:
 
 	void GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels);
 
-	void GenerateNormalMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels, const NormalMipResources& Resources);
+	void GenerateNormalMipChain(
+		vk::raii::CommandBuffer& Cmd,
+		vk::Image Image,
+		uint32_t Width,
+		uint32_t Height,
+		uint32_t MipLevels,
+		MipAddressMode AddressU,
+		MipAddressMode AddressV,
+		const NormalMipResources& Resources);
 
 	// Submit a one‑time command buffer and wait for completion
 	void SubmitCopy(std::function<void(vk::raii::CommandBuffer&)> RecordCommands);

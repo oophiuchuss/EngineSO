@@ -1,8 +1,5 @@
 module;
 
-#include <memory>
-#include <string>
-
 export module MeshComponent;
 
 import Component;
@@ -23,6 +20,7 @@ public:
 	}
 
 	const MeshData* GetMeshData() const { return MeshHandle.Get(); }
+
 	const Material* GetMaterial() const { return MaterialHandle.Get(); }
 
 	void SetMaterial(ResourceHandle<Material> InMaterialHandle) { MaterialHandle = InMaterialHandle; }

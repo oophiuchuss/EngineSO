@@ -1,5 +1,6 @@
 module;
 
+#include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -18,6 +19,8 @@ export struct RenderableMesh
 
 export struct FrameData
 {
+    uint32_t FrameIndex = 0;
+
     std::vector<RenderableMesh> Renderables;
     std::vector<RenderableMesh> TranslucentRenderables;
     CameraUniformData Camera;

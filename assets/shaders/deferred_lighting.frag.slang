@@ -3,6 +3,7 @@
 
 import GPULightData;
 import CameraUBO;
+import NormalFiltering;
 
 struct PSInput
 {
@@ -174,26 +175,18 @@ PSOutput main(PSInput input)
     PSOutput output;
 
     // Sample G‑buffer
-    float4 Albedo       = GBuffer_Albedo.Sample(input.uv);
-    float4 PackedNormal = GBuffer_Normal.Sample(input.uv);
-    float4 MetalRough   = GBuffer_MetalRough.Sample(input.uv);
-    float3 Emissive     = GBuffer_Emissive.Sample(input.uv).rgb;
-    float  Depth        = Main_Depth.Sample(input.uv).r;
+    float4 Albedo           = GBuffer_Albedo.Sample(input.uv);
+    float4 PackedNormal     = GBuffer_Normal.Sample(input.uv);
+    float4 MetalRough       = GBuffer_MetalRough.Sample(input.uv);
+    float3 Emissive         = GBuffer_Emissive.Sample(input.uv).rgb;
+    float  Depth            = Main_Depth.Sample(input.uv).r;
+    float3 Normal           = normalize(PackedNormal.xyz);
+    float NormalVariance    = NormalLengthToVariance(PackedNormal.a);
+    float Metallic          = MetalRough.x;
+    float Roughness         = max(MetalRough.y, 0.04);
+    float Occlusion         = Albedo.a;
 
-    float3 Normal = normalize(PackedNormal.xyz);
-    float FilteredNormalLength = PackedNormal.a;
-
-    float NormalVariance = (1.0 - FilteredNormalLength) / max(FilteredNormalLength, 1.0e-4);
-
-    float Metallic      = MetalRough.x;
-    float Roughness     = max(MetalRough.y, 0.04);
-    float Occlusion     = Albedo.a;
-
-    float BaseAlpha  = Roughness * Roughness;
-
-    float FilteredAlpha2 = saturate(BaseAlpha * BaseAlpha + NormalVariance);
-
-    float FilteredRoughness = sqrt(sqrt(FilteredAlpha2));
+    float FilteredRoughness = ApplyNormalVarianceToRoughness(Roughness, NormalVariance);
 
     // Reconstruct world position
     float3 WorldPos     = ReconstructWorldPosition(input.uv, Depth);
@@ -210,18 +203,15 @@ PSOutput main(PSInput input)
 
         if (Type == LightType_Directional)
         {
-            LitColor += ApplyDirectionalLight(L, WorldPos, Normal, Albedo.rgb,
-                                              Metallic, FilteredRoughness, ViewDir);
+            LitColor += ApplyDirectionalLight(L, WorldPos, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
         }
         else if (Type == LightType_Point)
         {
-            LitColor += ApplyPointLight(L, WorldPos, Normal, Albedo.rgb,
-                                            Metallic, FilteredRoughness, ViewDir);
+            LitColor += ApplyPointLight(L, WorldPos, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
         }
         else if (Type == LightType_Spot)
         {
-            LitColor += ApplySpotLight(L, WorldPos, Normal, Albedo.rgb,
-                                       Metallic, FilteredRoughness, ViewDir);
+            LitColor += ApplySpotLight(L, WorldPos, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
         }
     }
 

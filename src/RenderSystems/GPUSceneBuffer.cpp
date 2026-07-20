@@ -13,60 +13,91 @@ import GPUSceneData;
 GPUSceneBuffer::GPUSceneBuffer(
     const vk::raii::Device& InDevice,
     const vk::raii::PhysicalDevice& InPhysicalDevice,
+	uint32_t InFramesInFlight,
     uint32_t InMaxObjects,
     uint32_t InMaxMaterials) :
     Device(InDevice),
     PhysicalDevice(InPhysicalDevice),
     MaxObjects(InMaxObjects),
-    MaxMaterials(InMaxMaterials)
+    MaxMaterials(InMaxMaterials),
+	FramesInFlight(InFramesInFlight)
 {
+    if (FramesInFlight == 0)
+    {
+        throw std::invalid_argument("GPUSceneBuffer: FramesInFlight must be greater than zero");
+    }
+
     CreateBuffers();
     CreateDescriptor();
 }
 
+GPUSceneBuffer::~GPUSceneBuffer()
+{
+    // Persistently mapped allocations must be unmapped before DeviceMemory releases them.
+    for (FrameResources& Frame : Frames)
+    {
+        if (Frame.ObjectMappedMemory)
+        {
+            Frame.ObjectMemory.unmapMemory();
+            Frame.ObjectMappedMemory = nullptr;
+        }
+
+        if (Frame.MaterialMappedMemory)
+        {
+            Frame.MaterialMemory.unmapMemory();
+            Frame.MaterialMappedMemory = nullptr;
+        }
+    }
+}
+
 void GPUSceneBuffer::CreateBuffers()
 {
-    // Object buffer
-    vk::DeviceSize ObjectBufferSize = sizeof(ObjectData) * MaxObjects;
+    Frames.resize(FramesInFlight);
 
-    vk::BufferCreateInfo ObjectBufferInfo(
-        {}, ObjectBufferSize,
-        vk::BufferUsageFlagBits::eStorageBuffer,
-        vk::SharingMode::eExclusive);
+    const vk::DeviceSize ObjectBufferSize = sizeof(ObjectData) * MaxObjects;
 
-    ObjectBuffer = Device.createBuffer(ObjectBufferInfo);
+    const vk::DeviceSize MaterialBufferSize = sizeof(MaterialData) * MaxMaterials;
+    for (FrameResources& Frame : Frames)
+    {
+        vk::BufferCreateInfo ObjectBufferInfo(
+            {}, ObjectBufferSize,
+            vk::BufferUsageFlagBits::eStorageBuffer,
+            vk::SharingMode::eExclusive);
 
-    auto ObjMemReqs = ObjectBuffer.getMemoryRequirements();
-    uint32_t ObjMemTypeIndex = VulkanUtils::FindMemoryType(
-        PhysicalDevice, ObjMemReqs.memoryTypeBits,
-        vk::MemoryPropertyFlagBits::eHostVisible |
-        vk::MemoryPropertyFlagBits::eHostCoherent);
+        Frame.ObjectBuffer = Device.createBuffer(ObjectBufferInfo);
 
-    ObjectMemory = Device.allocateMemory(vk::MemoryAllocateInfo(ObjMemReqs.size, ObjMemTypeIndex));
+        auto ObjMemReqs = Frame.ObjectBuffer.getMemoryRequirements();
 
-    ObjectBuffer.bindMemory(*ObjectMemory, 0);
-    ObjectMappedMemory = ObjectMemory.mapMemory(0, ObjectBufferSize);
+        const uint32_t ObjMemTypeIndex = VulkanUtils::FindMemoryType(
+            PhysicalDevice, ObjMemReqs.memoryTypeBits,
+            vk::MemoryPropertyFlagBits::eHostVisible |
+            vk::MemoryPropertyFlagBits::eHostCoherent);
 
-    // Material buffer
-    vk::DeviceSize MaterialBufferSize = sizeof(MaterialData) * MaxMaterials;
+        Frame.ObjectMemory = Device.allocateMemory(vk::MemoryAllocateInfo(ObjMemReqs.size, ObjMemTypeIndex));
 
-    vk::BufferCreateInfo MaterialBufferInfo(
-        {}, MaterialBufferSize,
-        vk::BufferUsageFlagBits::eStorageBuffer,
-        vk::SharingMode::eExclusive);
+        Frame.ObjectBuffer.bindMemory(*Frame.ObjectMemory, 0);
+        Frame.ObjectMappedMemory = Frame.ObjectMemory.mapMemory(0, ObjectBufferSize);
 
-    MaterialBuffer = Device.createBuffer(MaterialBufferInfo);
+        vk::BufferCreateInfo MaterialBufferInfo(
+            {}, MaterialBufferSize,
+            vk::BufferUsageFlagBits::eStorageBuffer,
+            vk::SharingMode::eExclusive);
 
-    auto MatMemReqs = MaterialBuffer.getMemoryRequirements();
-    uint32_t MatMemTypeIndex = VulkanUtils::FindMemoryType(
-        PhysicalDevice, MatMemReqs.memoryTypeBits,
-        vk::MemoryPropertyFlagBits::eHostVisible |
-        vk::MemoryPropertyFlagBits::eHostCoherent);
+        Frame.MaterialBuffer = Device.createBuffer(MaterialBufferInfo);
 
-    MaterialMemory = Device.allocateMemory(vk::MemoryAllocateInfo(MatMemReqs.size, MatMemTypeIndex));
+        auto MatMemReqs = Frame.MaterialBuffer.getMemoryRequirements();
 
-    MaterialBuffer.bindMemory(*MaterialMemory, 0);
-    MaterialMappedMemory = MaterialMemory.mapMemory(0, MaterialBufferSize);
+        const uint32_t MatMemTypeIndex = VulkanUtils::FindMemoryType(
+            PhysicalDevice, MatMemReqs.memoryTypeBits,
+            vk::MemoryPropertyFlagBits::eHostVisible |
+            vk::MemoryPropertyFlagBits::eHostCoherent);
+
+        Frame.MaterialMemory = Device.allocateMemory(vk::MemoryAllocateInfo(MatMemReqs.size, MatMemTypeIndex));
+
+        Frame.MaterialBuffer.bindMemory(*Frame.MaterialMemory, 0);
+        Frame.MaterialMappedMemory = Frame.MaterialMemory.mapMemory(0, MaterialBufferSize);
+
+    }
 }
 
 void GPUSceneBuffer::CreateDescriptor()
@@ -80,29 +111,40 @@ void GPUSceneBuffer::CreateDescriptor()
     vk::DescriptorSetLayoutCreateInfo LayoutInfo({}, Bindings);
     DescriptorSetLayout = Device.createDescriptorSetLayout(LayoutInfo);
 
-    vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eStorageBuffer, 2);
+    // Every frame owns one descriptor set containing two storage-buffer descriptors.
+    vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eStorageBuffer, FramesInFlight * 2);
     vk::DescriptorPoolCreateInfo PoolInfo(
         vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        1, PoolSize);
+        FramesInFlight, PoolSize);
 
     DescriptorPool = Device.createDescriptorPool(PoolInfo);
 
-    vk::DescriptorSetAllocateInfo AllocInfo(*DescriptorPool, *DescriptorSetLayout);
-    DescriptorSet = std::move(Device.allocateDescriptorSets(AllocInfo).front());
+    std::vector<vk::DescriptorSetLayout> Layouts(FramesInFlight, *DescriptorSetLayout);
 
-    vk::DescriptorBufferInfo ObjectBufferInfo(*ObjectBuffer, 0, sizeof(ObjectData) * MaxObjects);
+    vk::DescriptorSetAllocateInfo AllocateInfo(*DescriptorPool, Layouts);
+    std::vector<vk::raii::DescriptorSet> DescriptorSets = Device.allocateDescriptorSets(AllocateInfo);
 
-    vk::DescriptorBufferInfo MaterialBufferInfo(*MaterialBuffer, 0, sizeof(MaterialData) * MaxMaterials);
+    for (uint32_t FrameIndex = 0; FrameIndex < FramesInFlight; FrameIndex++)
+    {
+        FrameResources& Frame = Frames[FrameIndex];
 
-    std::array<vk::WriteDescriptorSet, 2> Writes = { {
-        { *DescriptorSet, 0, 0, vk::DescriptorType::eStorageBuffer, nullptr, ObjectBufferInfo },
-        { *DescriptorSet, 1, 0, vk::DescriptorType::eStorageBuffer, nullptr, MaterialBufferInfo }
-    } };
+        Frame.DescriptorSet = std::move(DescriptorSets[FrameIndex]);
 
-    Device.updateDescriptorSets(Writes, {});
+        vk::DescriptorBufferInfo ObjectBufferInfo(*Frame.ObjectBuffer, 0, sizeof(ObjectData) * MaxObjects);
+
+        vk::DescriptorBufferInfo MaterialBufferInfo(*Frame.MaterialBuffer, 0, sizeof(MaterialData) * MaxMaterials);
+
+        std::array<vk::WriteDescriptorSet, 2> Writes = { {
+            { *Frame.DescriptorSet, 0, 0, vk::DescriptorType::eStorageBuffer, nullptr, ObjectBufferInfo },
+            { *Frame.DescriptorSet, 1, 0, vk::DescriptorType::eStorageBuffer, nullptr, MaterialBufferInfo }
+        } };
+        
+        Device.updateDescriptorSets(Writes, {});
+    }
 }
 
 void GPUSceneBuffer::Update(
+    uint32_t FrameIndex,
     const std::vector<ObjectData>& Objects,
     const std::vector<MaterialData>& Materials)
 {
@@ -116,13 +158,40 @@ void GPUSceneBuffer::Update(
         throw std::runtime_error("GPUSceneBuffer: material count exceeds MaxMaterials");
     }
 
+    FrameResources& Frame = GetFrameResources(FrameIndex);
+
     if (!Objects.empty())
     {
-        std::memcpy(ObjectMappedMemory, Objects.data(), Objects.size() * sizeof(ObjectData));
+        std::memcpy(Frame.ObjectMappedMemory, Objects.data(), Objects.size() * sizeof(ObjectData));
     }
 
     if (!Materials.empty())
     {
-        std::memcpy(MaterialMappedMemory, Materials.data(), Materials.size() * sizeof(MaterialData));
+        std::memcpy(Frame.MaterialMappedMemory, Materials.data(), Materials.size() * sizeof(MaterialData));
     }
+}
+
+const vk::raii::DescriptorSet& GPUSceneBuffer::GetDescriptorSet(uint32_t FrameIndex) const
+{
+    return GetFrameResources(FrameIndex).DescriptorSet;
+}
+
+GPUSceneBuffer::FrameResources& GPUSceneBuffer::GetFrameResources(uint32_t FrameIndex)
+{
+    if (FrameIndex >= Frames.size())
+    {
+        throw std::out_of_range("GPUSceneBuffer: frame index is out of range");
+    }
+
+    return Frames[FrameIndex];
+}
+
+const GPUSceneBuffer::FrameResources& GPUSceneBuffer::GetFrameResources(uint32_t FrameIndex) const
+{
+    if (FrameIndex >= Frames.size())
+    {
+        throw std::out_of_range("GPUSceneBuffer: frame index is out of range");
+    }
+
+    return Frames[FrameIndex];
 }

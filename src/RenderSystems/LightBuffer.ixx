@@ -1,7 +1,8 @@
 module;
 
-#include <vulkan/vulkan_raii.hpp>
+#include <cstdint>
 #include <vector>
+#include <vulkan/vulkan_raii.hpp>
 
 export module LightBuffer;
 
@@ -13,35 +14,48 @@ public:
     LightBuffer(
         const vk::raii::Device& Device,
         const vk::raii::PhysicalDevice& PhysicalDevice,
-        uint32_t  MaxLights = 128);
+        uint32_t FramesInFlight,
+        uint32_t MaxLights = 128);
 
-    ~LightBuffer() = default;
+    ~LightBuffer();
 
-    // Upload an array of GPULightData to the GPU buffer.
     // Automatically writes the light count header followed by the LightData entries.
-    void Update(const std::vector<GPULightData>& Lights);
+    void Update(uint32_t FrameIndex, const std::vector<GPULightData>& Lights);
 
-    const vk::raii::DescriptorSet& GetDescriptorSet() const { return DescriptorSet; }
+    const vk::raii::DescriptorSet& GetDescriptorSet(uint32_t FrameIndex) const;
     const vk::raii::DescriptorSetLayout& GetDescriptorSetLayout() const { return DescriptorLayout; }
 
 private:
+    struct FrameResources
+    {
+        vk::raii::DeviceMemory Memory = nullptr;
+        vk::raii::Buffer Buffer = nullptr;
+        void* MappedMemory = nullptr;
+
+        vk::raii::DescriptorSet DescriptorSet = nullptr;
+    };
+
+    void CalculateBufferLayout();
     void CreateBuffer();
     void CreateDescriptorLayout();
     void CreateDescriptorPool();
     void CreateDescriptorSet();
 
+    FrameResources& GetFrameResources(uint32_t FrameIndex);
+    const FrameResources& GetFrameResources(uint32_t FrameIndex) const;
+
     const vk::raii::Device& Device;
     const vk::raii::PhysicalDevice& PhysicalDevice;
+
+    uint32_t FramesInFlight;
     uint32_t MaxLights;
 
-    // Pre‑allocated to maximum size, host‑visible & coherent
-    vk::DeviceSize BufferSize;
+    static constexpr vk::DeviceSize HeaderSize = 16;
 
-    vk::raii::Buffer Buffer = nullptr;
-    vk::raii::DeviceMemory BufferMemory = nullptr;
-    void* MappedMemory = nullptr;
+    vk::DeviceSize LightDataOffset = 0;
+    vk::DeviceSize BufferSize = 0;
 
     vk::raii::DescriptorSetLayout DescriptorLayout = nullptr;
     vk::raii::DescriptorPool DescriptorPool = nullptr;
-    vk::raii::DescriptorSet DescriptorSet = nullptr;
+    std::vector<FrameResources> Frames;
 };

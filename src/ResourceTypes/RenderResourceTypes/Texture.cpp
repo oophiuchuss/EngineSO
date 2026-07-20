@@ -8,6 +8,7 @@ module Texture;
 
 import TextureData;
 import VulkanUploader;
+import SamplerDesc;
 
 Texture::Texture(vk::raii::Image&& InImage,
     vk::raii::DeviceMemory&& InMemory,
@@ -20,19 +21,25 @@ Texture::Texture(vk::raii::Image&& InImage,
 
 std::unique_ptr<Texture> Texture::CreateFromTextureData(const vk::raii::Device& Device, VulkanUploader& Uploader, const TextureData& Data)
 {
+    const SamplerDesc& Sampler = Data.GetSamplerDesc();
+
 	// TODO: potentially support other formats in the future
     vk::Format Format = (Data.GetColorSpace() == TextureColorSpace::SRGB)
         ? vk::Format::eR8G8B8A8Srgb
         : vk::Format::eR8G8B8A8Unorm;
+
+    VulkanUploader::ImageMipGeneration MipGeneration = Data.GetMipFilter() == TextureMipFilter::NormalMap
+        ? VulkanUploader::ImageMipGeneration::NormalMapCompute
+        : VulkanUploader::ImageMipGeneration::LinearBlit;
 
     VulkanUploader::ImageUploadInfo Info;
     Info.PixelData = Data.GetPixels().data();
     Info.Width = Data.GetWidth();
     Info.Height = Data.GetHeight();
     Info.Format = Format;
-    Info.MipGeneration = Data.GetMipFilter() == TextureMipFilter::NormalMap
-        ? VulkanUploader::ImageMipGeneration::NormalMapCompute
-        : VulkanUploader::ImageMipGeneration::LinearBlit;
+    Info.MipGeneration = MipGeneration;
+    Info.AddressU = VulkanUploader::ToMipAddressMode(Sampler.AddressU);
+    Info.AddressV = VulkanUploader::ToMipAddressMode(Sampler.AddressV);
 
     auto Result = Uploader.UploadImage(Info);
 
@@ -63,6 +70,8 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
 
     for (const TextureData* Data : DataList)
     {
+        const SamplerDesc& Sampler = Data->GetSamplerDesc();
+        
         // TODO: potentially support other formats in the future
         vk::Format Format = (Data->GetColorSpace() == TextureColorSpace::SRGB)
             ? vk::Format::eR8G8B8A8Srgb
@@ -78,6 +87,8 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
         Info.Height = Data->GetHeight();
         Info.Format = Format;
         Info.MipGeneration = MipGeneration;
+        Info.AddressU = VulkanUploader::ToMipAddressMode(Sampler.AddressU);
+        Info.AddressV = VulkanUploader::ToMipAddressMode(Sampler.AddressV);
         UploadInfos.push_back(Info);
     }
 

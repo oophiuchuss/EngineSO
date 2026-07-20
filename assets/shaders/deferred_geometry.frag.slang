@@ -1,4 +1,5 @@
 import GPUSceneData;
+import NormalFiltering;
 
 struct PSInput
 {
@@ -92,7 +93,13 @@ PSOutput main(PSInput input)
 
     float3 DecodedNormalTS = SampledNormalTS * 2.0 - 1.0;
 
-    float FilteredNormalLength = length(DecodedNormalTS);
+    float RawFilteredNormalLength = length(DecodedNormalTS);
+
+    float NormalVariance = NormalLengthToVariance(RawFilteredNormalLength);
+
+    NormalVariance = ScaleNormalVariance(NormalVariance, material.NormalScale);
+
+    float EffectiveFilteredNormalLength = NormalVarianceToLength(NormalVariance);
 
     float3 GeometricNormal = normalize(input.inNormal);
 
@@ -100,7 +107,7 @@ PSOutput main(PSInput input)
 
     // Write G‑buffer attachments
     output.Albedo       = float4(Albedo.rgb, Occlusion);                        // pack occlusion into alpha
-    output.Normal       = float4(FinalNormal, saturate(FilteredNormalLength));  // world-space normal
+    output.Normal       = float4(FinalNormal, EffectiveFilteredNormalLength);  // world-space normal
     output.MetalRough   = float4(Metallic, Roughness, 0.0, 0.0);                // metallic, roughness
     output.Emissive     = float4(Emissive, 0.0);                                // HDR emissive
 
