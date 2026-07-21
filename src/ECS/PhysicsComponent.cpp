@@ -12,7 +12,7 @@ PhysicsComponent::~PhysicsComponent()
 	/*EventSystem::Get().RemoveListener(this);*/
 }
 
-void PhysicsComponent::OnEvent(const EventBase& Event)
+EventReply PhysicsComponent::OnEvent(const EventBase& Event)
 {
 	if (const auto CollisionEventPtr = dynamic_cast<const CollisionEvent*>(&Event))
 	{
@@ -22,4 +22,6 @@ void PhysicsComponent::OnEvent(const EventBase& Event)
 		
 		// TODO Implement physics response to the collision between EntityA and EntityB
 	}
+
+	return EventReply::Unhandled;
 }

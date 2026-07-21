@@ -6,5 +6,5 @@ export class EventListener
 {
 public:
 	virtual ~EventListener() = default;
-	virtual void OnEvent(const EventBase& Event) = 0;
+	virtual EventReply OnEvent(const EventBase& Event) = 0;
 };

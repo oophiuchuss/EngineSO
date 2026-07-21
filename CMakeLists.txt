@@ -78,6 +78,39 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.92.8-docking
+    GIT_SHALLOW    TRUE
+)
+
+FetchContent_MakeAvailable(imgui)
+
+set(IMGUI_SOURCES
+    "${imgui_SOURCE_DIR}/imgui.cpp"
+    "${imgui_SOURCE_DIR}/imgui_draw.cpp"
+    "${imgui_SOURCE_DIR}/imgui_tables.cpp"
+    "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
+    "${imgui_SOURCE_DIR}/imgui_demo.cpp"
+
+    "${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
+    "${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp"
+)
+
+target_sources(EngineSO PRIVATE ${IMGUI_SOURCES})
+
+target_include_directories(EngineSO PRIVATE
+    "${imgui_SOURCE_DIR}"
+    "${imgui_SOURCE_DIR}/backends"
+)
+
+source_group(
+    TREE "${imgui_SOURCE_DIR}"
+    PREFIX "Dependencies/Dear ImGui"
+    FILES ${IMGUI_SOURCES}
+)
+
 file(GLOB_RECURSE SLANGC_CANDIDATES
     "${slang_SOURCE_DIR}/**/slangc.exe"
 )
@@ -112,11 +145,12 @@ file(GLOB_RECURSE ALL_SHADER_SOURCES CONFIGURE_DEPENDS
     "${SHADER_SRC_DIR}/*.slang"
 )
 
-# Filter to only non-stage files (modules)
+set(SHADER_MODULES ${ALL_SHADER_SOURCES})
+
+# Keep only imported module files, excluding shader entry-point files.
 list(FILTER SHADER_MODULES EXCLUDE REGEX "\\.(vert|frag|comp)\\.slang$")
 
 set(ALL_SPV_FILES)
-
 
 foreach(SHADER_SRC ${ALL_SHADER_SOURCES})
 

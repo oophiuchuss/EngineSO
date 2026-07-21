@@ -1231,7 +1231,7 @@ bool Renderer::CanAcquireSwapchainImage() const
 	return true;
 }
 
-void Renderer::OnEvent(const EventBase& Event)
+EventReply Renderer::OnEvent(const EventBase& Event)
 {
 	EventDispatcher Dispatcher(Event);
 
@@ -1263,4 +1263,6 @@ void Renderer::OnEvent(const EventBase& Event)
 
 		// TODO: Handle shaders here too
 	});
+
+	return EventReply::Unhandled;
 }

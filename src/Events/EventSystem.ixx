@@ -63,13 +63,7 @@ public:
 	{
 		if (bImmediateMode)
 		{
-			for (const ListenerInfo& Info: Listeners)
-			{
-				if (Info.CategoryFilter == -1 || (Event.GetCategoryFlags() & Info.CategoryFilter))
-				{
-					Info.Listener->OnEvent(Event);
-				}
-			}
+			DispatchEvent(Event);
 		}
 		else
 		{
@@ -94,21 +88,26 @@ public:
 
 		while (!CurrentEvents.empty())
 		{
-			auto& Event = *CurrentEvents.front();
-
-			for (const ListenerInfo& Info : Listeners)
-			{
-				if (Info.CategoryFilter == -1 || (Event.GetCategoryFlags() & Info.CategoryFilter))
-				{
-					Info.Listener->OnEvent(Event);
-				}
-			}
-
+			DispatchEvent(*CurrentEvents.front());
 			CurrentEvents.pop();
 		}
 	}
 
 private:
+	void DispatchEvent(const EventBase& Event)
+	{
+		for (const ListenerInfo& Info : Listeners)
+		{
+			if (Info.CategoryFilter == -1 || (Event.GetCategoryFlags() & Info.CategoryFilter))
+			{
+				if (Info.Listener->OnEvent(Event) == EventReply::Handled)
+				{
+					break;
+				}
+			}
+		}
+	}
+
 	std::vector<ListenerInfo> Listeners;
 	std::queue<std::unique_ptr<EventBase>> EventQueue;
 	std::mutex QueueMutex;

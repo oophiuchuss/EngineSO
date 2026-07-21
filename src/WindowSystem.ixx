@@ -8,8 +8,10 @@ module;
 export module WindowSystem;
 
 import EventSystem;
+import EventListener;
+import EventBase;
 
-export class WindowSystem
+export class WindowSystem : public EventListener
 {
 public:
 	WindowSystem(EventSystem* InEventSystem,
@@ -41,6 +43,8 @@ public:
 	int GetHeight() const { return WindowHeight; }
 private:
 	void RegisterCallbacks();
+
+	EventReply OnEvent(const EventBase& Event) override;
 
 	// Static GLFW callback functions that forward to the instance methods
 	static void FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height);

@@ -66,7 +66,7 @@ private:
 
 	bool CanAcquireSwapchainImage() const;
 	
-	void OnEvent(const EventBase& Event) override;
+	EventReply OnEvent(const EventBase& Event) override;
 
 	ResourceManager* ResourceManagerPtr;	// Non-owning resource manager
 

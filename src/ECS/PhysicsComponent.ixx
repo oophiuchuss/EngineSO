@@ -9,7 +9,7 @@ export class PhysicsComponent : public ComponentBase, public EventListener
 {
 public:
 	~PhysicsComponent() override;
-	void OnEvent(const EventBase& Event) override;
+	EventReply OnEvent(const EventBase& Event) override;
 
 protected:
 	void OnInitialize() override;

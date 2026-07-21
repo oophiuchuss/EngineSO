@@ -10,6 +10,9 @@ module;
 module WindowSystem;
 
 import EventSystem;
+import EventBase;
+import EventDispatcher;
+import CursorCaptureRequestEvent;
 import KeyEvent;
 import MouseMovedEvent;
 import MouseButtonEvent;
@@ -25,6 +28,8 @@ WindowSystem::WindowSystem(
 	WindowWidth(InWidth),
 	WindowHeight(InHeight)
 {
+    EventSystemPtr->AddListener(this, static_cast<int>(EventCategory::Window), 1);
+
     if (!glfwInit())
     {
         throw std::runtime_error("Failed to initialize GLFW");
@@ -46,6 +51,11 @@ WindowSystem::WindowSystem(
 
 WindowSystem::~WindowSystem()
 {
+    if (EventSystemPtr)
+    {
+        EventSystemPtr->RemoveListener(this);
+    }
+
     // Destroy Window and GLFW
     if (Window)
     {
@@ -100,6 +110,22 @@ void WindowSystem::RegisterCallbacks()
     glfwSetCursorPosCallback(Window, MouseMoveCallback);
     glfwSetMouseButtonCallback(Window, MouseButtonCallback);
     glfwSetScrollCallback(Window, MouseScrollCallback);
+}
+
+EventReply WindowSystem::OnEvent(const EventBase& Event)
+{
+    EventDispatcher Dispatcher(Event);
+
+    if (Dispatcher.Dispatch<CursorCaptureRequestEvent>(
+        [this](const CursorCaptureRequestEvent& E)
+        {
+            SetCursorCaptured(E.ShouldCapture());
+        }))
+    {
+        return EventReply::Handled;
+    }
+
+    return EventReply::Unhandled;
 }
 
 void WindowSystem::FrameBufferResizeCallback(GLFWwindow* Window, int Width, int Height)
@@ -192,9 +218,6 @@ void WindowSystem::OnMouseMove(double XPos, double YPos)
 
 void WindowSystem::OnMouseButton(int Button, int Action)
 {
-    if (Button == GLFW_MOUSE_BUTTON_RIGHT)
-        SetCursorCaptured(Action == GLFW_PRESS);
-
     MouseButtonAction BAction = (Action == GLFW_PRESS)
         ? MouseButtonAction::Press
         : MouseButtonAction::Release;

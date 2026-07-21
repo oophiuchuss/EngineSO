@@ -13,6 +13,7 @@ import EventDispatcher;
 import KeyEvent;
 import TransformComponent;
 import MouseButtonEvent;
+import CursorCaptureRequestEvent;
 
 void FlyCameraControllerComponent::OnInitialize()
 {
@@ -98,7 +99,7 @@ void FlyCameraControllerComponent::Update(float DeltaTime)
 	MouseDeltaY = 0.0;
 }
 
-void FlyCameraControllerComponent::OnEvent(const EventBase& Event)
+EventReply FlyCameraControllerComponent::OnEvent(const EventBase& Event)
 {
 	EventDispatcher Dispatcher(Event);
 
@@ -121,6 +122,8 @@ void FlyCameraControllerComponent::OnEvent(const EventBase& Event)
 	{
 		ProcessMouseScroll(E);
 	});
+
+	return EventReply::Unhandled;
 }
 
 void FlyCameraControllerComponent::ProcessKeyEvent(const KeyEvent& Event)
@@ -154,6 +157,11 @@ void FlyCameraControllerComponent::ProcessMouseButtonEvent(const MouseButtonEven
 	else
 	{
 		HeldKeys.erase(Button);
+	}
+
+	if (Button == GLFW_MOUSE_BUTTON_RIGHT)
+	{
+		EventSystemPtr->PublishEvent(CursorCaptureRequestEvent(Event.GetAction() == MouseButtonAction::Press));
 	}
 }
 

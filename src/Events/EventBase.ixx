@@ -20,6 +20,12 @@ export enum class KeyAction
 	Repeat
 };
 
+export enum class EventReply
+{
+	Unhandled,
+	Handled
+};
+
 export class EventBase
 {
 public:
