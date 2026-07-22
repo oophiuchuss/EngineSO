@@ -1,7 +1,7 @@
 module;
 
 #include <vulkan/vulkan_raii.hpp>
-
+#include <imgui.h>
 #include <vector>
 #include <unordered_set>
 
@@ -35,7 +35,7 @@ public:
 	Renderer(vk::raii::Instance& Instance, vk::raii::SurfaceKHR&& Surface, ResourceManager* InResourceManagerPtr);
 	~Renderer();
 
-	void RenderFrame(Scene* SceneToRender);
+	void RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData);
 
 private:
 	void SetActiveCamera(CameraComponent* Camera);
@@ -66,6 +66,11 @@ private:
 
 	bool CanAcquireSwapchainImage() const;
 	
+	void InitializeImGuiVulkanBackend();
+	void ShutdownImGuiVulkanBackend();
+
+	static void CheckImGuiVulkanResult(VkResult Result);
+
 	EventReply OnEvent(const EventBase& Event) override;
 
 	ResourceManager* ResourceManagerPtr;	// Non-owning resource manager
@@ -90,6 +95,9 @@ private:
 	std::vector<vk::raii::ImageView> SwapchainImageViews;	// Created ourselves therefore is raii
 	vk::Format SwapchainImageFormat;
 	vk::Extent2D SwapchainExtent;
+
+	uint32_t SwapchainMinImageCount = 2;
+	bool bImGuiVulkanBackendInitialized = false;
 
 	// Synchronization (double buffered, but swapchain may have 3 images)
 	static constexpr int MAX_FRAMES_IN_FLIGHT = 2;

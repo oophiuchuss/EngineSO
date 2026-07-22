@@ -16,6 +16,7 @@ import Renderer;
 import Scene;
 import ResourceManager;
 import TaskScheduler;
+import ImGuiSystem;
 
 VulkanEngine::VulkanEngine()
 {
@@ -35,6 +36,10 @@ VulkanEngine::VulkanEngine()
     // Context should be create with default constructor
     // Initialize all needed resources for vulkan and GLFW  
     InitVulkan();
+
+    ImGuiSystemInstance = std::make_unique<ImGuiSystem>(
+        *WindowSystemInstance,
+        *EventSystemInstance);
 
     RendererInstance = std::make_unique<Renderer>(
         Instance,
@@ -121,7 +126,12 @@ void VulkanEngine::MainLoop()
         TaskSchedulerInstance->ProcessMainThreadTasks();
 
         MainSceneInstance->Update(DeltaTime);
-        RendererInstance->RenderFrame(MainSceneInstance.get());
+        
+        ImGuiSystemInstance->BeginFrame();
+        ImGuiSystemInstance->BuildPanels();
+        ImGuiSystemInstance->EndFrame();
+        
+        RendererInstance->RenderFrame(MainSceneInstance.get(), ImGuiSystemInstance->GetDrawData());
     }
 }
 

@@ -3,6 +3,8 @@ module;
 #include <vulkan/vulkan_raii.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <imgui.h>
+#include <imgui_impl_vulkan.h>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -17,10 +19,6 @@ import GPUProfiler;
 import Rendergraph;
 import CullingSystem;
 import Entity;
-import GeometryRenderPass;
-import LightingPass;
-import ForwardTranslucencyPass;
-import PostProcessPass;
 import CameraUniform;
 import Scene;
 import ResourceManager;
@@ -35,6 +33,12 @@ import LightBuffer;
 import GPULightData;
 import RenderResourceCache;
 import FrameData;
+
+import GeometryRenderPass;
+import LightingPass;
+import ForwardTranslucencyPass;
+import PostProcessPass;
+import ImGuiRenderPass;
 
 import EventDispatcher;
 import WindowResizeEvent;
@@ -149,6 +153,8 @@ Renderer::Renderer(
 	RendergraphInstance->Compile();
 	GBufferDescSet->Initialize(*RendergraphInstance);
 	PostProcessDesc->Initialize(*RendergraphInstance);
+
+	InitializeImGuiVulkanBackend();
 }
 
 Renderer::~Renderer()
@@ -157,10 +163,11 @@ Renderer::~Renderer()
 	{
 		// vk::raii::Device is truthy if valid
 		Device.waitIdle();
+		ShutdownImGuiVulkanBackend();
 	}
 }
 
-void Renderer::RenderFrame(Scene* SceneToRender)
+void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 {
 	// Wait for previous frame to finish
 	vk::Result FenceResult = Device.waitForFences({ *InFlightFences[CurrentFrame] }, VK_TRUE, UINT64_MAX);
@@ -252,6 +259,7 @@ void Renderer::RenderFrame(Scene* SceneToRender)
 		FrameData CurrentFrameData;
 		CurrentFrameData.FrameIndex = static_cast<uint32_t>(CurrentFrame);
 		CurrentFrameData.Camera = CameraUBO->GetLastData();
+		CurrentFrameData.ImGuiDrawData = InImGuiDrawData;
 
 		std::vector<ObjectData> FrameObjects;
 		std::vector<MaterialData> FrameMaterials;
@@ -769,8 +777,10 @@ void Renderer::CreateSwapchain()
 		| vk::ImageUsageFlagBits::eTransferSrc;
 
 	// First pass: required + extra usage
-	for (auto& Fmt : SurfaceFormats) {
-		if (IsFormatUsageSupported(Fmt.format, RequiredUsage | ExtraUsage)) {
+	for (auto& Fmt : SurfaceFormats) 
+	{
+		if (IsFormatUsageSupported(Fmt.format, RequiredUsage | ExtraUsage)) 
+		{
 			SurfaceFormat = Fmt.format;
 			SurfaceColorSpace = Fmt.colorSpace;
 			break;
@@ -778,9 +788,12 @@ void Renderer::CreateSwapchain()
 	}
 
 	// Second pass: fallback – required usage only
-	if (SurfaceFormat == vk::Format::eUndefined) {
-		for (auto& Fmt : SurfaceFormats) {
-			if (IsFormatUsageSupported(Fmt.format, RequiredUsage)) {
+	if (SurfaceFormat == vk::Format::eUndefined) 
+	{
+		for (auto& Fmt : SurfaceFormats) 
+		{
+			if (IsFormatUsageSupported(Fmt.format, RequiredUsage)) 
+			{
 				SurfaceFormat = Fmt.format;
 				SurfaceColorSpace = Fmt.colorSpace;
 				break;
@@ -788,7 +801,8 @@ void Renderer::CreateSwapchain()
 		}
 	}
 
-	if (SurfaceFormat == vk::Format::eUndefined) {
+	if (SurfaceFormat == vk::Format::eUndefined)
+	{
 		throw std::runtime_error("No suitable swapchain format found");
 	}
 
@@ -819,6 +833,8 @@ void Renderer::CreateSwapchain()
 	{
 		ImageCount = std::min(ImageCount, SurfaceCaps.maxImageCount); // Clamp to max if there is a limit
 	}
+
+	SwapchainMinImageCount = ImageCount;
 
 	vk::SwapchainCreateInfoKHR SwapchainCreateInfo;
 
@@ -1036,6 +1052,10 @@ void Renderer::SetupRenderPasses()
 		PostProcessShader,
 		PipelineCacheInstance.get(),
 		PostProcessDesc.get());
+
+	RendergraphInstance->AddRenderPass<ImGuiRenderPass>(
+		"ImGuiPass",
+		"Swapchain");
 }
 
 void Renderer::PreloadSceneResources(Scene& Scene)
@@ -1229,6 +1249,83 @@ bool Renderer::CanAcquireSwapchainImage() const
 	// maybe also compare swapchainExtent with caps.currentExtent if needed.
 
 	return true;
+}
+
+void Renderer::InitializeImGuiVulkanBackend()
+{
+	if (bImGuiVulkanBackendInitialized)
+	{
+		return;
+	}
+
+	if (ImGui::GetCurrentContext() == nullptr)
+	{
+		throw std::runtime_error("Cannot initialize ImGui Vulkan backend without an ImGui context");
+	}
+
+	const uint32_t ActualImageCount = static_cast<uint32_t>(SwapchainImages.size());
+
+	if (SwapchainMinImageCount < 2 || ActualImageCount < 2)
+	{
+		throw std::runtime_error("ImGui Vulkan backend requires at least two swapchain images");
+	}
+
+	VkFormat ColorAttachmentFormat = static_cast<VkFormat>(SwapchainImageFormat);
+
+	ImGui_ImplVulkan_InitInfo InitInfo{};
+
+	InitInfo.ApiVersion = VK_API_VERSION_1_4;
+	InitInfo.Instance = static_cast<VkInstance>(*Instance);
+	InitInfo.PhysicalDevice = static_cast<VkPhysicalDevice>(*PhysicalDevice);
+	InitInfo.Device = static_cast<VkDevice>(*Device);
+	InitInfo.QueueFamily = GraphicsQueueFamilyIndex;
+	InitInfo.Queue = static_cast<VkQueue>(*GraphicsQueue);
+
+	// Let the pinned ImGui backend create and own its private pool.
+	InitInfo.DescriptorPool = VK_NULL_HANDLE;
+	InitInfo.DescriptorPoolSize = 128;
+
+	InitInfo.MinImageCount = SwapchainMinImageCount;
+	InitInfo.ImageCount = ActualImageCount;
+	InitInfo.PipelineCache = VK_NULL_HANDLE;
+	InitInfo.UseDynamicRendering = true;
+	InitInfo.PipelineInfoMain.RenderPass = VK_NULL_HANDLE;
+	InitInfo.PipelineInfoMain.Subpass = 0;
+	InitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+	auto& RenderingInfo = InitInfo.PipelineInfoMain.PipelineRenderingCreateInfo;
+
+	RenderingInfo = {};
+	RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+	RenderingInfo.colorAttachmentCount = 1;
+	RenderingInfo.pColorAttachmentFormats = &ColorAttachmentFormat;
+	InitInfo.CheckVkResultFn = &Renderer::CheckImGuiVulkanResult;
+
+	if (!ImGui_ImplVulkan_Init(&InitInfo))
+	{
+		throw std::runtime_error("Failed to initialize ImGui Vulkan backend");
+	}
+
+	bImGuiVulkanBackendInitialized = true;
+}
+
+void Renderer::ShutdownImGuiVulkanBackend()
+{
+	if (!bImGuiVulkanBackendInitialized)
+	{
+		return;
+	}
+
+	ImGui_ImplVulkan_Shutdown();
+	bImGuiVulkanBackendInitialized = false;
+}
+
+void Renderer::CheckImGuiVulkanResult(VkResult Result)
+{
+	if (Result < VK_SUCCESS)
+	{
+		throw std::runtime_error("ImGui Vulkan backend error: " + std::to_string(static_cast<int>(Result)));
+	}
 }
 
 EventReply Renderer::OnEvent(const EventBase& Event)

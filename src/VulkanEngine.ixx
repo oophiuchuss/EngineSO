@@ -12,6 +12,7 @@ import ResourceManager;
 import TaskScheduler;
 import EventSystem;
 import WindowSystem;
+import ImGuiSystem;
 
 // EngineSO Coordinate System Contract:
 // - World space: right-handed, Y-up, camera looks toward -Z
@@ -57,6 +58,7 @@ private:
     vk::raii::Instance Instance = nullptr;
     vk::raii::DebugUtilsMessengerEXT DebugMessenger = nullptr;
 
+    std::unique_ptr<ImGuiSystem> ImGuiSystemInstance;
     std::unique_ptr<Renderer> RendererInstance;
 	std::unique_ptr<Scene> MainSceneInstance;
 

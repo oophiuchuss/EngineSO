@@ -3,6 +3,7 @@ module;
 #include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
+#include <imgui.h>
 
 export module FrameData;
 
@@ -24,4 +25,5 @@ export struct FrameData
     std::vector<RenderableMesh> Renderables;
     std::vector<RenderableMesh> TranslucentRenderables;
     CameraUniformData Camera;
+    ImDrawData* ImGuiDrawData = nullptr;
 };
