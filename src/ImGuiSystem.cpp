@@ -11,6 +11,7 @@ module ImGuiSystem;
 import EventDispatcher;
 import KeyEvent;
 import MouseButtonEvent;
+import CursorCaptureRequestEvent;
 
 ImGuiSystem::ImGuiSystem(
 	WindowSystem& InWindowSystem, 
@@ -41,7 +42,11 @@ ImGuiSystem::ImGuiSystem(
 		throw std::runtime_error("Failed to initialize ImGui GLFW backend");
 	}
 
-	EventSystemRef.AddListener(this, static_cast<int>(EventCategory::Input), 2);
+	EventSystemRef.AddListener(
+		this,
+		static_cast<int>(EventCategory::Input) |
+		static_cast<int>(EventCategory::Window),
+		2);
 }
 
 ImGuiSystem::~ImGuiSystem()
@@ -90,6 +95,19 @@ EventReply ImGuiSystem::OnEvent(const EventBase& Event)
 
 	ImGuiIO& IO = ImGui::GetIO();
 	EventDispatcher Dispatcher(Event);
+
+	bool bCursorCaptureDispatched = Dispatcher.Dispatch<CursorCaptureRequestEvent>([](const CursorCaptureRequestEvent& E)
+		{
+			if (E.ShouldCapture())
+			{
+				ImGui::SetWindowFocus(nullptr);
+			}
+		});
+
+	if (bCursorCaptureDispatched)
+	{
+		return EventReply::Unhandled;
+	}
 
 	if (Event.IsInCategory(EventCategory::Keyboard))
 	{
