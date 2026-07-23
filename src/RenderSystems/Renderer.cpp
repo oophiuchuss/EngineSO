@@ -45,6 +45,7 @@ import WindowResizeEvent;
 import SceneBulkChangedEvent;
 import SceneEntityChangedEvent;
 import ResourceReprocessedEvent;
+import PostProcessSettingsChangedEvent;
 
 import MeshComponent;
 import TransformComponent;
@@ -1051,7 +1052,8 @@ void Renderer::SetupRenderPasses()
 		"Swapchain",
 		PostProcessShader,
 		PipelineCacheInstance.get(),
-		PostProcessDesc.get());
+		PostProcessDesc.get(),
+		CurrentPostProcessSettings);
 
 	RendergraphInstance->AddRenderPass<ImGuiRenderPass>(
 		"ImGuiPass",
@@ -1359,6 +1361,11 @@ EventReply Renderer::OnEvent(const EventBase& Event)
 		RenderCacheInstance->Evict(E.GetResourceID());
 
 		// TODO: Handle shaders here too
+	});
+
+	Dispatcher.Dispatch<PostProcessSettingsChangedEvent>([this](const PostProcessSettingsChangedEvent& E)
+	{
+		CurrentPostProcessSettings = E.GetSettings();
 	});
 
 	return EventReply::Unhandled;

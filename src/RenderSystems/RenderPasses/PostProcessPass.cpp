@@ -9,13 +9,15 @@ PostProcessPass::PostProcessPass(
     const std::string& InOutputResourceName,
     Shader* InShader,
     PipelineCache* InPipelineCache,
-    SingleTextureDescriptorSet* InInputDescSet) :
+    SingleTextureDescriptorSet* InInputDescSet,
+    const PostProcessSettings& InSettings) :
     RenderPassBase(InName),
     InputResourceName(InInputResourceName),
     OutputResourceName(InOutputResourceName),
     ShaderPtr(InShader),
     PipelineCachePtr(InPipelineCache),
-    InputDescSetPtr(InInputDescSet)
+    InputDescSetPtr(InInputDescSet),
+    Settings(InSettings)
 {
     AddInput(InputResourceName);
     AddOutput(OutputResourceName, vk::ImageLayout::eColorAttachmentOptimal);
@@ -45,6 +47,25 @@ void PostProcessPass::ExecuteMainLogic(
 {
     Resource* Res = Graph.GetResource(OutputResourceName);
 
+    PostProcessPushConstants PushConstants{};
+    PushConstants.Exposure = Settings.Exposure;
+    PushConstants.Flags = 0;
+
+    if (Settings.bToneMapping)
+    {
+        PushConstants.Flags |= PP_ToneMapping;
+    }
+
+    if (Settings.bGammaCorrection)
+    {
+        PushConstants.Flags |= PP_GammaCorrect;
+    }
+
+    if (Settings.bDithering)
+    {
+        PushConstants.Flags |= PP_Dithering;
+    }
+    
     GraphicsPipelineKey Key;
     Key.ShaderPtr = ShaderPtr;
     Key.ColorFormats = { Res->Format };

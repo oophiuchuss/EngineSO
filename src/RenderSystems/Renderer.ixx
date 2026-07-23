@@ -25,6 +25,7 @@ import GBufferDescriptorSet;
 import SingleTextureDescriptorSet;
 import LightBuffer;
 import Shader;
+import PostProcessSettings;
 
 import MeshData;
 import TextureData;
@@ -108,6 +109,8 @@ private:
 
 	vk::raii::CommandPool CommandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer>  CommandBuffers;
+
+	PostProcessSettings CurrentPostProcessSettings;
 
 	std::unique_ptr<GPUProfiler>				ProfilerInstance;
 	std::unique_ptr<Rendergraph>				RendergraphInstance;

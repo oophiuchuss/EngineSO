@@ -10,7 +10,8 @@ export enum class EventCategory
 	MouseButton = 1 << 4,
 	Window = 1 << 5,
 	Scene = 1 << 6,
-	Resource = 1 << 7
+	Resource = 1 << 7,
+	Rendering = 1 << 8
 };
 
 export enum class KeyAction

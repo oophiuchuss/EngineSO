@@ -12,6 +12,7 @@ import EventDispatcher;
 import KeyEvent;
 import MouseButtonEvent;
 import CursorCaptureRequestEvent;
+import PostProcessSettingsChangedEvent;
 
 ImGuiSystem::ImGuiSystem(
 	WindowSystem& InWindowSystem, 
@@ -80,6 +81,11 @@ void ImGuiSystem::BuildPanels()
 	if (bShowDemoWindow)
 	{
 		ImGui::ShowDemoWindow(&bShowDemoWindow);
+	}
+	
+	if (bShowPostProcessPanel)
+	{
+		BuildPostProcessPanel();
 	}
 }
 
@@ -155,4 +161,41 @@ ImDrawData* ImGuiSystem::GetDrawData() const
 {
 	ImGui::SetCurrentContext(Context);
 	return ImGui::GetDrawData();
+}
+
+void ImGuiSystem::BuildPostProcessPanel()
+{
+	bool bSettingsChanged = false;
+
+	if (ImGui::Begin("Post Processing", &bShowPostProcessPanel))
+	{
+		bSettingsChanged |= ImGui::DragFloat(
+			"Exposure",
+			&EditablePostProcessSettings.Exposure,
+			0.05f,
+			0.0f,
+			20.0f,
+			"%.2f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		bSettingsChanged |= ImGui::Checkbox(
+			"Tone Mapping",
+			&EditablePostProcessSettings.bToneMapping);
+
+		bSettingsChanged |= ImGui::Checkbox(
+			"Gamma Correction",
+			&EditablePostProcessSettings.bGammaCorrection);
+
+		bSettingsChanged |= ImGui::Checkbox(
+			"Dithering",
+			&EditablePostProcessSettings.bDithering);
+	}
+
+	ImGui::End();
+
+	if (bSettingsChanged)
+	{
+		EventSystemRef.PublishEvent(
+			PostProcessSettingsChangedEvent(EditablePostProcessSettings));
+	}
 }

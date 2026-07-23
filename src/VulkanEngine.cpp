@@ -51,7 +51,8 @@ VulkanEngine::VulkanEngine()
     EventSystemInstance->AddListener(RendererInstance.get(),
         static_cast<int>(EventCategory::Window) | 
         static_cast<int>(EventCategory::Scene)  |
-        static_cast<int>(EventCategory::Resource) );
+        static_cast<int>(EventCategory::Resource) |
+        static_cast<int>(EventCategory::Rendering));
 
     LastFrameTime = 0.0;
 }

@@ -8,6 +8,7 @@ import EventBase;
 import EventListener;
 import EventSystem;
 import WindowSystem;
+import PostProcessSettings;
 
 export class ImGuiSystem final : public EventListener
 {
@@ -30,8 +31,13 @@ public:
     ImDrawData* GetDrawData() const;
 
 private:
+    void BuildPostProcessPanel();
+
+    PostProcessSettings EditablePostProcessSettings;
+    bool bShowPostProcessPanel = true;
+
     EventSystem& EventSystemRef;
     ImGuiContext* Context = nullptr;
 
-    bool bShowDemoWindow = true;
+    bool bShowDemoWindow = false;
 };

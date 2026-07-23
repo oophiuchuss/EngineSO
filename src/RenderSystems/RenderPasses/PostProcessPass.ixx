@@ -10,6 +10,7 @@ import FrameData;
 import Shader;
 import PipelineCache;
 import SingleTextureDescriptorSet;
+import PostProcessSettings;
 
 export enum PostProcessFlags : uint32_t
 {
@@ -34,14 +35,14 @@ public:
         const std::string& InOutputResourceName,
         Shader* InShader,
         PipelineCache* InPipelineCache,
-        SingleTextureDescriptorSet* InInputDescSet);
+        SingleTextureDescriptorSet* InInputDescSet,
+        const PostProcessSettings& InSettings);
 
     void BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame) override;
     void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame) override;
     void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame) override;
 
-    // Exposed so the app layer (e.g. an eventual ImGui panel) can tune this live.
-    PostProcessPushConstants& GetPushConstants() { return PushConstants; }
+    const PostProcessSettings& Settings;
 
 private:
     std::string InputResourceName;
@@ -49,5 +50,4 @@ private:
     Shader* ShaderPtr;
     PipelineCache* PipelineCachePtr;
     SingleTextureDescriptorSet* InputDescSetPtr;
-    PostProcessPushConstants PushConstants;
 };
