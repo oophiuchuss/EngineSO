@@ -114,10 +114,12 @@ void VulkanEngine::Run()
 
 void VulkanEngine::MainLoop()
 {
+    LastFrameTime = WindowSystemInstance->GetTime();
+
     while (!WindowSystemInstance->ShouldClose())
     {
         double CurrentTime = WindowSystemInstance->GetTime();
-        float  DeltaTime = static_cast<float>(CurrentTime - LastFrameTime);
+        double  DeltaTime = CurrentTime - LastFrameTime;
         LastFrameTime = CurrentTime;
 
         WindowSystemInstance->PollEvents();     // fires window callbacks → EventSystem
@@ -126,10 +128,12 @@ void VulkanEngine::MainLoop()
         // Process any callbacks that were posted from background threads
         TaskSchedulerInstance->ProcessMainThreadTasks();
 
-        MainSceneInstance->Update(DeltaTime);
+        MainSceneInstance->Update(static_cast<float>(DeltaTime));
         
+        PerformanceStats Stats = RendererInstance->GetPerformanceStats(DeltaTime);
+
         ImGuiSystemInstance->BeginFrame();
-        ImGuiSystemInstance->BuildPanels();
+        ImGuiSystemInstance->BuildPanels(Stats);
         ImGuiSystemInstance->EndFrame();
         
         RendererInstance->RenderFrame(MainSceneInstance.get(), ImGuiSystemInstance->GetDrawData());

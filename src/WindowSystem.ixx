@@ -36,7 +36,7 @@ public:
 
 	inline const char** GetRequiredInstanceExtensions(uint32_t* WindowExtensionCount) { return glfwGetRequiredInstanceExtensions(WindowExtensionCount); }
 
-	inline float GetTime() const { return static_cast<float>(glfwGetTime()); }
+	inline double GetTime() const { return glfwGetTime(); }
 
 	GLFWwindow* GetHandle() const { return Window; }
 	int GetWidth() const { return WindowWidth; }

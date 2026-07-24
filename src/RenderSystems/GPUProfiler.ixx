@@ -6,6 +6,8 @@ module;
 
 export module GPUProfiler;
 
+import PerformanceStats;
+
 export class GPUProfiler
 {
 public:
@@ -16,13 +18,7 @@ public:
 
     void BeginFrame(vk::raii::CommandBuffer& Cmd, uint32_t FrameIndex);
 
-    struct ScopeResult
-    {
-        std::string Label;
-        double Milliseconds;
-    };
-
-    const std::vector<ScopeResult>& GetLastResults() const { return LastResults; }
+    const std::vector<GPUScopeTiming>& GetLastResults() const { return LastResults; }
   
     class Scope
     {
@@ -49,7 +45,7 @@ private:
     std::vector<vk::raii::QueryPool> Pools;                 // one per frame-in-flight
     std::vector<uint32_t> NextQueryIndex;                   // per frame-in-flight, reset each BeginFrame
     std::vector<std::vector<std::string>> PendingLabels;    // per frame-in-flight, labels in write order
-    std::vector<ScopeResult> LastResults;
+    std::vector<GPUScopeTiming> LastResults;
     double TimestampPeriodNs = 1.0;
     uint32_t MaxScopesPerFrame;
 };

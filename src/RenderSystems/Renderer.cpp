@@ -510,6 +510,31 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 	CurrentFrame = (CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT; // Advance to next frame index
 }
 
+PerformanceStats Renderer::GetPerformanceStats(double CPUFrameSeconds) const
+{
+	PerformanceStats Stats;
+
+	if (CPUFrameSeconds > 0.0)
+	{
+		Stats.CPUFrameMilliseconds = CPUFrameSeconds * 1000.0;
+		Stats.FramesPerSecond = 1.0 / CPUFrameSeconds;
+	}
+
+	const auto& GPUResults = ProfilerInstance->GetLastResults();
+	Stats.GPUScopeTimings = GPUResults;
+
+	for (const GPUScopeTiming& Scope : GPUResults)
+	{
+		if (Scope.Label == "TotalFrame")
+		{
+			Stats.TotalGPUFrameMilliseconds = Scope.Milliseconds;
+			break;
+		}
+	}
+
+	return Stats;
+}
+
 void Renderer::RecreateSwapchain()
 {
 	// Handle minimization of window

@@ -26,6 +26,7 @@ import SingleTextureDescriptorSet;
 import LightBuffer;
 import Shader;
 import PostProcessSettings;
+import PerformanceStats;
 
 import MeshData;
 import TextureData;
@@ -37,6 +38,8 @@ public:
 	~Renderer();
 
 	void RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData);
+
+	PerformanceStats GetPerformanceStats(double CPUFrameSeconds) const;
 
 private:
 	void SetActiveCamera(CameraComponent* Camera);

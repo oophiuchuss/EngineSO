@@ -13,6 +13,7 @@ import KeyEvent;
 import MouseButtonEvent;
 import CursorCaptureRequestEvent;
 import PostProcessSettingsChangedEvent;
+import PerformanceStats;
 
 ImGuiSystem::ImGuiSystem(
 	WindowSystem& InWindowSystem, 
@@ -72,7 +73,7 @@ void ImGuiSystem::BeginFrame()
 	ImGui::NewFrame();
 }
 
-void ImGuiSystem::BuildPanels()
+void ImGuiSystem::BuildPanels(const PerformanceStats& Stats)
 {
 	ImGui::SetCurrentContext(Context);
 
@@ -83,6 +84,11 @@ void ImGuiSystem::BuildPanels()
 		ImGui::ShowDemoWindow(&bShowDemoWindow);
 	}
 	
+	if (bShowPerformancePanel)
+	{
+		BuildPerformancePanel(Stats);
+	}
+
 	if (bShowPostProcessPanel)
 	{
 		BuildPostProcessPanel();
@@ -198,4 +204,47 @@ void ImGuiSystem::BuildPostProcessPanel()
 		EventSystemRef.PublishEvent(
 			PostProcessSettingsChangedEvent(EditablePostProcessSettings));
 	}
+}
+
+void ImGuiSystem::BuildPerformancePanel(const PerformanceStats& Stats)
+{
+	ImGuiTableFlags TableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+
+	if (ImGui::Begin("Performance", &bShowPerformancePanel))
+	{
+		ImGui::Text("FPS: %.1f", Stats.FramesPerSecond);
+
+		ImGui::Text("CPU frame: %.3f ms", Stats.CPUFrameMilliseconds);
+
+		ImGui::Text("GPU frame: %.3f ms", Stats.TotalGPUFrameMilliseconds);
+
+		ImGui::SeparatorText("GPU scopes");
+
+		if (Stats.GPUScopeTimings.empty())
+		{
+			ImGui::TextDisabled("Waiting for GPU timing data...");
+		}
+		else if (ImGui::BeginTable("GPU timing table", 2, TableFlags))
+		{
+			ImGui::TableSetupColumn("Scope");
+			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed);
+
+			ImGui::TableHeadersRow();
+
+			for (const GPUScopeTiming& Scope : Stats.GPUScopeTimings)
+			{
+				ImGui::TableNextRow();
+
+				ImGui::TableSetColumnIndex(0);
+				ImGui::TextUnformatted(Scope.Label.c_str());
+
+				ImGui::TableSetColumnIndex(1);
+				ImGui::Text("%.3f", Scope.Milliseconds);
+			}
+
+			ImGui::EndTable();
+		}
+	}
+
+	ImGui::End();
 }

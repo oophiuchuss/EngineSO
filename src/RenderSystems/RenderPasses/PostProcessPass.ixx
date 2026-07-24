@@ -42,9 +42,10 @@ public:
     void ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame) override;
     void EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame) override;
 
-    const PostProcessSettings& Settings;
 
 private:
+    const PostProcessSettings& Settings;
+
     std::string InputResourceName;
     std::string OutputResourceName;
     Shader* ShaderPtr;
