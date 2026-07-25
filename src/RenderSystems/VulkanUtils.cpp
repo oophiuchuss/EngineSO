@@ -264,9 +264,18 @@ void VulkanUtils::TransitionImageLayout(
     vk::AccessFlags SrcAccess,
     vk::AccessFlags DstAccess,
     uint32_t BaseMipLevel /*= 0*/,
-    uint32_t LevelCount /*= 1*/)
+    uint32_t LevelCount /*= 1*/,
+    uint32_t BaseArrayLayer /*= 0*/,
+    uint32_t LayerCount /*= 1*/)
 {
     // Configure image barrier strcture to coordinate memory access
+
+    vk::ImageSubresourceRange SubresourceRange;
+    SubresourceRange.setAspectMask(Aspect)
+        .setBaseMipLevel(BaseMipLevel)
+        .setLevelCount(LevelCount)
+        .setBaseArrayLayer(BaseArrayLayer)
+        .setLayerCount(LayerCount);
 
     vk::ImageMemoryBarrier Barrier;
     Barrier.setOldLayout(OldLayout)                                         // Current resource layuout
@@ -274,7 +283,7 @@ void VulkanUtils::TransitionImageLayout(
         .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)                    // No queue family transfer
         .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
         .setImage(Image)                                                    // Target Image
-        .setSubresourceRange({ Aspect, BaseMipLevel, LevelCount, 0, 1 })
+        .setSubresourceRange(SubresourceRange)
         .setSrcAccessMask(SrcAccess)
         .setDstAccessMask(DstAccess);
 

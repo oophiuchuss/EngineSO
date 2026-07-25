@@ -438,7 +438,7 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 
 	// Scan RawMaterials to determine each texture's intended color space and mip filters
 	std::vector<TextureColorSpace> TextureColorSpaces(RawTextures.size(), TextureColorSpace::Linear);
-	std::vector<TextureMipFilter> TextureMipFilters(RawTextures.size(), TextureMipFilter::Standard);
+	std::vector<TextureMipMode> TextureMipModes(RawTextures.size(), TextureMipMode::GenerateLinear);
 	for (const auto& Mat : RawMaterials)
 	{
 		if (Mat.AlbedoTextureIndex >= 0 && Mat.AlbedoTextureIndex < static_cast<int>(TextureColorSpaces.size()))
@@ -451,7 +451,7 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 		}
 		if (Mat.NormalTextureIndex >= 0 && Mat.NormalTextureIndex < static_cast<int>(TextureColorSpaces.size()))
 		{
-			TextureMipFilters[Mat.NormalTextureIndex] = TextureMipFilter::NormalMap;
+			TextureMipModes[Mat.NormalTextureIndex] = TextureMipMode::GenerateNormalMap;
 		}
 		
 	}
@@ -463,17 +463,17 @@ std::vector<std::string> GltfSceneData::RegisterAllTextures()
 	{
 		auto& Raw = RawTextures[i];
 		TextureColorSpace CS = TextureColorSpaces[i];
-		TextureMipFilter MF = TextureMipFilters[i];
+		TextureMipMode MipMode = TextureMipModes[i];
 
 		if (Raw.bIsEmbedded)
 		{
 			std::string TexID = GetResourceID() + "_tex_" + std::to_string(i);
-			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData, CS, MF);
+			ResourceManagerRef.PrepareAsyncFromMemory<TextureData>(TexID, Raw.EmbeddedData, CS, MipMode);
 			TextureIDs.push_back(TexID);
 		}
 		else
 		{
-			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath, CS, MF);
+			ResourceManagerRef.PrepareAsync<TextureData>(Raw.FilePath, CS, MipMode);
 			TextureIDs.push_back(Raw.FilePath);
 		}
 	}

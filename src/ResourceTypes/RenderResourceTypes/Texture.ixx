@@ -33,6 +33,7 @@ public:
 		const std::vector<const TextureData*>& DataList);
 
 
+
 	vk::Image GetImage() const { return *Image; }
 	vk::ImageView GetImageView() const { return *ImageView; }
 
@@ -41,6 +42,10 @@ private:
 	Texture(vk::raii::Image&& InImage,
 		vk::raii::DeviceMemory&& InImageMemory,
 		vk::raii::ImageView&& InImageView);
+	
+	static VulkanUploader::ImageUploadInfo GenerateVulkanUploaderImageInfo(const TextureData& Data);
+	
+	static VulkanUploader::ImageMipMode ToVulkanMipMode(TextureMipMode MipMode);
 
 	vk::raii::Image Image = nullptr;
 	vk::raii::DeviceMemory ImageMemory = nullptr;

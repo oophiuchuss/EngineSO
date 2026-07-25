@@ -189,9 +189,27 @@ void DescriptorHeap::CreateDefaultTextures()
 {
 	auto UploadDefault = [&](std::array<uint8_t, 4> Pixels, int Slot) -> DefaultTexture
 		{
-			auto Result = Uploader.UploadImage(
-				{ Pixels.data(), 1, 1,
-				vk::Format::eR8G8B8A8Unorm });
+			VulkanUploader::ImageUploadInfo Info;
+			Info.Data = Pixels.data();
+			Info.DataSize = Pixels.size();
+			Info.Width = 1;
+			Info.Height = 1;
+			Info.Depth = 1;
+			Info.MipLevels = 1;
+			Info.ArrayLayers = 1;
+			Info.Format = vk::Format::eR8G8B8A8Unorm;
+			Info.MipMode = VulkanUploader::ImageMipMode::None;
+
+			VulkanUploader::ImageSubresourceUpload Subresource;
+			Subresource.BufferOffset = 0;
+			Subresource.ByteSize = Pixels.size();
+			Subresource.MipLevel = 0;
+			Subresource.BaseArrayLayer = 0;
+			Subresource.Extent = vk::Extent3D{ 1, 1, 1 };
+
+			Info.Subresources.push_back(Subresource);
+
+			auto Result = Uploader.UploadImage(Info);
 
 			vk::ImageViewCreateInfo ViewInfo(
 				{},

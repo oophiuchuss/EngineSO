@@ -33,7 +33,9 @@ export namespace VulkanUtils
 		vk::AccessFlags SrcAccess,
 		vk::AccessFlags DstAccess,
 		uint32_t BaseMipLevel = 0,
-		uint32_t LevelCount = 1);
+		uint32_t LevelCount = 1,
+		uint32_t BaseArrayLayer = 0,
+		uint32_t LayerCount = 1);
 
 	uint32_t ComputeMipLevels(
 		uint32_t Width,

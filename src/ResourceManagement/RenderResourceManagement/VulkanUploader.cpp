@@ -117,25 +117,136 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 
 	for (const auto& Info : Images)
 	{
-		vk::DeviceSize DataSize = static_cast<vk::DeviceSize>(Info.Width) * Info.Height * 4;
-		uint32_t MipLevelCount = VulkanUtils::ComputeMipLevels(Info.Width, Info.Height);
+		uint32_t DestinationMipLevels = 1;
+
+		switch (Info.MipMode)
+		{
+		case ImageMipMode::None:
+			DestinationMipLevels = 1;
+			break;
+
+		case ImageMipMode::GenerateLinear:
+		case ImageMipMode::GenerateNormalMap:
+			DestinationMipLevels = VulkanUtils::ComputeMipLevels(Info.Width, Info.Height);
+			break;
+
+		case ImageMipMode::Provided:
+			DestinationMipLevels = Info.MipLevels;
+			break;
+		}
+
+		if (!Info.Data || Info.DataSize == 0)
+		{
+			throw std::runtime_error("Image upload contains no data");
+		}
+
+		if (Info.Width == 0 || Info.Height == 0 || Info.Depth != 1)
+		{
+			throw std::runtime_error("Invalid 2D image dimensions");
+		}
+
+		if (Info.ArrayLayers == 0 || DestinationMipLevels == 0)
+		{
+			throw std::runtime_error("Invalid image layer or mip count");
+		}
+
+		if (Info.Format == vk::Format::eUndefined)
+		{
+			throw std::runtime_error("Image upload has undefined format");
+		}
+
+		const uint32_t MaximumMipLevels = VulkanUtils::ComputeMipLevels(Info.Width, Info.Height);
+
+		if (DestinationMipLevels > MaximumMipLevels)
+		{
+			throw std::runtime_error("Image contains more mip levels than its dimensions permit");
+		}
+
+		const bool bProvided = Info.MipMode == ImageMipMode::Provided;
+
+		const uint32_t SuppliedMipLevels = bProvided ? DestinationMipLevels : 1;
+
+		const size_t ExpectedSubresourceCount = static_cast<size_t>(SuppliedMipLevels) * static_cast<size_t>(Info.ArrayLayers);
+
+		if (Info.Subresources.size() != ExpectedSubresourceCount)
+		{
+			throw std::runtime_error("Image upload has an incomplete subresource set");
+		}
+
+		std::vector<bool> Seen(ExpectedSubresourceCount, false);
+
+		for (const auto& Subresource : Info.Subresources)
+		{
+			if (Subresource.MipLevel >= DestinationMipLevels)
+			{
+				throw std::runtime_error("Subresource mip level is out of range");
+			}
+
+			if (!bProvided && Subresource.MipLevel != 0)
+			{
+				throw std::runtime_error("Generated mip modes must only supply mip zero");
+			}
+
+			if (Subresource.BaseArrayLayer >= Info.ArrayLayers)
+			{
+				throw std::runtime_error("Subresource array layer is out of range");
+			}
+
+			if (Subresource.ByteSize == 0)
+			{
+				throw std::runtime_error("Subresource contains no bytes");
+			}
+
+			if (Subresource.BufferOffset > Info.DataSize || Subresource.ByteSize > Info.DataSize - Subresource.BufferOffset)
+			{
+				throw std::runtime_error("Subresource byte range is out of bounds");
+			}
+
+			const uint32_t ExpectedWidth = (std::max)(Info.Width >> Subresource.MipLevel, 1u);
+
+			const uint32_t ExpectedHeight = (std::max)(Info.Height >> Subresource.MipLevel, 1u);
+
+			if (Subresource.Extent.width != ExpectedWidth || Subresource.Extent.height != ExpectedHeight || Subresource.Extent.depth != 1)
+			{
+				throw std::runtime_error("Subresource extent does not match its mip level");
+			}
+
+			const size_t Index = static_cast<size_t>(Subresource.MipLevel) * Info.ArrayLayers + Subresource.BaseArrayLayer;
+
+			if (Seen[Index])
+			{
+				throw std::runtime_error("Image upload contains a duplicate subresource");
+			}
+
+			Seen[Index] = true;
+		}
 
 		vk::ImageUsageFlags Usage =
 			vk::ImageUsageFlagBits::eTransferDst |
 			vk::ImageUsageFlagBits::eSampled;
 
-		if (Info.MipGeneration == VulkanUploader::ImageMipGeneration::NormalMapCompute)
-		{
-			ValidateNormalMipUpload(Info);
-			Usage |= vk::ImageUsageFlagBits::eStorage;
-		}
-		else
+		if (Info.MipMode == ImageMipMode::GenerateLinear)
 		{
 			Usage |= vk::ImageUsageFlagBits::eTransferSrc;
 		}
 
-		Stagings.push_back(CreateStagingBuffer(Info.PixelData, DataSize));
-		Results.push_back(CreateDeviceLocalImage(Info.Width, Info.Height, Info.Format, MipLevelCount, Usage));
+		if (Info.MipMode == ImageMipMode::GenerateNormalMap)
+		{
+			ValidateNormalMipUpload(Info);
+			Usage |= vk::ImageUsageFlagBits::eStorage;
+		}
+
+		Stagings.push_back(CreateStagingBuffer(Info.Data, Info.DataSize));
+
+		Results.push_back(CreateDeviceLocalImage(
+			Info.Width,
+			Info.Height,
+			Info.Depth,
+			Info.Format,
+			DestinationMipLevels,
+			Info.ArrayLayers,
+			Info.CreateFlags,
+			Usage));
 	}
 
 	// Image uploads stay on the graphics queue because mip generation and final
@@ -146,25 +257,63 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 		{
 			for (size_t i = 0; i < Images.size(); ++i)
 			{
+				const uint32_t UploadedMipLevels = Images[i].MipMode == ImageMipMode::Provided ? Results[i].MipLevels : 1;
+
 				VulkanUtils::TransitionImageLayout(
 					Cmd, *Results[i].Image,
 					vk::ImageAspectFlagBits::eColor,
 					vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
 					vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
 					vk::AccessFlagBits::eNone, vk::AccessFlagBits::eTransferWrite,
-					0, 1);
+					0,
+					UploadedMipLevels,
+					0,
+					Results[i].ArrayLayers);
 
-				vk::BufferImageCopy Region(
-					0, 0, 0,
-					vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1),
-					vk::Offset3D(0, 0, 0),
-					vk::Extent3D(Images[i].Width, Images[i].Height, 1));
+				std::vector<vk::BufferImageCopy> Regions;
+				Regions.reserve(Images[i].Subresources.size());
+
+				for (const auto& Subresource : Images[i].Subresources)
+				{
+					vk::BufferImageCopy Region;
+					Region.bufferOffset = Subresource.BufferOffset;
+					Region.bufferRowLength = 0;
+					Region.bufferImageHeight = 0;
+
+					Region.imageSubresource = {
+						vk::ImageAspectFlagBits::eColor,
+						Subresource.MipLevel,
+						Subresource.BaseArrayLayer,
+						1
+					};
+
+					Region.setImageOffset( { 0, 0, 0 } );
+					Region.imageExtent = Subresource.Extent;
+
+					Regions.push_back(Region);
+				}
 
 				Cmd.copyBufferToImage(
 					*Stagings[i].Buffer,
 					*Results[i].Image,
 					vk::ImageLayout::eTransferDstOptimal,
-					Region);
+					Regions);
+
+				if (Images[i].MipMode == ImageMipMode::None || Images[i].MipMode == ImageMipMode::Provided)
+				{
+					VulkanUtils::TransitionImageLayout(
+						Cmd, *Results[i].Image,
+						vk::ImageAspectFlagBits::eColor,
+						vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+						vk::PipelineStageFlagBits::eTransfer,
+						vk::PipelineStageFlagBits::eFragmentShader |
+						vk::PipelineStageFlagBits::eComputeShader,
+						vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+						0,
+						Results[i].MipLevels,
+						0,
+						Results[i].ArrayLayers);
+				}
 			}
 		});
 
@@ -173,7 +322,7 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 
 	for (size_t i = 0; i < Images.size(); ++i)
 	{
-		if (Images[i].MipGeneration == ImageMipGeneration::NormalMapCompute)
+		if (Images[i].MipMode == ImageMipMode::GenerateNormalMap)
 		{
 			NormalResources[i] = CreateNormalMipResources(*Results[i].Image, Images[i].Format, Results[i].MipLevels);
 		}
@@ -183,26 +332,33 @@ std::vector<VulkanUploader::UploadImageResult> VulkanUploader::UploadImageBatch(
 		{
 			for (size_t i = 0; i < Images.size(); ++i)
 			{
-				if (Images[i].MipGeneration == ImageMipGeneration::NormalMapCompute)
+				switch (Images[i].MipMode)
 				{
+				case ImageMipMode::GenerateLinear:
+					GenerateMipChain(
+						Cmd,
+						*Results[i].Image,
+						Images[i].Width,
+						Images[i].Height,
+						Results[i].MipLevels,
+						Results[i].ArrayLayers);
+					break;
+
+				case ImageMipMode::GenerateNormalMap:
 					GenerateNormalMipChain(
 						Cmd,
 						*Results[i].Image,
-						Images[i].Width, 
-						Images[i].Height, 
-						Results[i].MipLevels, 
-						Images[i].AddressU, 
-						Images[i].AddressV, 
-						*NormalResources[i]);
-				}
-				else
-				{
-					GenerateMipChain(
-						Cmd, 
-						*Results[i].Image, 
 						Images[i].Width,
-						Images[i].Height, 
-						Results[i].MipLevels);
+						Images[i].Height,
+						Results[i].MipLevels,
+						Images[i].AddressU,
+						Images[i].AddressV,
+						*NormalResources[i]);
+					break;
+
+				case ImageMipMode::None:
+				case ImageMipMode::Provided:
+					break;
 				}
 			}
 		});
@@ -362,17 +518,27 @@ VulkanUploader::UploadBufferResult VulkanUploader::CreateDeviceLocalBuffer(vk::D
 VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(
 	uint32_t Width,
 	uint32_t Height,
+	uint32_t Depth,
 	vk::Format Format,
 	uint32_t MipLevels,
+	uint32_t ArrayLayers,
+	vk::ImageCreateFlags CreateFlags,
 	vk::ImageUsageFlags Usage)
 {
-	std::array<uint32_t, 2> QueueFamilies = { TransferQueueFamilyIndex, GraphicsQueueFamilyIndex };
-	bool bNeedsConcurrent = !bSameQueueFamily;
+	std::array<uint32_t, 2> QueueFamilies = {
+		TransferQueueFamilyIndex,
+		GraphicsQueueFamilyIndex
+	};
+
+	const bool bNeedsConcurrent = !bSameQueueFamily;
 
 	vk::ImageCreateInfo ImageInfo(
-		{}, vk::ImageType::e2D, Format,
-		vk::Extent3D(Width, Height, 1),
-		MipLevels, 1,
+		CreateFlags,
+		vk::ImageType::e2D,
+		Format,
+		vk::Extent3D(Width, Height, Depth),
+		MipLevels,
+		ArrayLayers,
 		vk::SampleCountFlagBits::e1,
 		vk::ImageTiling::eOptimal,
 		Usage,
@@ -383,76 +549,107 @@ VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(
 	vk::raii::Image Image = Device.createImage(ImageInfo);
 	auto MemReqs = Image.getMemoryRequirements();
 
-	uint32_t MemTypeIdx = VulkanUtils::FindMemoryType(
+	uint32_t MemoryType = VulkanUtils::FindMemoryType(
 		PhysicalDevice,
 		MemReqs.memoryTypeBits,
 		vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-	vk::raii::DeviceMemory Memory = Device.allocateMemory(
-		vk::MemoryAllocateInfo(MemReqs.size, MemTypeIdx));
+	vk::raii::DeviceMemory Memory = Device.allocateMemory(vk::MemoryAllocateInfo(MemReqs.size, MemoryType));
 
 	Image.bindMemory(*Memory, 0);
 
-	return { std::move(Image), std::move(Memory), MipLevels };
+	return { std::move(Image), std::move(Memory), MipLevels, ArrayLayers };
 }
 
-void VulkanUploader::GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels)
+void VulkanUploader::GenerateMipChain(
+	vk::raii::CommandBuffer& Cmd,
+	vk::Image Image,
+	uint32_t Width,
+	uint32_t Height,
+	uint32_t MipLevels,
+	uint32_t ArrayLayers)
 {
-	int32_t MipWidth = static_cast<int32_t>(Width);
-	int32_t MipHeight = static_cast<int32_t>(Height);
-
-	for (uint32_t Level = 1; Level < MipLevels; ++Level)
+	for (uint32_t Layer = 0; Layer < ArrayLayers; Layer++)
 	{
+		int32_t MipWidth = static_cast<int32_t>(Width);
+		int32_t MipHeight = static_cast<int32_t>(Height);
+
+		for (uint32_t Level = 1; Level < MipLevels; ++Level)
+		{
+			VulkanUtils::TransitionImageLayout(
+				Cmd, Image,
+				vk::ImageAspectFlagBits::eColor,
+				vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal,
+				vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer,
+				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferRead,
+				Level - 1, 1, Layer, 1);
+
+			VulkanUtils::TransitionImageLayout(
+				Cmd, Image,
+				vk::ImageAspectFlagBits::eColor,
+				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+				vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
+				vk::AccessFlagBits::eNone, vk::AccessFlagBits::eTransferWrite,
+				Level, 1, Layer, 1);
+
+			const int32_t NextWidth = (std::max)(MipWidth / 2, 1);
+			const int32_t NextHeight = (std::max)(MipHeight / 2, 1);
+
+			vk::ImageBlit Blit;
+			Blit.srcSubresource = {
+				vk::ImageAspectFlagBits::eColor,
+				Level - 1,
+				Layer,
+				1
+			};
+			
+			Blit.setSrcOffsets({
+				vk::Offset3D(0, 0, 0),
+				vk::Offset3D(MipWidth, MipHeight, 1)
+				});
+
+			Blit.dstSubresource = {
+				vk::ImageAspectFlagBits::eColor,
+				Level,
+				Layer,
+				1
+			};
+			
+			Blit.setDstOffsets({
+				vk::Offset3D(0, 0, 0),
+				vk::Offset3D(NextWidth, NextHeight, 1)
+			});
+
+			Cmd.blitImage(
+				Image, vk::ImageLayout::eTransferSrcOptimal,
+				Image, vk::ImageLayout::eTransferDstOptimal,
+				Blit,
+				vk::Filter::eLinear);
+
+			VulkanUtils::TransitionImageLayout(
+				Cmd, Image,
+				vk::ImageAspectFlagBits::eColor,
+				vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+				vk::PipelineStageFlagBits::eTransfer,
+				vk::PipelineStageFlagBits::eFragmentShader |
+				vk::PipelineStageFlagBits::eComputeShader,
+				vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderRead,
+				Level - 1, 1, Layer, 1);
+
+			MipWidth = NextWidth;
+			MipHeight = NextHeight;
+		}
+
 		VulkanUtils::TransitionImageLayout(
 			Cmd, Image,
 			vk::ImageAspectFlagBits::eColor,
-			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal,
-			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer,
-			vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferRead,
-			Level - 1, 1);
-
-		VulkanUtils::TransitionImageLayout(
-			Cmd, Image, vk::ImageAspectFlagBits::eColor,
-			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
-			vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
-			vk::AccessFlagBits::eNone, vk::AccessFlagBits::eTransferWrite,
-			Level, 1);
-
-		int32_t NextWidth = (std::max)(MipWidth / 2, 1);
-		int32_t NextHeight = (std::max)(MipHeight / 2, 1);
-
-		vk::ImageBlit Blit;
-		Blit.srcSubresource = { vk::ImageAspectFlagBits::eColor, Level - 1, 0, 1 };
-		Blit.srcOffsets[0] = vk::Offset3D(0, 0, 0);
-		Blit.srcOffsets[1] = vk::Offset3D(MipWidth, MipHeight, 1);
-		Blit.dstSubresource = { vk::ImageAspectFlagBits::eColor, Level, 0, 1 };
-		Blit.dstOffsets[0] = vk::Offset3D(0, 0, 0);
-		Blit.dstOffsets[1] = vk::Offset3D(NextWidth, NextHeight, 1);
-
-		Cmd.blitImage(
-			Image, vk::ImageLayout::eTransferSrcOptimal,
-			Image, vk::ImageLayout::eTransferDstOptimal,
-			Blit, vk::Filter::eLinear);
-
-		VulkanUtils::TransitionImageLayout(
-			Cmd, Image,
-			vk::ImageAspectFlagBits::eColor,
-			vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
-			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader,
-			vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderRead,
-			Level - 1, 1);
-
-		MipWidth = NextWidth;
-		MipHeight = NextHeight;
+			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::PipelineStageFlagBits::eTransfer, 
+			vk::PipelineStageFlagBits::eFragmentShader |
+			vk::PipelineStageFlagBits::eComputeShader,
+			vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+			MipLevels - 1, 1, Layer, 1);
 	}
-
-	// Last level was only ever a blit destination, never read from — transition separately.
-	VulkanUtils::TransitionImageLayout(
-		Cmd, Image, vk::ImageAspectFlagBits::eColor,
-		vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
-		vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader,
-		vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
-		MipLevels - 1, 1);
 }
 
 void VulkanUploader::GenerateNormalMipChain(
@@ -744,5 +941,10 @@ void VulkanUploader::ValidateNormalMipUpload(const ImageUploadInfo& Info) const
 	if (Info.Format != NormalMipFormat)
 	{
 		throw std::runtime_error("Normal mip generation requires R8G8B8A8_UNORM");
+	}
+
+	if (Info.ArrayLayers != 1)
+	{
+		throw std::runtime_error("Compute normal mip generation currently supports one array layer");
 	}
 }

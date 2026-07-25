@@ -21,35 +21,34 @@ Texture::Texture(vk::raii::Image&& InImage,
 
 std::unique_ptr<Texture> Texture::CreateFromTextureData(const vk::raii::Device& Device, VulkanUploader& Uploader, const TextureData& Data)
 {
-    const SamplerDesc& Sampler = Data.GetSamplerDesc();
-
-	// TODO: potentially support other formats in the future
-    vk::Format Format = (Data.GetColorSpace() == TextureColorSpace::SRGB)
-        ? vk::Format::eR8G8B8A8Srgb
-        : vk::Format::eR8G8B8A8Unorm;
-
-    VulkanUploader::ImageMipGeneration MipGeneration = Data.GetMipFilter() == TextureMipFilter::NormalMap
-        ? VulkanUploader::ImageMipGeneration::NormalMapCompute
-        : VulkanUploader::ImageMipGeneration::LinearBlit;
-
-    VulkanUploader::ImageUploadInfo Info;
-    Info.PixelData = Data.GetPixels().data();
-    Info.Width = Data.GetWidth();
-    Info.Height = Data.GetHeight();
-    Info.Format = Format;
-    Info.MipGeneration = MipGeneration;
-    Info.AddressU = VulkanUploader::ToMipAddressMode(Sampler.AddressU);
-    Info.AddressV = VulkanUploader::ToMipAddressMode(Sampler.AddressV);
+    VulkanUploader::ImageUploadInfo Info = GenerateVulkanUploaderImageInfo(Data);
 
     auto Result = Uploader.UploadImage(Info);
+
+    vk::ImageViewType ViewType;
+
+    if (Data.GetFaceCount() == 6)
+    {
+        ViewType = Data.GetLayerCount() == 1 ? vk::ImageViewType::eCube : vk::ImageViewType::eCubeArray;
+    }
+    else
+    {
+        ViewType = Data.GetLayerCount() == 1 ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray;
+    }
 
     vk::ImageViewCreateInfo ViewInfo(
         {},
         *Result.Image,
-        vk::ImageViewType::e2D,
-        Format,   // must match the image's actual format
+        ViewType,
+        Info.Format,
         {},
-        { vk::ImageAspectFlagBits::eColor, 0, Result.MipLevels, 0, 1 });
+        {
+            vk::ImageAspectFlagBits::eColor,
+            0,
+            Result.MipLevels,
+            0,
+            Result.ArrayLayers
+        });
 
     vk::raii::ImageView View = Device.createImageView(ViewInfo);
 
@@ -70,26 +69,7 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
 
     for (const TextureData* Data : DataList)
     {
-        const SamplerDesc& Sampler = Data->GetSamplerDesc();
-        
-        // TODO: potentially support other formats in the future
-        vk::Format Format = (Data->GetColorSpace() == TextureColorSpace::SRGB)
-            ? vk::Format::eR8G8B8A8Srgb
-            : vk::Format::eR8G8B8A8Unorm;
-
-        VulkanUploader::ImageMipGeneration MipGeneration = Data->GetMipFilter() == TextureMipFilter::NormalMap
-            ? VulkanUploader::ImageMipGeneration::NormalMapCompute
-            : VulkanUploader::ImageMipGeneration::LinearBlit;
-
-        VulkanUploader::ImageUploadInfo Info;
-        Info.PixelData = Data->GetPixels().data();
-        Info.Width = Data->GetWidth();
-        Info.Height = Data->GetHeight();
-        Info.Format = Format;
-        Info.MipGeneration = MipGeneration;
-        Info.AddressU = VulkanUploader::ToMipAddressMode(Sampler.AddressU);
-        Info.AddressV = VulkanUploader::ToMipAddressMode(Sampler.AddressV);
-        UploadInfos.push_back(Info);
+        UploadInfos.push_back(GenerateVulkanUploaderImageInfo(*Data));
     }
 
     // Single batched GPU upload — one submit, one fence wait for all textures
@@ -100,14 +80,32 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
     {
 		auto& Result = UploadResults[i];
 		const auto& UploadInfo = UploadInfos[i];
+		const auto* Data = DataList[i];
+
+        vk::ImageViewType ViewType;
+
+        if (Data->GetFaceCount() == 6)
+        {
+            ViewType = Data->GetLayerCount() == 1 ? vk::ImageViewType::eCube : vk::ImageViewType::eCubeArray;
+        }
+        else
+        {
+            ViewType = Data->GetLayerCount() == 1 ? vk::ImageViewType::e2D : vk::ImageViewType::e2DArray;
+        }
 
         vk::ImageViewCreateInfo ViewInfo(
             {},
             *Result.Image,
-            vk::ImageViewType::e2D,
+            ViewType,
             UploadInfo.Format,
             {},
-            { vk::ImageAspectFlagBits::eColor, 0, Result.MipLevels, 0, 1 });
+        {
+            vk::ImageAspectFlagBits::eColor,
+            0,
+            Result.MipLevels,
+            0,
+            Result.ArrayLayers
+        });
 
         vk::raii::ImageView View = Device.createImageView(ViewInfo);
 
@@ -115,4 +113,76 @@ std::vector<std::unique_ptr<Texture>> Texture::CreateBatchFromTextureData(const 
     }
 
     return Results;
+}
+
+VulkanUploader::ImageUploadInfo Texture::GenerateVulkanUploaderImageInfo(const TextureData& Data)
+{
+    if (Data.GetFaceCount() != 1 && Data.GetFaceCount() != 6)
+    {
+        throw std::runtime_error("FaceCount must be either 1 or 6");
+    }
+
+    if (Data.GetFaceCount() == 6 && Data.GetWidth() != Data.GetHeight())
+    {
+        throw std::runtime_error("Cubemap faces must be square");
+    }
+
+    const SamplerDesc& Sampler = Data.GetSamplerDesc();
+
+	VulkanUploader::ImageUploadInfo Info;
+
+    Info.Data = Data.GetBytes().data();
+    Info.DataSize = Data.GetBytes().size();
+
+    Info.Width = Data.GetWidth();
+    Info.Height = Data.GetHeight();
+    Info.Depth = Data.GetDepth();
+
+    Info.MipLevels = Data.GetMipLevels();
+    Info.ArrayLayers = Data.GetLayerCount() * Data.GetFaceCount();
+
+    Info.Format = Data.GetFormat();
+    Info.MipMode = ToVulkanMipMode(Data.GetMipMode());
+
+    if (Data.GetFaceCount() == 6)
+    {
+        Info.CreateFlags |= vk::ImageCreateFlagBits::eCubeCompatible;
+    }
+
+    Info.AddressU = VulkanUploader::ToMipAddressMode(Sampler.AddressU);
+    Info.AddressV = VulkanUploader::ToMipAddressMode(Sampler.AddressV);
+
+    for (const TextureSubresource& Source : Data.GetSubresources())
+    {
+        VulkanUploader::ImageSubresourceUpload Upload;
+
+        Upload.BufferOffset = Source.ByteOffset;
+        Upload.ByteSize = Source.ByteSize;
+        Upload.MipLevel = Source.MipLevel;
+
+        Upload.BaseArrayLayer = Source.Layer * Data.GetFaceCount() + Source.Face;
+
+        Upload.Extent = vk::Extent3D{ Source.Width, Source.Height, Source.Depth };
+
+        Info.Subresources.push_back(Upload);
+    }
+
+	return Info;
+}
+
+VulkanUploader::ImageMipMode Texture::ToVulkanMipMode(TextureMipMode MipMode)
+{
+    switch (MipMode)
+    {
+    case TextureMipMode::GenerateLinear:
+        return VulkanUploader::ImageMipMode::GenerateLinear;
+    case TextureMipMode::GenerateNormalMap:
+        return VulkanUploader::ImageMipMode::GenerateNormalMap;
+	case TextureMipMode::None:
+		return VulkanUploader::ImageMipMode::None;
+	case TextureMipMode::Provided:
+		return VulkanUploader::ImageMipMode::Provided;
+    default:
+        throw std::runtime_error("Unsupported TextureMipMode for Vulkan upload");
+    }
 }

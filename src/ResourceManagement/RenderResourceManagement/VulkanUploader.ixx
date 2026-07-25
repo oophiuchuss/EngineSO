@@ -38,9 +38,11 @@ public:
 	// Upload raw pixels to a device‑local image (shader‑ready)
 	struct UploadImageResult
 	{
-		vk::raii::Image        Image;
+		vk::raii::Image Image;
 		vk::raii::DeviceMemory Memory;
-		uint32_t MipLevels;
+
+		uint32_t MipLevels = 1;
+		uint32_t ArrayLayers = 1;
 	};
 
 	// Descriptor for a single buffer in a batch upload
@@ -51,10 +53,23 @@ public:
 		vk::BufferUsageFlags TargetUsage = {};
 	};
 
-	enum class ImageMipGeneration
+	enum class ImageMipMode
 	{
-		LinearBlit,
-		NormalMapCompute
+		None,
+		GenerateLinear,
+		GenerateNormalMap,
+		Provided
+	};
+
+	struct ImageSubresourceUpload
+	{
+		vk::DeviceSize BufferOffset = 0;
+		vk::DeviceSize ByteSize = 0;
+
+		uint32_t MipLevel = 0;
+		uint32_t BaseArrayLayer = 0;
+
+		vk::Extent3D Extent = { 1, 1, 1 };
 	};
 
 	enum class MipAddressMode : uint32_t
@@ -66,11 +81,23 @@ public:
 
 	struct ImageUploadInfo
 	{
-		const void* PixelData = nullptr;
-		uint32_t    Width = 0;
-		uint32_t    Height = 0;
-		vk::Format  Format = vk::Format::eR8G8B8A8Unorm;
-		ImageMipGeneration MipGeneration = ImageMipGeneration::LinearBlit;
+		const void* Data = nullptr;
+		vk::DeviceSize DataSize = 0;
+
+		uint32_t Width = 0;
+		uint32_t Height = 0;
+		uint32_t Depth = 1;
+
+		uint32_t MipLevels = 1;
+		uint32_t ArrayLayers = 1;
+
+		vk::Format Format = vk::Format::eR8G8B8A8Unorm;
+		vk::ImageCreateFlags CreateFlags = {};
+
+		ImageMipMode MipMode = ImageMipMode::GenerateLinear;
+
+		std::vector<ImageSubresourceUpload> Subresources;
+
 		MipAddressMode AddressU = MipAddressMode::Repeat;
 		MipAddressMode AddressV = MipAddressMode::Repeat;
 	};
@@ -117,11 +144,20 @@ private:
 	UploadImageResult CreateDeviceLocalImage(
 		uint32_t Width,
 		uint32_t Height,
+		uint32_t Depth,
 		vk::Format Format,
 		uint32_t MipLevels,
+		uint32_t ArrayLayers,
+		vk::ImageCreateFlags CreateFlags,
 		vk::ImageUsageFlags Usage);
 
-	void GenerateMipChain(vk::raii::CommandBuffer& Cmd, vk::Image Image, uint32_t Width, uint32_t Height, uint32_t MipLevels);
+	void GenerateMipChain(
+		vk::raii::CommandBuffer& Cmd,
+		vk::Image Image,
+		uint32_t Width,
+		uint32_t Height,
+		uint32_t MipLevels,
+		uint32_t ArrayLayers);
 
 	void GenerateNormalMipChain(
 		vk::raii::CommandBuffer& Cmd,

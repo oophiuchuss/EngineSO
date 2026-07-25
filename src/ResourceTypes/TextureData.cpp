@@ -14,7 +14,7 @@ module TextureData;
 
 bool TextureData::LoadResource(const std::string& FilePath)
 {
-	std::ifstream File(FilePath, std::ios::binary || std::ios::ate);
+	std::ifstream File(FilePath, std::ios::binary | std::ios::ate);
 	if (!File)
 	{
 		return false;
@@ -35,38 +35,63 @@ bool TextureData::LoadResourceFromMemory(const std::vector<uint8_t>& Data)
 
 void TextureData::UnloadResource()
 {
-	Pixels.clear();
+	Bytes.clear();
+	Subresources.clear();
+
 	Info.Width = 0;
 	Info.Height = 0;
-	Info.Channels = 0;
-	// ColorSpace and Sampler intentionally preserved since those are import-time decisions
+	Info.Depth = 1;
+
+	Info.MipLevels = 0;
+	Info.LayerCount = 1;
+	Info.FaceCount = 1;
+
+	// Format, mip policy and sampler are import decisions and remain unchanged across reloads.
 }
 
 bool TextureData::DecodePixels(const uint8_t* Data, int DataSize)
 {
-	int Width, Height, Channels;
+    int Width = 0;
+    int Height = 0;
 
-	// Force 4 channels (RGBA) for consistent GPU upload path later
-	// stb_image handles conversion from RGB, grayscale etc. automatically
-	uint8_t* DecodedPixels = stbi_load_from_memory(
-		Data,
-		DataSize,
-		&Width,
-		&Height,
-		&Channels,	// original channel count - stored for refference 
-		4);			// requested channels - always 4 (RGBA)
+    uint8_t* DecodedPixels = stbi_load_from_memory(Data, DataSize, &Width, &Height, nullptr, 4);
 
-	if (!DecodedPixels)
-	{
-		return false;
-	}
+    if (!DecodedPixels || Width <= 0 || Height <= 0)
+    {
+        if (DecodedPixels)
+        {
+            stbi_image_free(DecodedPixels);
+        }
 
-	Info.Width = static_cast<uint32_t>(Width);
-	Info.Height = static_cast<uint32_t>(Height);
-	Info.Channels = static_cast<uint32_t>(Channels); // original, not forced 4
+        return false;
+    }
 
-	size_t PixelDataSize = Width * Height * 4; // always 4 channels
-	Pixels.assign(DecodedPixels, DecodedPixels + PixelDataSize);
-	stbi_image_free(DecodedPixels);
-	return !Pixels.empty();
+    Info.Width = static_cast<uint32_t>(Width);
+    Info.Height = static_cast<uint32_t>(Height);
+    Info.Depth = 1;
+
+    Info.MipLevels = 1;
+    Info.LayerCount = 1;
+    Info.FaceCount = 1;
+
+    const size_t ByteCount = static_cast<size_t>(Width) * static_cast<size_t>(Height) * 4;
+
+    Bytes.assign(DecodedPixels, DecodedPixels + ByteCount);
+
+    stbi_image_free(DecodedPixels);
+
+    TextureSubresource BaseLevel;
+    BaseLevel.MipLevel = 0;
+    BaseLevel.Layer = 0;
+    BaseLevel.Face = 0;
+    BaseLevel.Width = Info.Width;
+    BaseLevel.Height = Info.Height;
+    BaseLevel.Depth = 1;
+    BaseLevel.ByteOffset = 0;
+    BaseLevel.ByteSize = static_cast<uint64_t>(Bytes.size());
+
+    Subresources.clear();
+    Subresources.push_back(BaseLevel);
+
+    return !Bytes.empty();
 }
