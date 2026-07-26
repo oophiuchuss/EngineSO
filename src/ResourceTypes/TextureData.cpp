@@ -91,15 +91,21 @@ void TextureData::UnloadResource()
 	SourceEncoding = TextureSourceEncoding::Direct;
 	PreparedBasisTarget.reset();
 
-	Info.Width = 0;
-	Info.Height = 0;
-	Info.Depth = 1;
-
+	Info = MakeImportTextureInfo();
 	Info.MipLevels = 0;
-	Info.LayerCount = 1;
-	Info.FaceCount = 1;
+}
 
-	// Format, mip policy and sampler are import decisions and remain unchanged across reloads.
+TextureInfo TextureData::MakeImportTextureInfo() const
+{
+	TextureInfo Result;
+
+	Result.Format = ImportColorSpace == TextureColorSpace::SRGB ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm;
+
+	Result.MipMode = ImportMipMode;
+	Result.Sampler = ImportSampler;
+	Result.ColorSpace = ImportColorSpace;
+
+	return Result;
 }
 
 bool TextureData::DecodeTextureData(const uint8_t* Data, std::size_t DataSize)
@@ -139,13 +145,15 @@ bool TextureData::DecodeRasterPixels(const uint8_t* Data, int DataSize)
         return false;
     }
 
-    Info.Width = static_cast<uint32_t>(Width);
-    Info.Height = static_cast<uint32_t>(Height);
-    Info.Depth = 1;
+	Info = MakeImportTextureInfo();
 
-    Info.MipLevels = 1;
-    Info.LayerCount = 1;
-    Info.FaceCount = 1;
+	Info.Width = static_cast<uint32_t>(Width);
+	Info.Height = static_cast<uint32_t>(Height);
+	Info.Depth = 1;
+
+	Info.MipLevels = 1;
+	Info.LayerCount = 1;
+	Info.FaceCount = 1;
 
     const size_t ByteCount = static_cast<size_t>(Width) * static_cast<size_t>(Height) * 4;
 

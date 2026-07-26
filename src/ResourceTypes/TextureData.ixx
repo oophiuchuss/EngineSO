@@ -82,12 +82,12 @@ public:
 		TextureColorSpace InColorSpace = TextureColorSpace::SRGB,
 		TextureMipMode InMipMode = TextureMipMode::GenerateLinear,
 		SamplerDesc InSampler = PresetSamplerDesc::SamplerLinearRepeat) :
-		ResourceBase(ID)
+		ResourceBase(ID),
+		ImportColorSpace(InColorSpace),
+		ImportMipMode(InMipMode),
+		ImportSampler(InSampler)
 	{
-		Info.Format = InColorSpace == TextureColorSpace::SRGB ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm;
-		Info.MipMode = InMipMode;
-		Info.Sampler = InSampler;
-		Info.ColorSpace = InColorSpace;
+		Info = MakeImportTextureInfo();
 	}
 
 	// Accessors
@@ -123,11 +123,17 @@ protected:
 	void UnloadResource() override;
 
 private:
+	TextureInfo MakeImportTextureInfo() const;
+
 	bool DecodeTextureData(const uint8_t* Data, std::size_t DataSize);
 
 	bool DecodeRasterPixels(const uint8_t* Data, int DataSize);
 
 	bool DecodeKtx2(const uint8_t* Data, std::size_t DataSize);
+
+	TextureColorSpace ImportColorSpace;
+	TextureMipMode ImportMipMode;
+	SamplerDesc ImportSampler;
 
 	std::vector<uint8_t> Bytes;
 	std::vector<TextureSubresource> Subresources;

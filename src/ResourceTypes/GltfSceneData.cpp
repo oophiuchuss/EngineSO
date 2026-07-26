@@ -25,12 +25,44 @@ import TextureData;
 import MeshData;
 import MaterialProperties;
 
+namespace
+{
+	std::optional<std::size_t> ResolveTextureImageIndex(const fastgltf::Asset& Asset, std::size_t TextureIndex)
+	{
+		if (TextureIndex >= Asset.textures.size())
+		{
+			return std::nullopt;
+		}
+
+		const fastgltf::Texture& Texture = Asset.textures[TextureIndex];
+
+		std::optional<std::size_t> ImageIndex;
+
+		if (Texture.basisuImageIndex.has_value())
+		{
+			ImageIndex = Texture.basisuImageIndex.value();
+		}
+		else if (Texture.imageIndex.has_value())
+		{
+			ImageIndex = Texture.imageIndex.value();
+		}
+
+		if (!ImageIndex.has_value() || ImageIndex.value() >= Asset.images.size())
+		{
+			return std::nullopt;
+		}
+
+		return ImageIndex;
+	}
+}
+
+
 bool GltfSceneData::LoadResource(const std::string& FilePath)
 {
 	std::cout << "[GltfSceneData] Loading: " << FilePath << "\n";
 
 	// fastgltf handles both .gltf and .glb  transparently
-	fastgltf::Parser Parser{ fastgltf::Extensions::KHR_lights_punctual };
+	fastgltf::Parser Parser{ fastgltf::Extensions::KHR_lights_punctual | fastgltf::Extensions::KHR_texture_basisu };
 	
 	fastgltf::GltfFileStream FileStream(FilePath.c_str());
 	if (!FileStream.isOpen())
@@ -55,8 +87,6 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 	}
 
 	fastgltf::Asset& Asset = LoadResult.get();
-
-	Asset.extensionsUsed;
 
 	// Parse textures/images
 	RawTextures.reserve(Asset.images.size());
@@ -172,25 +202,47 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 
 		if (PBR.baseColorTexture.has_value())
 		{
-			Raw.AlbedoTextureIndex = static_cast<int>(Asset.textures[PBR.baseColorTexture->textureIndex].imageIndex.value());
+			auto ImageIndex = ResolveTextureImageIndex(Asset, PBR.baseColorTexture->textureIndex);
+
+			if (ImageIndex.has_value())
+			{
+				Raw.AlbedoTextureIndex = static_cast<int>(ImageIndex.value());
+			}
 		}
 		
 		if (PBR.metallicRoughnessTexture.has_value())
 		{
-			Raw.MetallicRoughnessTextureIndex = static_cast<int>(Asset.textures[PBR.metallicRoughnessTexture->textureIndex].imageIndex.value());
+			auto ImageIndex = ResolveTextureImageIndex(Asset, PBR.metallicRoughnessTexture->textureIndex);
+
+			if (ImageIndex.has_value())
+			{
+				Raw.MetallicRoughnessTextureIndex = static_cast<int>(ImageIndex.value());
+			}
 		}
 
 		// Normal
 		if (Mat.normalTexture.has_value())
 		{
-			Raw.NormalTextureIndex = static_cast<int>(Asset.textures[Mat.normalTexture->textureIndex].imageIndex.value());
+			auto ImageIndex = ResolveTextureImageIndex(Asset, Mat.normalTexture->textureIndex);
+
+			if (ImageIndex.has_value())
+			{
+				Raw.NormalTextureIndex = static_cast<int>(ImageIndex.value());
+			}
+			
 			Raw.NormalScale = Mat.normalTexture->scale;
 		}
 
 		// Occlusion
 		if (Mat.occlusionTexture.has_value())
 		{
-			Raw.OcclusionTextureIndex = static_cast<int>(Asset.textures[Mat.occlusionTexture->textureIndex].imageIndex.value());
+			auto ImageIndex = ResolveTextureImageIndex(Asset, Mat.occlusionTexture->textureIndex);
+
+			if (ImageIndex.has_value())
+			{
+				Raw.OcclusionTextureIndex = static_cast<int>(ImageIndex.value());
+			}
+			
 			Raw.OcclusionStrength = Mat.occlusionTexture->strength;
 		}
 
@@ -202,7 +254,13 @@ bool GltfSceneData::LoadResource(const std::string& FilePath)
 
 		if (Mat.emissiveTexture.has_value())
 		{
-			Raw.EmissiveTextureIndex = static_cast<int>(Asset.textures[Mat.emissiveTexture->textureIndex].imageIndex.value());
+			auto ImageIndex = ResolveTextureImageIndex(Asset, Mat.emissiveTexture->textureIndex);
+
+			if (ImageIndex.has_value())
+			{
+				Raw.EmissiveTextureIndex = static_cast<int>(ImageIndex.value());
+			}
+			
 			// TODO: what about emissiveStrength?
 		}
 

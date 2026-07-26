@@ -320,6 +320,11 @@ bool TextureData::DecodeKtx2(const uint8_t* Data, std::size_t DataSize)
 		return RejectKtx("only 2D textures are currently supported");
 	}
 
+	if (BaseTexture->orientation.x != KTX_ORIENT_X_RIGHT || BaseTexture->orientation.y != KTX_ORIENT_Y_DOWN)
+	{
+		return RejectKtx("only right/down image orientation is currently supported");
+	}
+
 	if (Texture->numFaces != 1 && Texture->numFaces != 6)
 	{
 		return RejectKtx("face count must be either one or six");
@@ -357,7 +362,7 @@ bool TextureData::DecodeKtx2(const uint8_t* Data, std::size_t DataSize)
 
 	TextureInfo NewInfo;
 
-	if (!ReadKtxInfo(Texture.get(), Info, NewInfo))
+	if (!ReadKtxInfo(Texture.get(), MakeImportTextureInfo(), NewInfo))
 	{
 		return false;
 	}
@@ -385,7 +390,7 @@ bool TextureData::DecodeKtx2(const uint8_t* Data, std::size_t DataSize)
 
 	if (Texture->supercompressionScheme != KTX_SS_NONE)
 	{
-		return RejectKtx("supercompression and Basis transcoding are not enabled yet");
+		return RejectKtx("non-Basis supercompression is currently unsupported");
 	}
 
 	if (Texture->vkFormat == static_cast<uint32_t>(vk::Format::eUndefined))
@@ -479,7 +484,7 @@ bool TextureData::PrepareBasisPayload(BasisTranscodeTarget Target)
 
 	TextureInfo NewInfo;
 
-	if (!ReadKtxInfo(Texture.get(), Info, NewInfo))
+	if (!ReadKtxInfo(Texture.get(), MakeImportTextureInfo(), NewInfo))
 	{
 		return false;
 	}
