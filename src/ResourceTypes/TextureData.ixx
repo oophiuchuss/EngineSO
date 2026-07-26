@@ -6,6 +6,7 @@ module;
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <optional>
 
 export module TextureData;
 
@@ -53,8 +54,24 @@ export struct TextureInfo
 
 	vk::Format Format = vk::Format::eUndefined;
 	TextureMipMode MipMode = TextureMipMode::GenerateLinear;
-
 	SamplerDesc Sampler = PresetSamplerDesc::SamplerLinearRepeat;
+
+	TextureColorSpace ColorSpace = TextureColorSpace::Linear;
+};
+
+export enum class TextureSourceEncoding
+{
+	Direct,
+	BasisUniversal
+};
+
+export enum class BasisTranscodeTarget
+{
+	BC7RGBA,
+	ASTC4x4RGBA,
+	ETC2RGBA,
+	BC3RGBA,
+	RGBA32
 };
 
 export class TextureData : public ResourceBase
@@ -70,6 +87,7 @@ public:
 		Info.Format = InColorSpace == TextureColorSpace::SRGB ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm;
 		Info.MipMode = InMipMode;
 		Info.Sampler = InSampler;
+		Info.ColorSpace = InColorSpace;
 	}
 
 	// Accessors
@@ -86,6 +104,14 @@ public:
 	inline vk::Format GetFormat() const { return Info.Format; }
 	inline TextureMipMode GetMipMode() const { return Info.MipMode; }
 	inline const SamplerDesc& GetSamplerDesc() const { return Info.Sampler; }
+	inline TextureSourceEncoding GetSourceEncoding() const { return SourceEncoding; }
+	inline TextureColorSpace GetColorSpace() const { return Info.ColorSpace; }
+
+	bool IsUploadReady() const;
+	bool NeedsBasisPreparation() const;
+
+	bool PrepareBasisPayload(BasisTranscodeTarget Target);
+	bool IsPreparedFor(BasisTranscodeTarget Target) const;
 
 	// Extension empty — ID includes extension e.g. "albedo.png"
 	static std::string_view AssetFolder() { return "textures"; }
@@ -106,4 +132,8 @@ private:
 	std::vector<uint8_t> Bytes;
 	std::vector<TextureSubresource> Subresources;
 	TextureInfo Info;
+
+	std::vector<uint8_t> EncodedSource;
+	TextureSourceEncoding SourceEncoding = TextureSourceEncoding::Direct;
+	std::optional<BasisTranscodeTarget> PreparedBasisTarget;
 };

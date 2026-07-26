@@ -34,6 +34,21 @@ namespace
 	}
 }
 
+bool TextureData::IsUploadReady() const
+{
+	return !Bytes.empty() && !Subresources.empty() && Info.Format != vk::Format::eUndefined;
+}
+
+bool TextureData::NeedsBasisPreparation() const
+{
+	return SourceEncoding == TextureSourceEncoding::BasisUniversal && !IsUploadReady();
+}
+
+bool TextureData::IsPreparedFor(BasisTranscodeTarget Target) const
+{
+	return PreparedBasisTarget.has_value() && PreparedBasisTarget.value() == Target && IsUploadReady();
+}
+
 bool TextureData::LoadResource(const std::string& FilePath)
 {
 	std::ifstream File(FilePath, std::ios::binary | std::ios::ate);
@@ -71,6 +86,10 @@ void TextureData::UnloadResource()
 {
 	Bytes.clear();
 	Subresources.clear();
+	EncodedSource.clear();
+
+	SourceEncoding = TextureSourceEncoding::Direct;
+	PreparedBasisTarget.reset();
 
 	Info.Width = 0;
 	Info.Height = 0;
@@ -146,6 +165,10 @@ bool TextureData::DecodeRasterPixels(const uint8_t* Data, int DataSize)
 
     Subresources.clear();
     Subresources.push_back(BaseLevel);
+
+	EncodedSource.clear();
+	SourceEncoding = TextureSourceEncoding::Direct;
+	PreparedBasisTarget.reset();
 
     return !Bytes.empty();
 }

@@ -59,7 +59,7 @@ private:
 		Entity& Entity,
 		std::unordered_set<std::string>& SeenTextures,
 		std::vector<std::string>& TextureIDs,
-		std::vector<const TextureData*>& TextureDataPtrs,
+		std::vector<TextureData*>& TextureDataPtrs,
 		std::unordered_set<std::string>& SeenMeshes,
 		std::vector<std::string>& MeshIDs,
 		std::vector<const MeshData*>& MeshDataPtrs);

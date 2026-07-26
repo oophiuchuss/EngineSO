@@ -33,13 +33,13 @@ public:
 
     Mesh* GetOrUploadMesh(const std::string& ID, const MeshData& Data);
     Shader* GetOrCompileShader(const std::string& ID, const ShaderData& Data);
-    int GetOrUploadTexture(const std::string& ID, const TextureData& Data);
+    int GetOrUploadTexture(const std::string& ID, TextureData& Data);
 
     void GetOrUploadMeshBatch(const std::vector<std::string>& IDs, const std::vector<const MeshData*>& DataList);
 
     // IDs and DataList must be the same size and correspond by index
     // Returns slot indices in the same order as the input
-    std::vector<int> GetOrUploadTextureBatch(const std::vector<std::string>& IDs, const std::vector<const TextureData*>& DataList);
+    std::vector<int> GetOrUploadTextureBatch(const std::vector<std::string>& IDs, const std::vector<TextureData*>& DataList);
 
     // TODO: maybe resolve in better way
     inline bool IsMeshCached(const std::string& ID) const
@@ -57,6 +57,11 @@ public:
     void EvictAll();
 
 private:
+	// Helper function to prepare a texture for upload, including transcoding if necessary
+    void PrepareTextureForUpload(TextureData& Data);
+    BasisTranscodeTarget SelectBasisTranscodeTarget(const TextureData& Data) const;
+    bool IsBasisTargetSupported(const TextureData& Data, BasisTranscodeTarget Target) const;
+
     const vk::raii::Device& Device;
     const vk::raii::PhysicalDevice& PhysicalDevice;
     VulkanUploader* UploaderPtr;

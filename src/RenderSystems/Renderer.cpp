@@ -283,7 +283,7 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 				{
 					auto ResolveTexture = [&](const ResourceHandle<TextureData>& Handle, int DefaultIndex) -> int
 						{
-							if (const TextureData* TextureDataPtr = Handle.Get())
+							if (TextureData* TextureDataPtr = Handle.Get())
 							{
 								return RenderCacheInstance->GetOrUploadTexture(TextureDataPtr->GetResourceID(), *TextureDataPtr);
 							}
@@ -1088,7 +1088,7 @@ void Renderer::SetupRenderPasses()
 void Renderer::PreloadSceneResources(Scene& Scene)
 {
 	std::vector<std::string> TextureIDs;
-	std::vector<const TextureData*> TextureDataPtrs;
+	std::vector<TextureData*> TextureDataPtrs;
 	std::unordered_set<std::string> SeenTextures;
 	std::vector<std::string> MeshIDs;
 	std::vector<const MeshData*> MeshDataPtrs;
@@ -1096,9 +1096,7 @@ void Renderer::PreloadSceneResources(Scene& Scene)
 
 	for (Entity* E : Scene.GetAllEntities())
 	{
-		CollectEntityResources(*E,
-			SeenTextures, TextureIDs, TextureDataPtrs,
-			SeenMeshes, MeshIDs, MeshDataPtrs);
+		CollectEntityResources(*E, SeenTextures, TextureIDs, TextureDataPtrs, SeenMeshes, MeshIDs, MeshDataPtrs);
 	}
 
 	if (!MeshIDs.empty())
@@ -1116,15 +1114,13 @@ void Renderer::PreloadSceneResources(Scene& Scene)
 void Renderer::PreloadEntityResources(Entity& Entity)
 {
 	std::vector<std::string> TextureIDs;
-	std::vector<const TextureData*> TextureDataPtrs;
+	std::vector<TextureData*> TextureDataPtrs;
 	std::unordered_set<std::string> SeenTextures;
 	std::vector<std::string> MeshIDs;
 	std::vector<const MeshData*> MeshDataPtrs;
 	std::unordered_set<std::string> SeenMeshes;
 
-	CollectEntityResources(Entity,
-		SeenTextures, TextureIDs, TextureDataPtrs,
-		SeenMeshes, MeshIDs, MeshDataPtrs);
+	CollectEntityResources(Entity, SeenTextures, TextureIDs, TextureDataPtrs, SeenMeshes, MeshIDs, MeshDataPtrs);
 
 	if (!MeshIDs.empty())
 	{
@@ -1157,7 +1153,7 @@ void Renderer::CollectEntityResources(
 	Entity& Entity, 
 	std::unordered_set<std::string>& SeenTextures, 
 	std::vector<std::string>& TextureIDs, 
-	std::vector<const TextureData*>& TextureDataPtrs, 
+	std::vector<TextureData*>& TextureDataPtrs, 
 	std::unordered_set<std::string>& SeenMeshes, 
 	std::vector<std::string>& MeshIDs, 
 	std::vector<const MeshData*>& MeshDataPtrs)
@@ -1188,7 +1184,7 @@ void Renderer::CollectEntityResources(
 
 	auto Collect = [&](const ResourceHandle<TextureData>& Handle)
 		{
-			const TextureData* TD = Handle.Get();
+			TextureData* TD = Handle.Get();
 			if (!TD) 
 			{
 				return;
