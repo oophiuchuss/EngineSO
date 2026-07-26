@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 # Project setup
-project(EngineSO VERSION 0.1.0 LANGUAGES CXX)
+project(EngineSO VERSION 0.1.0 LANGUAGES C CXX)
 
 add_executable(EngineSO)
 
@@ -54,6 +54,37 @@ set_target_properties(EngineSO PROPERTIES
 
 # Shader compilation (Slang)
 include(FetchContent)
+
+# KTX2 texture container reader
+set(KTX_FEATURE_DOC OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_JNI OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_PY OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TOOLS_CTS OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_LOADTEST_APPS "OFF" CACHE STRING "" FORCE)
+
+set(KTX_FEATURE_KTX1 ON CACHE BOOL "" FORCE)
+set(KTX_FEATURE_KTX2 ON CACHE BOOL "" FORCE)
+
+# EngineSO owns Vulkan upload and does not use libktx GPU upload.
+set(KTX_FEATURE_VK_UPLOAD OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_GL_UPLOAD OFF CACHE BOOL "" FORCE)
+
+set(KTX_FEATURE_ETC_UNPACK OFF CACHE BOOL "" FORCE)
+
+# Avoid distributing an additional ktx_read DLL.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build fetched dependencies as static libraries" FORCE)
+
+FetchContent_Declare(
+	ktx
+	GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+	GIT_TAG        v4.4.2
+	GIT_SHALLOW    TRUE
+	GIT_SUBMODULES_RECURSE TRUE
+)
+
+FetchContent_MakeAvailable(ktx)
 
 set(SLANG_REQUIRED_VERSION "2026.10.2")
 
@@ -130,10 +161,10 @@ target_link_libraries(EngineSO PRIVATE
     Vulkan::Vulkan
     glfw
     fastgltf
+    ktx_read
 )
 
 target_include_directories(EngineSO PRIVATE ${stb_SOURCE_DIR})
-
 
 # Shader compilation pipeline
 set(SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")

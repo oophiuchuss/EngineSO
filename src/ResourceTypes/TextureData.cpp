@@ -5,32 +5,66 @@ module;
 #include <stdexcept>
 #include <fstream>
 
+#include <algorithm>
+#include <array>
+#include <limits>
+
 // stb_image implementation — define once here, never in a header
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 module TextureData;
 
+namespace
+{
+	constexpr std::array<uint8_t, 12> Ktx2Identifier = {
+		0xAB, 0x4B, 0x54, 0x58,
+		0x20, 0x32, 0x30, 0xBB,
+		0x0D, 0x0A, 0x1A, 0x0A
+	};
+
+	bool HasKtx2Identifier(const uint8_t* Data, size_t DataSize)
+	{
+		if (!Data || DataSize < Ktx2Identifier.size())
+		{
+			return false;
+		}
+
+		return std::equal(Ktx2Identifier.begin(), Ktx2Identifier.end(), Data);
+	}
+}
 
 bool TextureData::LoadResource(const std::string& FilePath)
 {
 	std::ifstream File(FilePath, std::ios::binary | std::ios::ate);
+
 	if (!File)
 	{
 		return false;
 	}
 
-	auto FileSize = File.tellg();
-	std::vector<uint8_t> RawData(static_cast<size_t>(FileSize));
-	File.seekg(0);
-	File.read(reinterpret_cast<char*>(RawData.data()), FileSize);
+	const std::streamsize FileSize = File.tellg();
 
-	return DecodePixels(RawData.data(), static_cast<int>(RawData.size()));
+	if (FileSize <= 0)
+	{
+		return false;
+	}
+
+	std::vector<uint8_t> RawData(static_cast<size_t>(FileSize));
+
+	File.seekg(0, std::ios::beg);
+
+	if (!File.read(reinterpret_cast<char*>(RawData.data()),FileSize))
+	{
+		return false;
+	}
+
+	return DecodeTextureData(RawData.data(), RawData.size());
 }
 
 bool TextureData::LoadResourceFromMemory(const std::vector<uint8_t>& Data)
 {
-	return DecodePixels(Data.data(), static_cast<int>(Data.size()));
+	return DecodeTextureData(Data.data(),Data.size());
 }
 
 void TextureData::UnloadResource()
@@ -49,7 +83,27 @@ void TextureData::UnloadResource()
 	// Format, mip policy and sampler are import decisions and remain unchanged across reloads.
 }
 
-bool TextureData::DecodePixels(const uint8_t* Data, int DataSize)
+bool TextureData::DecodeTextureData(const uint8_t* Data, std::size_t DataSize)
+{
+	if (!Data || DataSize == 0)
+	{
+		return false;
+	}
+
+	if (HasKtx2Identifier(Data, DataSize))
+	{
+		return DecodeKtx2(Data, DataSize);
+	}
+
+	if (DataSize > static_cast<size_t>((std::numeric_limits<int>::max)()))
+	{
+		return false;
+	}
+
+	return DecodeRasterPixels(Data, static_cast<int>(DataSize));
+}
+
+bool TextureData::DecodeRasterPixels(const uint8_t* Data, int DataSize)
 {
     int Width = 0;
     int Height = 0;

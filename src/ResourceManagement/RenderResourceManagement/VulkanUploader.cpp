@@ -525,6 +525,16 @@ VulkanUploader::UploadImageResult VulkanUploader::CreateDeviceLocalImage(
 	vk::ImageCreateFlags CreateFlags,
 	vk::ImageUsageFlags Usage)
 {
+	ValidateImageCreationSupport(
+		Width,
+		Height,
+		Depth,
+		Format,
+		MipLevels,
+		ArrayLayers,
+		CreateFlags,
+		Usage);
+
 	std::array<uint32_t, 2> QueueFamilies = {
 		TransferQueueFamilyIndex,
 		GraphicsQueueFamilyIndex
@@ -946,5 +956,52 @@ void VulkanUploader::ValidateNormalMipUpload(const ImageUploadInfo& Info) const
 	if (Info.ArrayLayers != 1)
 	{
 		throw std::runtime_error("Compute normal mip generation currently supports one array layer");
+	}
+}
+
+void VulkanUploader::ValidateImageCreationSupport(
+	uint32_t Width, 
+	uint32_t Height, 
+	uint32_t Depth, 
+	vk::Format Format, 
+	uint32_t MipLevels, 
+	uint32_t ArrayLayers, 
+	vk::ImageCreateFlags CreateFlags, 
+	vk::ImageUsageFlags Usage) const
+{
+	vk::ImageFormatProperties Properties;
+
+	try
+	{
+		Properties = PhysicalDevice.getImageFormatProperties(
+			Format,
+			vk::ImageType::e2D,
+			vk::ImageTiling::eOptimal,
+			Usage,
+			CreateFlags);
+	}
+	catch (const vk::SystemError& Error)
+	{
+		throw std::runtime_error(std::string("Unsupported Vulkan image format/usage combination: ") + Error.what());
+	}
+
+	if (Width > Properties.maxExtent.width || Height > Properties.maxExtent.height || Depth > Properties.maxExtent.depth)
+	{
+		throw std::runtime_error("Requested image dimensions exceed the format limits");
+	}
+
+	if (MipLevels > Properties.maxMipLevels)
+	{
+		throw std::runtime_error("Requested mip count exceeds the format limits");
+	}
+
+	if (ArrayLayers > Properties.maxArrayLayers)
+	{
+		throw std::runtime_error("Requested array layer count exceeds the format limits");
+	}
+
+	if (!(Properties.sampleCounts & vk::SampleCountFlagBits::e1))
+	{
+		throw std::runtime_error("Image format does not support one-sample images");
 	}
 }

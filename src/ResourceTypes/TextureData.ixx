@@ -5,6 +5,7 @@ module;
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <cstddef>
 
 export module TextureData;
 
@@ -96,7 +97,11 @@ protected:
 	void UnloadResource() override;
 
 private:
-	bool DecodePixels(const uint8_t* Data, int DataSize);
+	bool DecodeTextureData(const uint8_t* Data, std::size_t DataSize);
+
+	bool DecodeRasterPixels(const uint8_t* Data, int DataSize);
+
+	bool DecodeKtx2(const uint8_t* Data, std::size_t DataSize);
 
 	std::vector<uint8_t> Bytes;
 	std::vector<TextureSubresource> Subresources;

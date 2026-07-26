@@ -179,6 +179,16 @@ private:
 
 	void ValidateNormalMipUpload(const ImageUploadInfo& Info) const;
 
+	void ValidateImageCreationSupport(
+		uint32_t Width,
+		uint32_t Height,
+		uint32_t Depth,
+		vk::Format Format,
+		uint32_t MipLevels,
+		uint32_t ArrayLayers,
+		vk::ImageCreateFlags CreateFlags,
+		vk::ImageUsageFlags Usage) const;
+
 	const vk::raii::Device& Device;
 	const vk::raii::PhysicalDevice& PhysicalDevice;
 	const vk::raii::Queue& TransferQueue;
