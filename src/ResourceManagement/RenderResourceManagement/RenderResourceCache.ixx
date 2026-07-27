@@ -33,13 +33,15 @@ public:
 
     Mesh* GetOrUploadMesh(const std::string& ID, const MeshData& Data);
     Shader* GetOrCompileShader(const std::string& ID, const ShaderData& Data);
-    int GetOrUploadTexture(const std::string& ID, TextureData& Data);
 
     void GetOrUploadMeshBatch(const std::vector<std::string>& IDs, const std::vector<const MeshData*>& DataList);
 
+    int GetOrUploadTexture2D(const std::string& ID, TextureData& Data);
+    int GetOrUploadCubemap(const std::string& ID, TextureData& Data);
+
     // IDs and DataList must be the same size and correspond by index
     // Returns slot indices in the same order as the input
-    std::vector<int> GetOrUploadTextureBatch(const std::vector<std::string>& IDs, const std::vector<TextureData*>& DataList);
+    std::vector<int> GetOrUploadTexture2DBatch(const std::vector<std::string>& IDs, const std::vector<TextureData*>& DataList);
 
     // TODO: maybe resolve in better way
     inline bool IsMeshCached(const std::string& ID) const
@@ -50,7 +52,7 @@ public:
     // TODO: maybe resolve in better way
     inline bool IsTextureCached(const std::string& ID) const
     {
-        return TextureSlotMap.find(ID) != TextureSlotMap.end();
+        return TextureAllocationMap.find(ID) != TextureAllocationMap.end();
     }
 
     void Evict(const std::string& ID);
@@ -62,6 +64,9 @@ private:
     BasisTranscodeTarget SelectBasisTranscodeTarget(const TextureData& Data) const;
     bool IsBasisTargetSupported(const TextureData& Data, BasisTranscodeTarget Target) const;
 
+    int GetOrUploadTexture(const std::string& ID, TextureData& Data, TextureDescriptorType ExpectedType);
+    void ValidateTextureShape(const TextureData& Data, TextureDescriptorType ExpectedType) const;
+
     const vk::raii::Device& Device;
     const vk::raii::PhysicalDevice& PhysicalDevice;
     VulkanUploader* UploaderPtr;
@@ -70,5 +75,5 @@ private:
     std::unordered_map<std::string, std::unique_ptr<Mesh>> MeshCache;
     std::unordered_map<std::string, std::unique_ptr<Shader>> ShaderCache;
     std::unordered_map<std::string, std::unique_ptr<Texture>> TextureCache;
-    std::unordered_map<std::string, int> TextureSlotMap;    // Map id to slot index
+    std::unordered_map<std::string, TextureDescriptorAllocation> TextureAllocationMap;
 };

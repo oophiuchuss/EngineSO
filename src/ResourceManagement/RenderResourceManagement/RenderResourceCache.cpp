@@ -41,6 +41,39 @@ namespace
             return vk::Format::eUndefined;
         }
     }
+
+    class DescriptorAllocationGuard
+    {
+    public:
+        DescriptorAllocationGuard(
+            DescriptorHeap& InHeap,
+            TextureDescriptorAllocation InAllocation) :
+            Heap(&InHeap),
+            Allocation(InAllocation)
+        {
+        }
+
+        DescriptorAllocationGuard(const DescriptorAllocationGuard&) = delete;
+
+        DescriptorAllocationGuard& operator=(const DescriptorAllocationGuard&) = delete;
+
+        ~DescriptorAllocationGuard()
+        {
+            if (Heap && Allocation.IsValid())
+            {
+                Heap->FreeSlot(Allocation);
+            }
+        }
+
+        void Release()
+        {
+            Heap = nullptr;
+        }
+
+    private:
+        DescriptorHeap* Heap = nullptr;
+        TextureDescriptorAllocation Allocation;
+    };
 }
 
 Mesh* RenderResourceCache::GetOrUploadMesh(const std::string& ID, const MeshData& Data)
@@ -95,41 +128,6 @@ Shader* RenderResourceCache::GetOrCompileShader(const std::string& ID, const Sha
     return Ptr;
 }
 
-int RenderResourceCache::GetOrUploadTexture(const std::string& ID, TextureData& Data)
-{
-    // If already cached, return the existing slot index
-    auto It = TextureSlotMap.find(ID);
-    if (It != TextureSlotMap.end())
-    {
-        return It->second;
-    }
-
-    PrepareTextureForUpload(Data);
-
-    // Upload GPU image
-    auto NewTexture = Texture::CreateFromTextureData(Device, *UploaderPtr, Data);
-    if (!NewTexture)
-    {
-        return -1;
-    }
-
-    // Allocate a slot in the descriptor heap
-    int Slot = DescriptorHeapPtr->AllocateSlot();
-    if (Slot < 0)
-    {
-        return -1;
-    }
-
-    // Write the descriptor with the sampler from the texture data
-    DescriptorHeapPtr->WriteSlot(Slot, NewTexture->GetImageView(), Data.GetSamplerDesc());
-
-    // Cache the texture and its slot index
-    TextureCache[ID] = std::move(NewTexture);
-    TextureSlotMap[ID] = Slot;
-
-    return Slot;
-}
-
 void RenderResourceCache::GetOrUploadMeshBatch(const std::vector<std::string>& IDs, const std::vector<const MeshData*>& DataList)
 {
     if (IDs.empty() || IDs.size() != DataList.size())
@@ -161,76 +159,107 @@ void RenderResourceCache::GetOrUploadMeshBatch(const std::vector<std::string>& I
     }
 }
 
-std::vector<int> RenderResourceCache::GetOrUploadTextureBatch(const std::vector<std::string>& IDs, const std::vector<TextureData*>& DataList)
+int RenderResourceCache::GetOrUploadTexture2D(const std::string& ID, TextureData& Data)
+{
+    return GetOrUploadTexture(ID, Data, TextureDescriptorType::Texture2D);
+}
+
+int RenderResourceCache::GetOrUploadCubemap(const std::string& ID, TextureData& Data)
+{
+    return GetOrUploadTexture(ID, Data, TextureDescriptorType::Cubemap);
+}
+
+std::vector<int> RenderResourceCache::GetOrUploadTexture2DBatch(const std::vector<std::string>& IDs, const std::vector<TextureData*>& DataList)
 {
     if (IDs.size() != DataList.size())
     {
-        throw std::invalid_argument("GetOrUploadTextureBatch: IDs and DataList size mismatch");
+        throw std::invalid_argument("GetOrUploadTexture2DBatch: IDs and DataList size mismatch");
     }
 
     std::vector<int> ResultSlots(IDs.size(), -1);
 
-    // Figure out which ones are already cached, and which need uploading
-    std::vector<size_t> PendingIndices;             // index into IDs/DataList
+    std::vector<size_t> PendingIndices;
     std::vector<TextureData*> PendingData;
 
-    for (size_t i = 0; i < IDs.size(); ++i)
-    {
-        auto It = TextureSlotMap.find(IDs[i]);
-        if (It != TextureSlotMap.end())
-        {
-            ResultSlots[i] = It->second; // already uploaded — reuse slot
-        }
-        else
-        {
-            PendingIndices.push_back(i);
-            PendingData.push_back(DataList[i]);
-        }
-    }
+    PendingIndices.reserve(IDs.size());
+    PendingData.reserve(DataList.size());
 
-    if (PendingData.empty())
+    for (size_t Index = 0; Index < IDs.size(); ++Index)
     {
-        return ResultSlots; // everything was already cached
-    }
+        TextureData* Data = DataList[Index];
 
-    for (TextureData* Data : PendingData)
-    {
         if (!Data)
         {
             throw std::runtime_error("Texture batch contains null data");
         }
 
+        ValidateTextureShape(*Data, TextureDescriptorType::Texture2D);
+
+        auto Existing = TextureAllocationMap.find(IDs[Index]);
+
+        if (Existing != TextureAllocationMap.end())
+        {
+            if (Existing->second.Type != TextureDescriptorType::Texture2D)
+            {
+                throw std::runtime_error("Cached texture is not a Texture2D: " + IDs[Index]);
+            }
+
+            ResultSlots[Index] = Existing->second.Slot;
+
+            continue;
+        }
+
+        PendingIndices.push_back(Index);
+        PendingData.push_back(Data);
+    }
+
+    if (PendingData.empty())
+    {
+        return ResultSlots;
+    }
+
+    for (TextureData* Data : PendingData)
+    {
         PrepareTextureForUpload(*Data);
     }
 
     std::vector<const TextureData*> PreparedData(PendingData.begin(), PendingData.end());
 
-    // Single batched GPU upload for everything not yet cached
     std::vector<std::unique_ptr<Texture>> NewTextures = Texture::CreateBatchFromTextureData(Device, *UploaderPtr, PreparedData);
 
     if (NewTextures.size() != PendingData.size())
     {
-        throw std::runtime_error("GetOrUploadTextureBatch: batch upload returned mismatched count");
+        throw std::runtime_error("GetOrUploadTexture2DBatch: batch upload returned mismatched count");
     }
 
-    // Allocate slots and write descriptors for each newly uploaded texture
-    for (size_t i = 0; i < NewTextures.size(); ++i)
+    for (size_t PendingIndex = 0; PendingIndex < NewTextures.size(); PendingIndex++)
     {
-        size_t OriginalIndex = PendingIndices[i];
+        const size_t OriginalIndex = PendingIndices[PendingIndex];
+
         const std::string& ID = IDs[OriginalIndex];
 
-        int Slot = DescriptorHeapPtr->AllocateSlot();
-        if (Slot < 0)
+        TextureDescriptorAllocation Allocation = DescriptorHeapPtr->AllocateSlot(TextureDescriptorType::Texture2D);
+
+        if (!Allocation.IsValid())
         {
-            ResultSlots[OriginalIndex] = -1; // out of slots — caller falls back to default
+            ResultSlots[OriginalIndex] = -1;
             continue;
         }
 
-        DescriptorHeapPtr->WriteSlot(Slot, NewTextures[i]->GetImageView(), DataList[OriginalIndex]->GetSamplerDesc());
+        DescriptorAllocationGuard AllocationGuard(
+            *DescriptorHeapPtr,
+            Allocation);
 
-        TextureCache[ID] = std::move(NewTextures[i]);
-        TextureSlotMap[ID] = Slot;
-        ResultSlots[OriginalIndex] = Slot;
+        DescriptorHeapPtr->WriteSlot(
+            Allocation,
+            NewTextures[PendingIndex]->GetImageView(),
+            DataList[OriginalIndex]->GetSamplerDesc());
+
+        TextureCache[ID] = std::move(NewTextures[PendingIndex]);
+        TextureAllocationMap[ID] = Allocation;
+        ResultSlots[OriginalIndex] = Allocation.Slot;
+
+        AllocationGuard.Release();
     }
 
     return ResultSlots;
@@ -241,17 +270,15 @@ void RenderResourceCache::Evict(const std::string& ID)
     MeshCache.erase(ID);
     ShaderCache.erase(ID);
 
-    auto TexIt = TextureCache.find(ID);
-    if (TexIt != TextureCache.end())
+    auto AllocationIt = TextureAllocationMap.find(ID);
+
+    if (AllocationIt != TextureAllocationMap.end())
     {
-        auto SlotIt = TextureSlotMap.find(ID);
-        if (SlotIt != TextureSlotMap.end())
-        {
-            DescriptorHeapPtr->FreeSlot(SlotIt->second);
-            TextureSlotMap.erase(SlotIt);
-        }
-        TextureCache.erase(TexIt);
+        DescriptorHeapPtr->FreeSlot(AllocationIt->second);
+        TextureAllocationMap.erase(AllocationIt);
     }
+
+    TextureCache.erase(ID);
 }
 
 void RenderResourceCache::EvictAll()
@@ -259,13 +286,13 @@ void RenderResourceCache::EvictAll()
     MeshCache.clear();
     ShaderCache.clear();
 
-    for (auto& [ID, Slot] : TextureSlotMap)
+    for (const auto& [ID, Allocation] : TextureAllocationMap)
     {
-        DescriptorHeapPtr->FreeSlot(Slot);
+        DescriptorHeapPtr->FreeSlot(Allocation);
     }
 
+    TextureAllocationMap.clear();
     TextureCache.clear();
-    TextureSlotMap.clear();
 }
 
 void RenderResourceCache::PrepareTextureForUpload(TextureData& Data)
@@ -380,4 +407,81 @@ bool RenderResourceCache::IsBasisTargetSupported(const TextureData& Data, BasisT
     }
 
     return true;
+}
+
+int RenderResourceCache::GetOrUploadTexture(const std::string& ID, TextureData& Data, TextureDescriptorType ExpectedType)
+{
+    ValidateTextureShape(Data, ExpectedType);
+
+    auto Existing = TextureAllocationMap.find(ID);
+
+    if (Existing != TextureAllocationMap.end())
+    {
+        if (Existing->second.Type != ExpectedType)
+        {
+            throw std::runtime_error("Cached texture descriptor type does not match the requested descriptor type: " + ID);
+        }
+
+        return Existing->second.Slot;
+    }
+
+    PrepareTextureForUpload(Data);
+
+    std::unique_ptr<Texture> NewTexture = Texture::CreateFromTextureData(Device, *UploaderPtr, Data);
+
+    if (!NewTexture)
+    {
+        return -1;
+    }
+
+    TextureDescriptorAllocation Allocation = DescriptorHeapPtr->AllocateSlot(ExpectedType);
+
+    if (!Allocation.IsValid())
+    {
+        return -1;
+    }
+
+    DescriptorAllocationGuard AllocationGuard(*DescriptorHeapPtr, Allocation);
+
+    DescriptorHeapPtr->WriteSlot(Allocation, NewTexture->GetImageView(), Data.GetSamplerDesc());
+
+    TextureCache[ID] = std::move(NewTexture);
+    TextureAllocationMap[ID] = Allocation;
+
+    AllocationGuard.Release();
+
+    return Allocation.Slot;
+}
+
+void RenderResourceCache::ValidateTextureShape(const TextureData& Data, TextureDescriptorType ExpectedType) const
+{
+    if (Data.GetDepth() != 1)
+    {
+        throw std::runtime_error("Only 2D texture images are supported by the current descriptor heap");
+    }
+
+    switch (ExpectedType)
+    {
+    case TextureDescriptorType::Texture2D:
+        if (Data.GetFaceCount() != 1 || Data.GetLayerCount() != 1)
+        {
+            throw std::runtime_error("Sampler2D requires one face and one layer");
+        }
+        break;
+
+    case TextureDescriptorType::Cubemap:
+        if (Data.GetFaceCount() != 6 || Data.GetLayerCount() != 1)
+        {
+            throw std::runtime_error("SamplerCube requires six faces and one cube layer");
+        }
+
+        if (Data.GetWidth() != Data.GetHeight())
+        {
+            throw std::runtime_error("Cubemap faces must be square");
+        }
+        break;
+
+    default:
+        throw std::runtime_error("Unsupported texture descriptor type");
+    }
 }

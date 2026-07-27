@@ -109,6 +109,7 @@ Renderer::Renderer(
 		PhysicalDevice,
 		Device,
 		1024,						// TODO: Max textures hard-coded for now
+		64,							// TODO: Max textures hard-coded for now
 		*UploaderInstance);	
 
 	GPUSceneInstance = std::make_unique<GPUSceneBuffer>(
@@ -285,7 +286,9 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 						{
 							if (TextureData* TextureDataPtr = Handle.Get())
 							{
-								return RenderCacheInstance->GetOrUploadTexture(TextureDataPtr->GetResourceID(), *TextureDataPtr);
+								const int Slot = RenderCacheInstance->GetOrUploadTexture2D(TextureDataPtr->GetResourceID(), *TextureDataPtr);
+
+								return Slot >= 0 ? Slot : DefaultIndex;
 							}
 
 							return DefaultIndex;
@@ -1107,7 +1110,7 @@ void Renderer::PreloadSceneResources(Scene& Scene)
 	if (!TextureIDs.empty())
 	{
 		std::cout << "[Renderer] Preloading " << TextureIDs.size() << " textures...\n";
-		RenderCacheInstance->GetOrUploadTextureBatch(TextureIDs, TextureDataPtrs);
+		RenderCacheInstance->GetOrUploadTexture2DBatch(TextureIDs, TextureDataPtrs);
 	}
 }
 
@@ -1128,7 +1131,7 @@ void Renderer::PreloadEntityResources(Entity& Entity)
 	}
 	if (!TextureIDs.empty())
 	{
-		RenderCacheInstance->GetOrUploadTextureBatch(TextureIDs, TextureDataPtrs);
+		RenderCacheInstance->GetOrUploadTexture2DBatch(TextureIDs, TextureDataPtrs);
 	}
 }
 
