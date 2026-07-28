@@ -7,11 +7,12 @@ export module LightingPass;
 
 import RenderPassBase;
 import FrameData;
-import CameraUniform;
+import FrameUniform;
 import LightBuffer;
 import GBufferDescriptorSet;
 import Shader;
 import PipelineCache;
+import DescriptorHeap;
 
 export class LightingPass : public RenderPassBase
 {
@@ -24,9 +25,10 @@ public:
         std::string InGBufferMetalRoughResourceName,
         std::string InGBufferEmissiveResourceName,
         std::string InGBufferDepthResourceName,
-        CameraUniformBuffer* InCameraUBO,
+        FrameUniformBuffer* InFrameUniforms,
         LightBuffer* InLightBuffer,
         GBufferDescriptorSet* InGBufferDescSet,
+        DescriptorHeap* InDescriptorHeap,
         Shader* InLightingShader,       
         PipelineCache* InPipelineCache);
 
@@ -43,9 +45,10 @@ private:
     std::string GBufferEmissiveResourceName;
     std::string GBufferDepthResourceName;
 
-    CameraUniformBuffer* CameraUBOPtr = nullptr;
+    FrameUniformBuffer* FrameUniformsPtr = nullptr;
     LightBuffer* LightBufferPtr = nullptr;
     GBufferDescriptorSet* GBufferDescSetPtr = nullptr;
+    DescriptorHeap* DescriptorHeapPtr = nullptr;
     Shader* LightingShaderPtr = nullptr;
     PipelineCache* PipelineCachePtr = nullptr;
 };

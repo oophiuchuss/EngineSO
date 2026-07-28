@@ -3,6 +3,7 @@ module;
 #include <glm/glm.hpp>
 #include <string>
 #include <memory>
+#include <optional>
 
 export module Scene;
 
@@ -14,6 +15,7 @@ import CameraComponent;
 import ResourceHandle;
 import EventSystem;
 import ResourceManager;
+import SceneEnvironment;
 
 export class Ray
 {
@@ -59,6 +61,11 @@ public:
 	// Destruction
 	void DestroyEntity(Entity* EntityToDestroy);
 
+	void SetEnvironment(SceneEnvironment InEnvironment);
+	void ClearEnvironment();
+
+	inline const std::optional<SceneEnvironment>& GetEnvironment() const { return Environment; }
+
 	bool Raycast(const Ray& InRay, RayCastHit& OutHit, float MaxDistance = 100.0f) const;
 
 	// TODO Placeholder for scene data and methods
@@ -72,6 +79,8 @@ private:
 	std::unordered_map<std::string, std::unique_ptr<Entity>> EntityMap;	// Primary storage of entities, keyed by unique name for easy lookup
 
 	std::vector<Entity*> EntityList;			// Optional additional storage for iteration or other access patterns, if needed
-	Entity* ActiveCameraEntity = nullptr;	// Pointer to the currently active camera entity, if any
+	Entity* ActiveCameraEntity = nullptr;		// Pointer to the currently active camera entity, if any
+
+	std::optional<SceneEnvironment> Environment;
 };
 

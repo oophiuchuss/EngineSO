@@ -1,8 +1,9 @@
-// Reads the G‑buffer, reconstructs world position, and applies PBR lighting
-// from a directional light read from the LightBuffer.
+// Reads the G-buffer, renders untouched depth as the environment,
+// and applies PBR lighting to visible geometry.
 
 import GPULightData;
 import CameraUBO;
+import EnvironmentUBO;
 import NormalFiltering;
 import DirectLighting;
 
@@ -16,10 +17,9 @@ struct PSOutput
     float4 outColor : SV_Target0;
 };
 
-// Descriptor sets
-
-// Set 0, Binding 0 — Camera UBO
+// Set 0: frame-global uniforms.
 [[vk::binding(0, 0)]] ConstantBuffer<CameraUBO> uCamera;
+[[vk::binding(1, 0)]] ConstantBuffer<EnvironmentUBO> uEnvironment;
 
 // Set 1 — G‑buffer textures (bindings 0‑4)
 [[vk::binding(0, 1)]] Sampler2D GBuffer_Albedo;
@@ -29,25 +29,47 @@ struct PSOutput
 [[vk::binding(4, 1)]] Sampler2D Main_Depth;
 
 // Set 2, Binding 0 – light count header
-[[vk::binding(0, 2)]]
-ConstantBuffer<uint> LightCountRaw;
+[[vk::binding(0, 2)]] ConstantBuffer<uint> LightCountRaw;
 
 // Set 2, Binding 1 – LightData array
-[[vk::binding(1, 2)]]
-StructuredBuffer<GPULightData> gLights;
+[[vk::binding(1, 2)]] StructuredBuffer<GPULightData> gLights;
+
+// Set 3: descriptor heap.
+// Binding 0 contains Sampler2D[], but this shader does not use it.
+[[vk::binding(1, 3)]] SamplerCube CubemapHeap[];
 
 // Helpers
-
 float3 ReconstructWorldPosition(float2 UV, float Depth)
 {
-    float4 ClipPos;
-    ClipPos.x = UV.x * 2.0 - 1.0;
-    ClipPos.y = UV.y * 2.0 - 1.0;
-    ClipPos.z = Depth;
-    ClipPos.w = 1.0;
+    float4 ClipPosition;
 
-    float4 WorldPos = mul(uCamera.InverseViewProj, ClipPos);
-    return WorldPos.xyz / WorldPos.w;
+    ClipPosition.x = UV.x * 2.0 - 1.0;
+    ClipPosition.y = UV.y * 2.0 - 1.0;
+    ClipPosition.z = Depth;
+    ClipPosition.w = 1.0;
+
+    float4 WorldPosition = mul(uCamera.InverseViewProj, ClipPosition);
+    return WorldPosition.xyz / WorldPosition.w;
+}
+
+float3 ReconstructWorldDirection(float2 UV)
+{
+    float3 FarWorldPosition = ReconstructWorldPosition(UV, 1.0);
+
+    return normalize(FarWorldPosition - uCamera.CameraPos.xyz);
+}
+
+float3 SampleEnvironment(float3 WorldDirection)
+{
+    float3 EnvironmentDirection = mul(uEnvironment.WorldToEnvironment, float4(WorldDirection, 0.0)).xyz;
+
+    EnvironmentDirection = normalize(EnvironmentDirection);
+
+    uint CubemapIndex = NonUniformResourceIndex(uEnvironment.CubemapIndex);
+
+    float3 EnvironmentColor = CubemapHeap[CubemapIndex].Sample(EnvironmentDirection).rgb;
+
+    return EnvironmentColor * uEnvironment.Intensity;
 }
 
 // Entry point
@@ -57,44 +79,55 @@ PSOutput main(PSInput input)
 {
     PSOutput output;
 
-    // Sample G‑buffer
-    float4 Albedo           = GBuffer_Albedo.Sample(input.uv);
-    float4 PackedNormal     = GBuffer_Normal.Sample(input.uv);
-    float4 MetalRough       = GBuffer_MetalRough.Sample(input.uv);
-    float3 Emissive         = GBuffer_Emissive.Sample(input.uv).rgb;
-    float  Depth            = Main_Depth.Sample(input.uv).r;
-    float3 Normal           = normalize(PackedNormal.xyz);
-    float NormalVariance    = NormalLengthToVariance(PackedNormal.a);
-    float Metallic          = MetalRough.x;
-    float Roughness         = max(MetalRough.y, 0.04);
-    float Occlusion         = Albedo.a;
+    // Depth is sampled first because it determines whether this pixel
+    // represents geometry or untouched background.
+    float Depth = Main_Depth.Sample(input.uv).r;
+
+    if (Depth >= 1.0)
+    {
+        float3 WorldDirection = ReconstructWorldDirection(input.uv);
+        float3 SkyColor = SampleEnvironment(WorldDirection);
+
+        output.outColor = float4(SkyColor, 1.0);
+
+        return output;
+    }
+
+    // Only read and process G-buffer surface data when geometry exists.
+    float4  Albedo          = GBuffer_Albedo.Sample(input.uv);
+    float4  PackedNormal    = GBuffer_Normal.Sample(input.uv);
+    float4  MetalRough      = GBuffer_MetalRough.Sample(input.uv);
+    float3  Emissive        = GBuffer_Emissive.Sample(input.uv).rgb;
+    float3  Normal          = normalize(PackedNormal.xyz);
+    float   NormalVariance  = NormalLengthToVariance(PackedNormal.a);
+    float   Metallic        = MetalRough.x;
+    float   Roughness       = max(MetalRough.y, 0.04);
+    float   Occlusion       = Albedo.a;
 
     float FilteredRoughness = ApplyNormalVarianceToRoughness(Roughness, NormalVariance);
 
-    // Reconstruct world position
-    float3 WorldPos     = ReconstructWorldPosition(input.uv, Depth);
-    float3 ViewDir      = normalize(uCamera.CameraPos.xyz - WorldPos);
+    float3 WorldPosition = ReconstructWorldPosition(input.uv, Depth);
+    float3 ViewDirection = normalize(uCamera.CameraPos.xyz - WorldPosition);
 
-    // Accumulate lighting from all lights in the buffer
-    float3 LitColor     = float3(0.0);
-    uint Count          = LightCountRaw;
+    float3 LitColor = float3(0.0);
+    uint LightCount = LightCountRaw;
 
-    for (uint i = 0; i < Count; ++i)
+    for (uint LightIndex = 0; LightIndex < LightCount; LightIndex++)
     {
-        GPULightData L = gLights[i];
-        uint Type = uint(L.Params.w);
+        GPULightData Light = gLights[LightIndex];
+        uint Type = uint(Light.Params.w);
 
         if (Type == LightType_Directional)
         {
-            LitColor += ApplyDirectionalLight(L, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
+            LitColor += ApplyDirectionalLight(Light, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDirection);
         }
         else if (Type == LightType_Point)
         {
-            LitColor += ApplyPointLight(L, WorldPos, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
+            LitColor += ApplyPointLight(Light, WorldPosition, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDirection);
         }
         else if (Type == LightType_Spot)
         {
-            LitColor += ApplySpotLight(L, WorldPos, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDir);
+            LitColor += ApplySpotLight(Light, WorldPosition, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDirection);
         }
     }
 

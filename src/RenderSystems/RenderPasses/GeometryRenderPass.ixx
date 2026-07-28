@@ -7,7 +7,7 @@ export module GeometryRenderPass;
 
 import RenderPassBase;
 import CullingSystem;
-import CameraUniform;
+import FrameUniform;
 import DescriptorHeap;
 import GPUSceneBuffer;
 import FrameData;
@@ -26,7 +26,7 @@ public:
 		std::string InGBufferDepthResourceName,
 		Shader* InGeometryShader,
 		PipelineCache* InPipelineCache,
-		CameraUniformBuffer* InCameraUBO,
+		FrameUniformBuffer* InFrameUniforms,
 		DescriptorHeap* InDescriptorHeap,
 		GPUSceneBuffer* InGPUScene);
 
@@ -48,7 +48,7 @@ private:
 
 	Shader* GeometryShaderPtr = nullptr;
 	PipelineCache* PipelineCachePtr = nullptr;
-	CameraUniformBuffer* CameraUBOPtr = nullptr;
+	FrameUniformBuffer* FrameUniformsPtr = nullptr;
 	DescriptorHeap* DescriptorHeapPtr = nullptr;
 	GPUSceneBuffer* GPUScenePtr = nullptr;
 

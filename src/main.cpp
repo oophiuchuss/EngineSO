@@ -22,6 +22,10 @@ import ResourceHandle;
 import GltfSceneData;
 import LightComponentBase;
 
+import TextureData;
+import SceneEnvironment;
+import SamplerDesc;
+
 int main() {
     VulkanEngine Engine;
 
@@ -99,6 +103,23 @@ int main() {
                         Engine.GetResourceManager()->Reprocess<Material>(StoneMaterial->GetResourceID(), MaterialOptions);
                     }
                 }
+
+
+                auto EnvironmentTexture = Engine.GetResourceManager()->Load<TextureData>("skyboxes/yokohama.ktx2", TextureColorSpace::SRGB, TextureMipMode::Provided, PresetSamplerDesc::SamplerLinearClamp);
+
+                if (EnvironmentTexture)
+                {
+                    SceneEnvironment Environment;
+
+                    Environment.Cubemap = EnvironmentTexture;
+
+                    Environment.Intensity = 1.0f;
+
+                    Environment.Orientation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+
+                    Engine.GetMainScene()->SetEnvironment(std::move(Environment));
+                }
+
             }
 
             /*auto SceneLightsDataHandle = Engine.GetResourceManager()->Load<GltfSceneData>("pkg_d_10k_candles/NewSponza_4_Combined_glTF.gltf", *Engine.GetResourceManager());

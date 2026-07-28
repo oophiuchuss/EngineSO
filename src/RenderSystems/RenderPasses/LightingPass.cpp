@@ -2,6 +2,9 @@ module;
 
 #include <string>
 #include <vector>
+#include <array>
+#include <stdexcept>
+#include <utility>
 #include <vulkan/vulkan_raii.hpp>
 
 module LightingPass;
@@ -11,6 +14,7 @@ import FrameData;
 import GBufferDescriptorSet;
 import Shader;
 import PipelineCache;
+import DescriptorHeap;
 
 LightingPass::LightingPass(
     std::string InName,
@@ -20,21 +24,23 @@ LightingPass::LightingPass(
     std::string InGBufferMetalRoughResourceName,
     std::string InGBufferEmissiveResourceName,
     std::string InGBufferDepthResourceName,
-    CameraUniformBuffer* InCameraUBO,
+    FrameUniformBuffer* InFrameUniforms,
     LightBuffer* InLightBuffer,
     GBufferDescriptorSet* InGBufferDescSet,
+    DescriptorHeap* InDescriptorHeap,
     Shader* InLightingShader,
     PipelineCache* InPipelineCache) :
     RenderPassBase(InName),
-    OutputColorResourceName(InOutputColorResourceName),
-    GBufferAlbedoResourceName(InGBufferAlbedoResourceName),
-    GBufferNormalResourceName(InGBufferNormalResourceName),
-    GBufferMetalRoughResourceName(InGBufferMetalRoughResourceName),
-    GBufferEmissiveResourceName(InGBufferEmissiveResourceName),
-    GBufferDepthResourceName(InGBufferDepthResourceName),
-    CameraUBOPtr(InCameraUBO),
+    OutputColorResourceName(std::move(InOutputColorResourceName)),
+    GBufferAlbedoResourceName(std::move(InGBufferAlbedoResourceName)),
+    GBufferNormalResourceName(std::move(InGBufferNormalResourceName)),
+    GBufferMetalRoughResourceName(std::move(InGBufferMetalRoughResourceName)),
+    GBufferEmissiveResourceName(std::move(InGBufferEmissiveResourceName)),
+    GBufferDepthResourceName(std::move(InGBufferDepthResourceName)),
+    FrameUniformsPtr(InFrameUniforms),
     LightBufferPtr(InLightBuffer),
     GBufferDescSetPtr(InGBufferDescSet),
+    DescriptorHeapPtr(InDescriptorHeap),
     LightingShaderPtr(InLightingShader),
     PipelineCachePtr(InPipelineCache)
 {
@@ -49,10 +55,7 @@ LightingPass::LightingPass(
     AddOutput(OutputColorResourceName, vk::ImageLayout::eColorAttachmentOptimal);
 }
 
-void LightingPass::BeginPass(
-    vk::raii::CommandBuffer& Cmd,
-    Rendergraph& Graph,
-    FrameData& CurrentFrameData)
+void LightingPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
     Resource* OutputColor = Graph.GetResource(OutputColorResourceName);
 
@@ -73,45 +76,65 @@ void LightingPass::BeginPass(
     Cmd.beginRendering(RenderingInfo);
 }
 
-void LightingPass::ExecuteMainLogic(
-    vk::raii::CommandBuffer& Cmd,
-    Rendergraph& Graph,
-    FrameData& CurrentFrameData)
+void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
     if (!PipelineCachePtr)
     {
         throw std::runtime_error("LightingPass: pipeline cache not set");
     }
-    
+
     if (!LightingShaderPtr)
     {
         throw std::runtime_error("LightingPass: shader not set");
     }
 
+    if (!FrameUniformsPtr)
+    {
+        throw std::runtime_error("LightingPass: frame uniforms not set");
+    }
+
+    if (!GBufferDescSetPtr)
+    {
+        throw std::runtime_error("LightingPass: GBuffer descriptors not set");
+    }
+
+    if (!LightBufferPtr)
+    {
+        throw std::runtime_error("LightingPass: light buffer not set");
+    }
+
+    if (!DescriptorHeapPtr)
+    {
+        throw std::runtime_error("LightingPass: descriptor heap not set");
+    }
+
     Resource* OutputColor = Graph.GetResource(OutputColorResourceName);
 
-    // Build pipeline key for this pass
     GraphicsPipelineKey Key;
+
     Key.ShaderPtr = LightingShaderPtr;
     Key.ColorFormats = { OutputColor->Format };
-    Key.DepthFormat = vk::Format::eUndefined;          // no depth attachment
+    Key.DepthFormat = vk::Format::eUndefined;
+
     Key.DescriptorSetLayouts = {
-        *CameraUBOPtr->GetDescriptorSetLayout(),
+        *FrameUniformsPtr->GetDescriptorSetLayout(),
         *GBufferDescSetPtr->GetDescriptorSetLayout(),
-        *LightBufferPtr->GetDescriptorSetLayout()
+        *LightBufferPtr->GetDescriptorSetLayout(),
+        *DescriptorHeapPtr->GetDescriptorSetLayout()
     };
-    Key.PushConstantRange = vk::PushConstantRange{};   // no push constants in lighting pass
-    Key.bUseVertexInput = false;                       // full‑screen triangle, no vertex buffer
+
+    Key.PushConstantRange = vk::PushConstantRange{};
+    Key.bUseVertexInput = false;
 
     auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
-    Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
+    Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics,Pipeline);
 
-    // Bind all descriptor sets at once
-    std::array<vk::DescriptorSet, 3> DescriptorSets = {
-        *CameraUBOPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
+    std::array<vk::DescriptorSet, 4> DescriptorSets = {
+        *FrameUniformsPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
         *GBufferDescSetPtr->GetDescriptorSet(),
-        *LightBufferPtr->GetDescriptorSet(CurrentFrameData.FrameIndex)
+        *LightBufferPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
+        *DescriptorHeapPtr->GetDescriptorSet()
     };
 
     Cmd.bindDescriptorSets(
@@ -121,14 +144,10 @@ void LightingPass::ExecuteMainLogic(
         DescriptorSets,
         {});
 
-    // Draw the full‑screen triangle (3 vertices, no vertex buffer)
     Cmd.draw(3, 1, 0, 0);
 }
 
-void LightingPass::EndPass(
-    vk::raii::CommandBuffer& Cmd,
-    Rendergraph& Graph,
-    FrameData& CurrentFrameData)
+void LightingPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
     Cmd.endRendering();
 }

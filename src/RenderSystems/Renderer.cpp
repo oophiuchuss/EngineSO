@@ -19,11 +19,11 @@ import GPUProfiler;
 import Rendergraph;
 import CullingSystem;
 import Entity;
-import CameraUniform;
 import Scene;
 import ResourceManager;
 import ResourceHandle;
 import VulkanUploader;
+import FrameUniform;
 import DescriptorHeap;
 import GPUSceneBuffer;
 import GPUSceneData;
@@ -33,6 +33,7 @@ import LightBuffer;
 import GPULightData;
 import RenderResourceCache;
 import FrameData;
+import SceneEnvironment;
 
 import GeometryRenderPass;
 import LightingPass;
@@ -46,6 +47,7 @@ import SceneBulkChangedEvent;
 import SceneEntityChangedEvent;
 import ResourceReprocessedEvent;
 import PostProcessSettingsChangedEvent;
+import SceneEnvironmentChangedEvent;
 
 import MeshComponent;
 import TransformComponent;
@@ -92,8 +94,8 @@ Renderer::Renderer(
 
 	CullingSystemInstance = std::make_unique<CullingSystem>();
 
-	CameraUBO = std::make_unique<CameraUniformBuffer>(
-		Device, 
+	FrameUniforms = std::make_unique<FrameUniformBuffer>(
+		Device,
 		PhysicalDevice,
 		MAX_FRAMES_IN_FLIGHT);
 
@@ -238,29 +240,36 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		CameraComponent* CamComp = SceneToRender->GetActiveCameraComponent();
 		TransformComponent* CamTrans = nullptr;
 
+		FrameUniformData CurrentUniformData = FrameUniforms->GetLastData();
+
 		if (CamComp)
 		{
 			SetActiveCamera(CamComp);
 
 			CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
 
-			CameraUniformData Data;
-			Data.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
-			Data.InverseViewProj = glm::inverse(Data.ViewProj);
-			Data.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
-
-			CameraUBO->Update(static_cast<uint32_t>(CurrentFrame),Data);
+			if (CamTrans)
+			{
+				CurrentUniformData.Camera.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
+				CurrentUniformData.Camera.InverseViewProj = glm::inverse(CurrentUniformData.Camera.ViewProj);
+				CurrentUniformData.Camera.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
+			}
 		}
 
-		// Cull scene and update per-frame data
+		CurrentUniformData.Environment = ResolveSceneEnvironment(*SceneToRender);
+
+		FrameUniforms->Update(static_cast<uint32_t>(CurrentFrame), CurrentUniformData);
+
+		// Cull scene and update per-frame data.
 		CullingSystemInstance->CullScene(SceneToRender->GetRenderableEntities());
 
-		// Build FrameData
 		const auto& VisibleEntities = CullingSystemInstance->GetAllVisibleEntities();
 
 		FrameData CurrentFrameData;
+
 		CurrentFrameData.FrameIndex = static_cast<uint32_t>(CurrentFrame);
-		CurrentFrameData.Camera = CameraUBO->GetLastData();
+		CurrentFrameData.Camera = CurrentUniformData.Camera;
+		CurrentFrameData.Environment = CurrentUniformData.Environment;
 		CurrentFrameData.ImGuiDrawData = InImGuiDrawData;
 
 		std::vector<ObjectData> FrameObjects;
@@ -1037,7 +1046,7 @@ void Renderer::SetupRenderPasses()
 		"Main_Depth",
 		GeometryShader,
 		PipelineCacheInstance.get(),
-		CameraUBO.get(),
+		FrameUniforms.get(),
 		DescriptorHeapInstance.get(),
 		GPUSceneInstance.get());
 
@@ -1048,9 +1057,10 @@ void Renderer::SetupRenderPasses()
 		"Main_Color",
 		"GBuffer_Albedo", "GBuffer_Normal", "GBuffer_MetalRough", "GBuffer_Emissive",
 		"Main_Depth",
-		CameraUBO.get(),
+		FrameUniforms.get(),
 		LightBufferInstance.get(),
 		GBufferDescSet.get(),
+		DescriptorHeapInstance.get(),
 		LightingShader,
 		PipelineCacheInstance.get());
 
@@ -1062,7 +1072,7 @@ void Renderer::SetupRenderPasses()
 		"Main_Depth",
 		TranslucencyShader,
 		PipelineCacheInstance.get(),
-		CameraUBO.get(),
+		FrameUniforms.get(),
 		DescriptorHeapInstance.get(),
 		GPUSceneInstance.get(),
 		LightBufferInstance.get());
@@ -1112,6 +1122,8 @@ void Renderer::PreloadSceneResources(Scene& Scene)
 		std::cout << "[Renderer] Preloading " << TextureIDs.size() << " textures...\n";
 		RenderCacheInstance->GetOrUploadTexture2DBatch(TextureIDs, TextureDataPtrs);
 	}
+
+	PreloadSceneEnvironment(Scene);
 }
 
 void Renderer::PreloadEntityResources(Entity& Entity)
@@ -1133,6 +1145,74 @@ void Renderer::PreloadEntityResources(Entity& Entity)
 	{
 		RenderCacheInstance->GetOrUploadTexture2DBatch(TextureIDs, TextureDataPtrs);
 	}
+}
+
+void Renderer::PreloadSceneEnvironment(Scene& Scene)
+{
+	const std::optional<SceneEnvironment>& Environment = Scene.GetEnvironment();
+
+	if (!Environment.has_value())
+	{
+		return;
+	}
+
+	TextureData* CubemapData = Environment->Cubemap.Get();
+
+	if (!CubemapData)
+	{
+		return;
+	}
+
+	RenderCacheInstance->GetOrUploadCubemap(CubemapData->GetResourceID(), *CubemapData);
+}
+
+EnvironmentUniformData Renderer::ResolveSceneEnvironment(Scene& Scene)
+{
+	EnvironmentUniformData Result;
+
+	const std::optional<SceneEnvironment>& Environment = Scene.GetEnvironment();
+
+	if (!Environment.has_value())
+	{
+		return Result;
+	}
+
+	TextureData* CubemapData = Environment->Cubemap.Get();
+
+	if (!CubemapData)
+	{
+		return Result;
+	}
+
+	const int CubemapSlot = RenderCacheInstance->GetOrUploadCubemap(CubemapData->GetResourceID(), *CubemapData);
+
+	if (CubemapSlot < 0)
+	{
+		return Result;
+	}
+
+	glm::quat Orientation = Environment->Orientation;
+
+	const float QuaternionLengthSquared = glm::dot(Orientation, Orientation);
+
+	constexpr float MinimumQuaternionLengthSquared = 0.000001f;
+
+	if (QuaternionLengthSquared <= MinimumQuaternionLengthSquared)
+	{
+		Orientation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+	}
+	else
+	{
+		Orientation = glm::normalize(Orientation);
+	}
+
+	Result.CubemapIndex = static_cast<uint32_t>(CubemapSlot);
+
+	Result.Intensity = Environment->Intensity;
+
+	Result.WorldToEnvironment = glm::mat4_cast(glm::conjugate(Orientation));
+
+	return Result;
 }
 
 Shader* Renderer::LoadShader(const std::string& Name)
@@ -1376,6 +1456,14 @@ EventReply Renderer::OnEvent(const EventBase& Event)
 		if (E.GetEntity())
 		{
 			PreloadEntityResources(*E.GetEntity());
+		}
+	});
+
+	Dispatcher.Dispatch<SceneEnvironmentChangedEvent>([this](const SceneEnvironmentChangedEvent& Event)
+	{
+		if (Event.GetScene())
+		{
+			PreloadSceneEnvironment(*Event.GetScene());
 		}
 	});
 

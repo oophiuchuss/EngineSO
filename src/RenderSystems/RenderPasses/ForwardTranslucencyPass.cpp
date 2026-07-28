@@ -14,7 +14,7 @@ ForwardTranslucencyPass::ForwardTranslucencyPass(
     std::string InDepthResourceName,
     Shader* InShader,
     PipelineCache* InPipelineCache,
-    CameraUniformBuffer* InCameraUBO,
+    FrameUniformBuffer* InFrameUniforms,
     DescriptorHeap* InDescriptorHeap,
     GPUSceneBuffer* InGPUScene,
     LightBuffer* InLightBuffer) :
@@ -23,7 +23,7 @@ ForwardTranslucencyPass::ForwardTranslucencyPass(
     DepthResourceName(InDepthResourceName),
     ShaderPtr(InShader),
     PipelineCachePtr(InPipelineCache),
-    CameraUBOPtr(InCameraUBO),
+    FrameUniformsPtr(InFrameUniforms),
     DescriptorHeapPtr(InDescriptorHeap),
     GPUScenePtr(InGPUScene),
     LightBufferPtr(InLightBuffer)
@@ -82,7 +82,7 @@ void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Ren
     Key.ColorFormats = { ColorRes->Format };
     Key.DepthFormat = DepthRes->Format;     // needed so depth test is enabled, even though write is off
     Key.DescriptorSetLayouts = {
-        *CameraUBOPtr->GetDescriptorSetLayout(),
+        *FrameUniformsPtr->GetDescriptorSetLayout(),
         *DescriptorHeapPtr->GetDescriptorSetLayout() ,
         *GPUScenePtr->GetDescriptorSetLayout() ,
         *LightBufferPtr->GetDescriptorSetLayout() 
@@ -98,7 +98,7 @@ void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Ren
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 
     std::array<vk::DescriptorSet, 4> DescriptorSets = {
-        *CameraUBOPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
+        *FrameUniformsPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
         *DescriptorHeapPtr->GetDescriptorSet(),
         *GPUScenePtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
         *LightBufferPtr->GetDescriptorSet(CurrentFrameData.FrameIndex)

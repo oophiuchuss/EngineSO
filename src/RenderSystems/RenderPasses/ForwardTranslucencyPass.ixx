@@ -4,7 +4,7 @@ module;
 export module ForwardTranslucencyPass;
 
 import RenderPassBase;
-import CameraUniform;
+import FrameUniform;
 import DescriptorHeap;
 import GPUSceneBuffer;
 import LightBuffer;
@@ -21,7 +21,7 @@ public:
         std::string InDepthResourceName,
         Shader* InShader,
         PipelineCache* InPipelineCache,
-        CameraUniformBuffer* InCameraUBO,
+        FrameUniformBuffer* InFrameUniforms,
         DescriptorHeap* InDescriptorHeap,
         GPUSceneBuffer* InGPUScene,
         LightBuffer* InLightBuffer);
@@ -39,7 +39,7 @@ private:
 
     Shader* ShaderPtr = nullptr;
     PipelineCache* PipelineCachePtr = nullptr;
-    CameraUniformBuffer* CameraUBOPtr = nullptr;
+    FrameUniformBuffer* FrameUniformsPtr = nullptr;
     DescriptorHeap* DescriptorHeapPtr = nullptr;
     GPUSceneBuffer* GPUScenePtr = nullptr;
     LightBuffer* LightBufferPtr = nullptr;

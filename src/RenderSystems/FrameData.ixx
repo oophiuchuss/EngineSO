@@ -9,7 +9,7 @@ export module FrameData;
 
 import Geometry;
 import Mesh;
-import CameraUniform;
+import FrameUniform;
 
 export struct RenderableMesh
 {
@@ -24,6 +24,9 @@ export struct FrameData
 
     std::vector<RenderableMesh> Renderables;
     std::vector<RenderableMesh> TranslucentRenderables;
+
     CameraUniformData Camera;
+    EnvironmentUniformData Environment;
+
     ImDrawData* ImGuiDrawData = nullptr;
 };

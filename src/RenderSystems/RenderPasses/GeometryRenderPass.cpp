@@ -24,7 +24,7 @@ GeometryRenderPass::GeometryRenderPass(
 	std::string InGBufferDepthResourceName,
 	Shader* InGeometryShader,
 	PipelineCache* InPipelineCache,
-	CameraUniformBuffer* InCameraUBO,
+	FrameUniformBuffer* InFrameUniforms,
 	DescriptorHeap* InDescriptorHeap,
 	GPUSceneBuffer* InGPUScene) :
 	RenderPassBase(InName), 
@@ -35,7 +35,7 @@ GeometryRenderPass::GeometryRenderPass(
 	GBufferDepthResourceName(InGBufferDepthResourceName),
 	GeometryShaderPtr(InGeometryShader),
 	PipelineCachePtr(InPipelineCache),
-	CameraUBOPtr(InCameraUBO),
+	FrameUniformsPtr(InFrameUniforms),
 	DescriptorHeapPtr(InDescriptorHeap),
 	GPUScenePtr(InGPUScene)
 {
@@ -135,7 +135,7 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	Key.DepthFormat = Depth->Format;
 
 	Key.DescriptorSetLayouts = {
-		*CameraUBOPtr->GetDescriptorSetLayout(),
+		*FrameUniformsPtr->GetDescriptorSetLayout(),
 		*DescriptorHeapPtr->GetDescriptorSetLayout(),
 		*GPUScenePtr->GetDescriptorSetLayout()
 	};
@@ -154,9 +154,9 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	// Bind pipeline
 	Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 
-	// Bind descriptor sets (set 0 = camera UBO, set 1 = texture heap, set 2 = GPU scene buffer)
+	// Bind descriptor sets (set 0 = frame uniforms, set 1 = texture heap, set 2 = GPU scene buffer)
 	std::array<vk::DescriptorSet, 3> DescriptorSets = {
-		*CameraUBOPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
+		*FrameUniformsPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
 		*DescriptorHeapPtr->GetDescriptorSet(),
 		*GPUScenePtr->GetDescriptorSet(CurrentFrameData.FrameIndex)
 	};

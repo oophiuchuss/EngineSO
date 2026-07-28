@@ -12,7 +12,7 @@ import Rendergraph;
 import CullingSystem;
 import CameraComponent;
 import Entity;
-import CameraUniform;
+import FrameUniform;
 import Scene;
 import ResourceManager;
 import RenderResourceCache;
@@ -27,6 +27,7 @@ import LightBuffer;
 import Shader;
 import PostProcessSettings;
 import PerformanceStats;
+import FrameData;
 
 import MeshData;
 import TextureData;
@@ -52,6 +53,9 @@ private:
 
 	void PreloadSceneResources(Scene& Scene);
 	void PreloadEntityResources(Entity& Entity);
+	void PreloadSceneEnvironment(Scene& Scene);
+	
+	EnvironmentUniformData ResolveSceneEnvironment(Scene& Scene);
 
 	Shader* LoadShader(const std::string& Name);
 
@@ -118,7 +122,7 @@ private:
 	std::unique_ptr<GPUProfiler>				ProfilerInstance;
 	std::unique_ptr<Rendergraph>				RendergraphInstance;
 	std::unique_ptr<CullingSystem>				CullingSystemInstance;
-	std::unique_ptr<CameraUniformBuffer>		CameraUBO;
+	std::unique_ptr<FrameUniformBuffer>			FrameUniforms;
 	std::unique_ptr<VulkanUploader>				UploaderInstance;
 	std::unique_ptr<DescriptorHeap>				DescriptorHeapInstance;
 	std::unique_ptr<GPUSceneBuffer>				GPUSceneInstance;

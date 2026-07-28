@@ -4,6 +4,7 @@ module;
 #include <string>
 #include <memory>
 #include <iostream>
+#include <utility>
 
 module Scene;
 
@@ -17,6 +18,7 @@ import DirectionalLightComponent;
 import PointLightComponent;
 import SpotLightComponent;
 import ResourceManager;
+import SceneEnvironmentChangedEvent;
 
 import EventSystem;
 import SceneBulkChangedEvent;
@@ -316,6 +318,31 @@ void Scene::DestroyEntity(Entity* EntityToDestroy)
 	}
 
 	EntityMap.erase(EntityName); // Unique pointer will automatically clean up the entity
+}
+
+void Scene::SetEnvironment(SceneEnvironment InEnvironment)
+{
+	Environment = std::move(InEnvironment);
+
+	if (EventSystemPtr)
+	{
+		EventSystemPtr->PublishEvent(SceneEnvironmentChangedEvent(this));
+	}
+}
+
+void Scene::ClearEnvironment()
+{
+	if (!Environment.has_value())
+	{
+		return;
+	}
+
+	Environment.reset();
+
+	if (EventSystemPtr)
+	{
+		EventSystemPtr->PublishEvent(SceneEnvironmentChangedEvent(this));
+	}
 }
 
 std::string Scene::GenerateUniqueEntityName(const std::string& BaseName) const
