@@ -133,7 +133,7 @@ void VulkanEngine::MainLoop()
         PerformanceStats Stats = RendererInstance->GetPerformanceStats(DeltaTime);
 
         ImGuiSystemInstance->BeginFrame();
-        ImGuiSystemInstance->BuildPanels(Stats);
+        ImGuiSystemInstance->BuildPanels(Stats, *MainSceneInstance);
         ImGuiSystemInstance->EndFrame();
         
         RendererInstance->RenderFrame(MainSceneInstance.get(), ImGuiSystemInstance->GetDrawData());

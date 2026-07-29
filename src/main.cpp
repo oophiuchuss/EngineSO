@@ -105,7 +105,7 @@ int main() {
                 }
 
 
-                auto EnvironmentTexture = Engine.GetResourceManager()->Load<TextureData>("skyboxes/yokohama.ktx2", TextureColorSpace::SRGB, TextureMipMode::Provided, PresetSamplerDesc::SamplerLinearClamp);
+                auto EnvironmentTexture = Engine.GetResourceManager()->Load<TextureData>("skyboxes/citrus_orchard_road_puresky_hdr.ktx2", TextureColorSpace::Linear, TextureMipMode::Provided, PresetSamplerDesc::SamplerLinearClamp);
 
                 if (EnvironmentTexture)
                 {

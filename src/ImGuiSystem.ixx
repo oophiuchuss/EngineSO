@@ -10,6 +10,7 @@ import EventSystem;
 import WindowSystem;
 import PostProcessSettings;
 import PerformanceStats;
+import Scene;
 
 export class ImGuiSystem final : public EventListener
 {
@@ -24,7 +25,7 @@ public:
     ImGuiSystem& operator=(const ImGuiSystem&) = delete;
 
     void BeginFrame();
-    void BuildPanels(const PerformanceStats& Stats);
+    void BuildPanels(const PerformanceStats& Stats, Scene& CurrentScene);
     void EndFrame();
 
     EventReply OnEvent(const EventBase& Event) override;
@@ -35,11 +36,14 @@ private:
     void BuildPostProcessPanel();
 
     void BuildPerformancePanel(const PerformanceStats& Stats);
+    void BuildEnvironmentPanel(Scene& CurrentScene);
 
     bool bShowPerformancePanel = true;
 
     PostProcessSettings EditablePostProcessSettings;
     bool bShowPostProcessPanel = true;
+
+    bool bShowEnvironmentPanel = true;
 
     EventSystem& EventSystemRef;
     ImGuiContext* Context = nullptr;
