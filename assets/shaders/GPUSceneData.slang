@@ -3,6 +3,7 @@
 struct ObjectData
 {
     float4x4 ModelMatrix;
+    float4x4 PreviousModelMatrix;
     float4x4 NormalMatrix;
     uint     MaterialIndex;
     uint     _Padding0;

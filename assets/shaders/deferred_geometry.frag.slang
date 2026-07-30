@@ -8,14 +8,18 @@ struct PSInput
     [[vk::location(2)]] float3 inWorldPos;
     [[vk::location(3)]] nointerpolation uint inMaterialIndex;
     [[vk::location(4)]] float4 inTangent; // world-space xyz, w = handedness sign
+
+    [[vk::location(5)]] float4 inCurrentClipPosition;
+    [[vk::location(6)]] float4 inPreviousClipPosition;
 };
 
 struct PSOutput
 {
-    float4 Albedo : SV_Target0;     // RGBA8  — albedo.rgb, alpha (AO later)
-    float4 Normal : SV_Target1;     // RGBA16F — world‑space normal.xyz
-    float4 MetalRough : SV_Target2; // RGBA8  — metallic, roughness
-    float4 Emissive : SV_Target3;   // RGBA16F — emissive.rgb
+    float4 Albedo       : SV_Target0;   // RGBA8  — albedo.rgb, alpha (AO later)
+    float4 Normal       : SV_Target1;   // RGBA16F — world‑space normal.xyz
+    float4 MetalRough   : SV_Target2;   // RGBA8  — metallic, roughness
+    float4 Emissive     : SV_Target3;   // RGBA16F — emissive.rgb
+    float2 Velocity     : SV_Target4;   // RG16F  — screen-space velocity.xy
 };
 
 // Set 1, Binding 0 — Texture heap
@@ -51,6 +55,13 @@ float3 ApplyNormalMap(
         : float3(0.0, 0.0, 1.0);
 
     return normalize(mul(TangentSpaceNormal, TBN));
+}
+
+float2 ClipPositionToUV(float4 ClipPosition)
+{
+    float2 NDC = ClipPosition.xy / ClipPosition.w;
+
+    return NDC * 0.5 + 0.5;
 }
 
 [shader("fragment")]
@@ -92,24 +103,38 @@ PSOutput main(PSInput input)
     float3 SampledNormalTS = TextureHeap[NormalTextureIndex].SampleBias(input.inUV, material.NormalLodBias).rgb;
 
     float3 DecodedNormalTS = SampledNormalTS * 2.0 - 1.0;
-
     float RawFilteredNormalLength = length(DecodedNormalTS);
-
     float NormalVariance = NormalLengthToVariance(RawFilteredNormalLength);
-
     NormalVariance = ScaleNormalVariance(NormalVariance, material.NormalScale);
 
     float EffectiveFilteredNormalLength = NormalVarianceToLength(NormalVariance);
-
     float3 GeometricNormal = normalize(input.inNormal);
-
     float3 FinalNormal = ApplyNormalMap(GeometricNormal, input.inTangent, SampledNormalTS, material.NormalScale);
+
+
+    float2 Velocity;
+
+    // A previous point behind the camera cannot provide a meaningful previous screen coordinate
+    if (input.inCurrentClipPosition.w > 0.00001 && input.inPreviousClipPosition.w > 0.00001)
+    {
+        float2 CurrentUV = ClipPositionToUV(input.inCurrentClipPosition);
+
+        float2 PreviousUV = ClipPositionToUV(input.inPreviousClipPosition);
+
+        Velocity = CurrentUV - PreviousUV;
+    }
+    else
+    {
+        Velocity = float2(2.0, 2.0);
+    }
+
 
     // Write G‑buffer attachments
     output.Albedo       = float4(Albedo.rgb, Occlusion);                        // pack occlusion into alpha
-    output.Normal       = float4(FinalNormal, EffectiveFilteredNormalLength);  // world-space normal
+    output.Normal       = float4(FinalNormal, EffectiveFilteredNormalLength);   // world-space normal
     output.MetalRough   = float4(Metallic, Roughness, 0.0, 0.0);                // metallic, roughness
     output.Emissive     = float4(Emissive, 0.0);                                // HDR emissive
+    output.Velocity     = Velocity;                                             // screen-space velocity
 
     return output;
 }

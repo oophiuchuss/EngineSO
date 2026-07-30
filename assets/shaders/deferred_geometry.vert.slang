@@ -18,6 +18,9 @@ struct VSOutput
     [[vk::location(3)]] nointerpolation uint outMaterialIndex;
     [[vk::location(4)]] float4 outTangent; // world-space xyz,  w = handedness sign
 
+    [[vk::location(5)]] float4 outCurrentClipPosition;
+    [[vk::location(6)]] float4 outPreviousClipPosition;
+
     float4 position : SV_Position;
 };
 
@@ -48,10 +51,18 @@ VSOutput main(VSInput input)
     ObjectData object = gObjects[Push.ObjectIndex];
 
     // Transform position to world space then clip space
-    float4 WorldPos = mul(object.ModelMatrix, float4(input.inPosition, 1.0));
-    output.position = mul(uCamera.ViewProj, WorldPos);
+    float4 LocalPosition = float4(input.inPosition, 1.0);
+    float4 CurrentWorldPosition = mul(object.ModelMatrix, LocalPosition);
+    float4 PreviousWorldPosition = mul(object.PreviousModelMatrix, LocalPosition);
+    float4 CurrentClipPosition = mul(uCamera.ViewProj, CurrentWorldPosition);
+    float4 PreviousClipPosition = mul(uCamera.PreviousViewProj, PreviousWorldPosition);
+
+    output.position = CurrentClipPosition;
+    output.outCurrentClipPosition = CurrentClipPosition;
+    output.outPreviousClipPosition = PreviousClipPosition;
+    output.outWorldPos = CurrentWorldPosition.xyz;
+    
     output.outUV = input.inUV;
-    output.outWorldPos = WorldPos.xyz;
 
     float3x3 NormalMat = (float3x3)object.NormalMatrix;
     output.outNormal = normalize(mul(NormalMat, input.inNormal));

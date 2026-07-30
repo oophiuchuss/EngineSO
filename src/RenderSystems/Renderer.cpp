@@ -234,11 +234,24 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 	
 	ProfilerInstance->BeginFrame(Cmd, CurrentFrame);
 	
+	glm::mat4 SubmittedViewProjection = glm::mat4(1.0f);
+
 	{
 		auto FrameScope = ProfilerInstance->BeginScope(Cmd, CurrentFrame, "TotalFrame");
 
 		CameraComponent* CamComp = SceneToRender->GetActiveCameraComponent();
 		TransformComponent* CamTrans = nullptr;
+
+		// Switching scenes or active cameras invalidates every previous-frame relationship.
+		if (SceneToRender != LastTemporalScene || CamComp != LastTemporalCamera)
+		{
+			TemporalState.Invalidate();
+
+			LastTemporalScene = SceneToRender;
+			LastTemporalCamera = CamComp;
+		}
+
+		TemporalState.BeginFrame();
 
 		FrameUniformData CurrentUniformData = FrameUniforms->GetLastData();
 
@@ -250,10 +263,23 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 			if (CamTrans)
 			{
-				CurrentUniformData.Camera.ViewProj = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
-				CurrentUniformData.Camera.InverseViewProj = glm::inverse(CurrentUniformData.Camera.ViewProj);
+				const glm::mat4 CurrentViewProjection = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
+
+				CurrentUniformData.Camera.ViewProj = CurrentViewProjection;
+				CurrentUniformData.Camera.InverseViewProj = glm::inverse(CurrentViewProjection);
+				CurrentUniformData.Camera.PreviousViewProj = TemporalState.ResolvePreviousViewProjection(CurrentViewProjection);
 				CurrentUniformData.Camera.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
+
+				SubmittedViewProjection = CurrentViewProjection;
 			}
+		}
+		else
+		{
+			// Keep all temporal matrices internally consistent even if no active
+			// camera is available.
+			CurrentUniformData.Camera.PreviousViewProj = TemporalState.ResolvePreviousViewProjection(CurrentUniformData.Camera.ViewProj);
+
+			SubmittedViewProjection = CurrentUniformData.Camera.ViewProj;
 		}
 
 		CurrentUniformData.Environment = ResolveSceneEnvironment(*SceneToRender);
@@ -361,6 +387,7 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 			ObjectData Obj;
 			Obj.ModelMatrix = WorldTransform;
+			Obj.PreviousModelMatrix = TemporalState.ResolvePreviousModel(E, WorldTransform);
 			Obj.NormalMatrix = glm::mat4(NormalMat3); // upper-left 3x3 used by shader, rest is identity padding
 			Obj.MaterialIndex = MaterialIndex;
 
@@ -491,6 +518,10 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 	GraphicsQueue.submit(SubmitInfo, *InFlightFences[CurrentFrame]);   // Submit to GPU queue
 
+	// The command buffer now contains a complete submitted frame, so its camera
+	// and object transforms become the reference for the next temporal frame.
+	TemporalState.CommitFrame(SubmittedViewProjection);
+
 	// Present result
 	vk::PresentInfoKHR PresentInfo;
 	PresentInfo.setImageIndices(ImageIndex)
@@ -560,6 +591,9 @@ void Renderer::RecreateSwapchain()
 	}
 	
 	Device.waitIdle(); // Wait for device to be idle before recreating swapchain
+
+	// Invalidate temporal state on swapchain resize, as previous frame data is no longer valid
+	TemporalState.Invalidate();
 
 	// Clean up old swapchain resources
 	SwapchainImageViews.clear();
@@ -997,6 +1031,17 @@ void Renderer::SetupRenderPasses()
 		vk::ImageLayout::eShaderReadOnlyOptimal
 	);
 
+	RendergraphInstance->AddResource(
+		"GBuffer_Velocity",
+		vk::Format::eR16G16Sfloat,
+		SwapchainExtent,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal
+	);
+
 	// Lighting pass output + swapchain target
 	RendergraphInstance->AddResource(
 		"Main_Color",
@@ -1043,6 +1088,7 @@ void Renderer::SetupRenderPasses()
 		"GBuffer_Normal",
 		"GBuffer_MetalRough",
 		"GBuffer_Emissive",
+		"GBuffer_Velocity",
 		"Main_Depth",
 		GeometryShader,
 		PipelineCacheInstance.get(),

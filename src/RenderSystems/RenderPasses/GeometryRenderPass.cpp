@@ -21,6 +21,7 @@ GeometryRenderPass::GeometryRenderPass(
 	std::string InGBufferNormalResourceName,
 	std::string InGBufferMetalRoughResourceName,
 	std::string InGBufferEmissiveResourceName,
+	std::string InGBufferVelocityResourceName,
 	std::string InGBufferDepthResourceName,
 	Shader* InGeometryShader,
 	PipelineCache* InPipelineCache,
@@ -32,6 +33,7 @@ GeometryRenderPass::GeometryRenderPass(
 	GBufferNormalResourceName(InGBufferNormalResourceName),
 	GBufferMetalRoughResourceName(InGBufferMetalRoughResourceName),
 	GBufferEmissiveResourceName(InGBufferEmissiveResourceName),
+	GBufferVelocityResourceName(InGBufferVelocityResourceName),
 	GBufferDepthResourceName(InGBufferDepthResourceName),
 	GeometryShaderPtr(InGeometryShader),
 	PipelineCachePtr(InPipelineCache),
@@ -43,6 +45,7 @@ GeometryRenderPass::GeometryRenderPass(
 	AddOutput(GBufferNormalResourceName, vk::ImageLayout::eColorAttachmentOptimal);
 	AddOutput(GBufferMetalRoughResourceName, vk::ImageLayout::eColorAttachmentOptimal);
 	AddOutput(GBufferEmissiveResourceName, vk::ImageLayout::eColorAttachmentOptimal);
+	AddOutput(GBufferVelocityResourceName, vk::ImageLayout::eColorAttachmentOptimal);
 	AddOutput(GBufferDepthResourceName, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 }
 
@@ -65,11 +68,12 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 		};
 
 	// Set up color attachments
-	std::array<vk::RenderingAttachmentInfoKHR, 4> ColorAttachments = {
+	std::array<vk::RenderingAttachmentInfoKHR, 5> ColorAttachments = {
 		MakeColorAttachment(GBufferAlbedoResourceName,     { 0.0f, 0.0f, 0.0f, 1.0f }),
 		MakeColorAttachment(GBufferNormalResourceName,     { 0.0f, 0.0f, 0.0f, 0.0f }),
 		MakeColorAttachment(GBufferMetalRoughResourceName, { 0.0f, 0.0f, 0.0f, 0.0f }),
 		MakeColorAttachment(GBufferEmissiveResourceName,   { 0.0f, 0.0f, 0.0f, 0.0f }),
+		MakeColorAttachment(GBufferVelocityResourceName,   { 0.0f, 0.0f, 0.0f, 0.0f }),
 	};
 
 
@@ -126,12 +130,13 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 	Resource* Normal = Graph.GetResource(GBufferNormalResourceName);
 	Resource* MetalRough = Graph.GetResource(GBufferMetalRoughResourceName);
 	Resource* Emissive = Graph.GetResource(GBufferEmissiveResourceName);
+	Resource* Velocity = Graph.GetResource(GBufferVelocityResourceName);
 	Resource* Depth = Graph.GetResource(GBufferDepthResourceName);
 
 	// Build the base key from resource formats — same for every mesh this pass
 	GraphicsPipelineKey Key;
 	Key.ShaderPtr = GeometryShaderPtr;
-	Key.ColorFormats = { Albedo->Format, Normal->Format, MetalRough->Format, Emissive->Format };
+	Key.ColorFormats = { Albedo->Format, Normal->Format, MetalRough->Format, Emissive->Format, Velocity->Format };
 	Key.DepthFormat = Depth->Format;
 
 	Key.DescriptorSetLayouts = {

@@ -10,6 +10,10 @@ export module GPUSceneData;
 export struct ObjectData
 {
     glm::mat4 ModelMatrix = glm::mat4(1.0f);
+
+    // Transform used by the previous successfully submitted frame.
+    glm::mat4 PreviousModelMatrix = glm::mat4(1.0f);
+
     glm::mat4 NormalMatrix = glm::mat4(1.0f);   // only upper-left 3x3 used by shader
     uint32_t MaterialIndex = 0;
     uint32_t _Padding[3] = { 0, 0, 0 };         // align struct to 16 bytes

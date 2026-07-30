@@ -23,6 +23,7 @@ public:
 		std::string InGBufferNormalResourceName,
 		std::string InGBufferMetalRoughResourceName,
 		std::string InGBufferEmissiveResourceName,
+		std::string InGBufferVelocityResourceName,
 		std::string InGBufferDepthResourceName,
 		Shader* InGeometryShader,
 		PipelineCache* InPipelineCache,
@@ -44,6 +45,7 @@ private:
 	std::string GBufferNormalResourceName;
 	std::string GBufferMetalRoughResourceName;
 	std::string GBufferEmissiveResourceName;
+	std::string GBufferVelocityResourceName;
 	std::string GBufferDepthResourceName;
 
 	Shader* GeometryShaderPtr = nullptr;

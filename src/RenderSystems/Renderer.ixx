@@ -28,6 +28,7 @@ import Shader;
 import PostProcessSettings;
 import PerformanceStats;
 import FrameData;
+import TemporalAAState;
 
 import MeshData;
 import TextureData;
@@ -113,6 +114,11 @@ private:
 	std::vector<vk::raii::Semaphore> RenderFinishedSemaphores;
 	std::vector<vk::raii::Fence>     InFlightFences;
 	int CurrentFrame = 0;
+
+	TemporalAAState TemporalState;
+
+	Scene* LastTemporalScene = nullptr;
+	CameraComponent* LastTemporalCamera = nullptr;
 
 	vk::raii::CommandPool CommandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer>  CommandBuffers;
