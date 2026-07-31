@@ -18,6 +18,7 @@ public:
         const std::string& NormalName,
         const std::string& MetalRoughName,
         const std::string& EmissiveName,
+        const std::string& VelocityName,
         const std::string& DepthName);
 
     // Must be called once after Rendergraph::Compile()
@@ -34,6 +35,7 @@ private:
     std::string NormalName;
     std::string MetalRoughName;
     std::string EmissiveName;
+    std::string VelocityName;
     std::string DepthName;
 
     vk::raii::Sampler Sampler = nullptr;

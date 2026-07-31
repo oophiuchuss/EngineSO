@@ -14,6 +14,12 @@ import Shader;
 import PipelineCache;
 import DescriptorHeap;
 
+export struct LightingPushConstants
+{
+    uint32_t DebugView = 0;
+    float MotionVectorScale = 20.0f;
+};
+
 export class LightingPass : public RenderPassBase
 {
 public:
@@ -24,6 +30,7 @@ public:
         std::string InGBufferNormalResourceName,
         std::string InGBufferMetalRoughResourceName,
         std::string InGBufferEmissiveResourceName,
+        std::string InGBufferVelocityResourceName,
         std::string InGBufferDepthResourceName,
         FrameUniformBuffer* InFrameUniforms,
         LightBuffer* InLightBuffer,
@@ -43,6 +50,7 @@ private:
     std::string GBufferNormalResourceName;
     std::string GBufferMetalRoughResourceName;
     std::string GBufferEmissiveResourceName;
+    std::string GBufferVelocityResourceName;
     std::string GBufferDepthResourceName;
 
     FrameUniformBuffer* FrameUniformsPtr = nullptr;

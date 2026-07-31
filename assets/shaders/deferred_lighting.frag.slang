@@ -26,7 +26,8 @@ struct PSOutput
 [[vk::binding(1, 1)]] Sampler2D GBuffer_Normal;
 [[vk::binding(2, 1)]] Sampler2D GBuffer_MetalRough;
 [[vk::binding(3, 1)]] Sampler2D GBuffer_Emissive;
-[[vk::binding(4, 1)]] Sampler2D Main_Depth;
+[[vk::binding(4, 1)]] Sampler2D GBuffer_Velocity;
+[[vk::binding(5, 1)]] Sampler2D Main_Depth;
 
 // Set 2, Binding 0 – light count header
 [[vk::binding(0, 2)]] ConstantBuffer<uint> LightCountRaw;
@@ -37,6 +38,20 @@ struct PSOutput
 // Set 3: descriptor heap.
 // Binding 0 contains Sampler2D[], but this shader does not use it.
 [[vk::binding(1, 3)]] SamplerCube CubemapHeap[];
+
+// Push constants
+struct LightingPushConstants
+{
+    uint  DebugView;
+    float MotionVectorScale;
+};
+
+[[vk::push_constant]]
+LightingPushConstants Push;
+
+// Debug view modes
+static const uint RenderDebugView_None = 0;
+static const uint RenderDebugView_MotionVectors = 1;
 
 // Helpers
 float3 ReconstructWorldPosition(float2 UV, float Depth)
@@ -78,6 +93,15 @@ float3 SampleEnvironment(float3 WorldDirection)
 PSOutput main(PSInput input)
 {
     PSOutput output;
+
+    if (Push.DebugView == RenderDebugView_MotionVectors)
+    {
+        float2 Velocity = GBuffer_Velocity.Sample(input.uv).xy;
+        float2 EncodedVelocity = saturate(Velocity * Push.MotionVectorScale + 0.5);
+        output.outColor = float4(EncodedVelocity.x, EncodedVelocity.y, 0.5, 1.0);
+
+        return output;
+    }
 
     // Depth is sampled first because it determines whether this pixel
     // represents geometry or untouched background.

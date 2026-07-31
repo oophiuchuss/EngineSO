@@ -10,6 +10,7 @@ export module FrameData;
 import Geometry;
 import Mesh;
 import FrameUniform;
+import RenderDebugSettings;
 
 export struct RenderableMesh
 {
@@ -27,6 +28,7 @@ export struct FrameData
 
     CameraUniformData Camera;
     EnvironmentUniformData Environment;
+    RenderDebugSettings DebugSettings;
 
     ImDrawData* ImGuiDrawData = nullptr;
 };

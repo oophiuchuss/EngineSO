@@ -8,9 +8,11 @@ import EventBase;
 import EventListener;
 import EventSystem;
 import WindowSystem;
+import Scene;
+
 import PostProcessSettings;
 import PerformanceStats;
-import Scene;
+import RenderDebugSettings;
 
 export class ImGuiSystem final : public EventListener
 {
@@ -38,12 +40,17 @@ private:
     void BuildPerformancePanel(const PerformanceStats& Stats);
     void BuildEnvironmentPanel(Scene& CurrentScene);
 
+    void BuildRenderDebugPanel();
+
     bool bShowPerformancePanel = true;
 
     PostProcessSettings EditablePostProcessSettings;
     bool bShowPostProcessPanel = true;
 
     bool bShowEnvironmentPanel = true;
+
+    RenderDebugSettings EditableRenderDebugSettings;
+    bool bShowRenderDebugPanel = true;
 
     EventSystem& EventSystemRef;
     ImGuiContext* Context = nullptr;

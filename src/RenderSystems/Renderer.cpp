@@ -48,6 +48,7 @@ import SceneEntityChangedEvent;
 import ResourceReprocessedEvent;
 import PostProcessSettingsChangedEvent;
 import SceneEnvironmentChangedEvent;
+import RenderDebugSettingsChangedEvent;
 
 import MeshComponent;
 import TransformComponent;
@@ -296,6 +297,7 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		CurrentFrameData.FrameIndex = static_cast<uint32_t>(CurrentFrame);
 		CurrentFrameData.Camera = CurrentUniformData.Camera;
 		CurrentFrameData.Environment = CurrentUniformData.Environment;
+		CurrentFrameData.DebugSettings = CurrentRenderDebugSettings;
 		CurrentFrameData.ImGuiDrawData = InImGuiDrawData;
 
 		std::vector<ObjectData> FrameObjects;
@@ -1076,6 +1078,7 @@ void Renderer::SetupRenderPasses()
 			"GBuffer_Normal",
 			"GBuffer_MetalRough",
 			"GBuffer_Emissive",
+			"GBuffer_Velocity",
 			"Main_Depth");
 	}
 
@@ -1101,7 +1104,11 @@ void Renderer::SetupRenderPasses()
 	auto LightPass = RendergraphInstance->AddRenderPass<LightingPass>(
 		"LightPass",
 		"Main_Color",
-		"GBuffer_Albedo", "GBuffer_Normal", "GBuffer_MetalRough", "GBuffer_Emissive",
+		"GBuffer_Albedo",
+		"GBuffer_Normal",
+		"GBuffer_MetalRough",
+		"GBuffer_Emissive",
+		"GBuffer_Velocity",
 		"Main_Depth",
 		FrameUniforms.get(),
 		LightBufferInstance.get(),
@@ -1524,6 +1531,11 @@ EventReply Renderer::OnEvent(const EventBase& Event)
 	Dispatcher.Dispatch<PostProcessSettingsChangedEvent>([this](const PostProcessSettingsChangedEvent& E)
 	{
 		CurrentPostProcessSettings = E.GetSettings();
+	});
+
+	Dispatcher.Dispatch<RenderDebugSettingsChangedEvent>([this](const RenderDebugSettingsChangedEvent& E)
+	{
+		CurrentRenderDebugSettings = E.GetSettings();
 	});
 
 	return EventReply::Unhandled;

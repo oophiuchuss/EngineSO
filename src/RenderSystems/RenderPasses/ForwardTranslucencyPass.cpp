@@ -7,6 +7,7 @@ import RenderPassBase;
 import Rendergraph;
 import Mesh;
 import PushConstants;
+import RenderDebugSettings;
 
 ForwardTranslucencyPass::ForwardTranslucencyPass(
     std::string InName,
@@ -65,6 +66,11 @@ void ForwardTranslucencyPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergrap
 
 void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& CurrentFrameData)
 {
+    if (CurrentFrameData.DebugSettings.View != RenderDebugView::None)
+    {
+        return;
+    }
+    
     if (CurrentFrameData.TranslucentRenderables.empty())
     {
         return; // nothing to draw

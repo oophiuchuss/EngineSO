@@ -15,6 +15,7 @@ import GBufferDescriptorSet;
 import Shader;
 import PipelineCache;
 import DescriptorHeap;
+import RenderDebugSettings;
 
 LightingPass::LightingPass(
     std::string InName,
@@ -23,6 +24,7 @@ LightingPass::LightingPass(
     std::string InGBufferNormalResourceName,
     std::string InGBufferMetalRoughResourceName,
     std::string InGBufferEmissiveResourceName,
+    std::string InGBufferVelocityResourceName,
     std::string InGBufferDepthResourceName,
     FrameUniformBuffer* InFrameUniforms,
     LightBuffer* InLightBuffer,
@@ -36,6 +38,7 @@ LightingPass::LightingPass(
     GBufferNormalResourceName(std::move(InGBufferNormalResourceName)),
     GBufferMetalRoughResourceName(std::move(InGBufferMetalRoughResourceName)),
     GBufferEmissiveResourceName(std::move(InGBufferEmissiveResourceName)),
+    GBufferVelocityResourceName(std::move(InGBufferVelocityResourceName)),
     GBufferDepthResourceName(std::move(InGBufferDepthResourceName)),
     FrameUniformsPtr(InFrameUniforms),
     LightBufferPtr(InLightBuffer),
@@ -49,6 +52,7 @@ LightingPass::LightingPass(
     AddInput(GBufferNormalResourceName);
     AddInput(GBufferMetalRoughResourceName);
     AddInput(GBufferEmissiveResourceName);
+	AddInput(GBufferVelocityResourceName);
     AddInput(GBufferDepthResourceName);
 
     // Declare output (lit result)
@@ -123,7 +127,11 @@ void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& G
         *DescriptorHeapPtr->GetDescriptorSetLayout()
     };
 
-    Key.PushConstantRange = vk::PushConstantRange{};
+    Key.PushConstantRange = vk::PushConstantRange(
+            vk::ShaderStageFlagBits::eFragment,
+            0,
+            sizeof(LightingPushConstants));
+
     Key.bUseVertexInput = false;
 
     auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
@@ -143,6 +151,18 @@ void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& G
         0,
         DescriptorSets,
         {});
+
+    LightingPushConstants PushConstants;
+
+    PushConstants.DebugView = static_cast<uint32_t>(CurrentFrameData.DebugSettings.View);
+
+    PushConstants.MotionVectorScale = CurrentFrameData.DebugSettings.MotionVectorScale;
+
+    Cmd.pushConstants<LightingPushConstants>(
+        PipelineLayout,
+        vk::ShaderStageFlagBits::eFragment,
+        0,
+        PushConstants);
 
     Cmd.draw(3, 1, 0, 0);
 }

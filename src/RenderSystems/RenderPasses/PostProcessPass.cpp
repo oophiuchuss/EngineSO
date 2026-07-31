@@ -1,7 +1,11 @@
 module;
+
 #include <vulkan/vulkan_raii.hpp>
+
 module PostProcessPass;
+
 import Rendergraph;
+import RenderDebugSettings;
 
 PostProcessPass::PostProcessPass(
     std::string InName,
@@ -48,22 +52,36 @@ void PostProcessPass::ExecuteMainLogic(
     Resource* Res = Graph.GetResource(OutputResourceName);
 
     PostProcessPushConstants PushConstants{};
-    PushConstants.Exposure = Settings.Exposure;
-    PushConstants.Flags = 0;
 
-    if (Settings.bToneMapping)
+    const bool bDebugViewActive = Frame.DebugSettings.View != RenderDebugView::None;
+
+    if (bDebugViewActive)
     {
-        PushConstants.Flags |= PP_ToneMapping;
+        // Debug channels should reach the swapchain without exposure,
+        // tone mapping, gamma conversion, or dithering changing them.
+        PushConstants.Exposure = 1.0f;
+        PushConstants.Flags = 0;
     }
-
-    if (Settings.bGammaCorrection)
+    else
     {
-        PushConstants.Flags |= PP_GammaCorrect;
-    }
+        PushConstants.Exposure = Settings.Exposure;
 
-    if (Settings.bDithering)
-    {
-        PushConstants.Flags |= PP_Dithering;
+        PushConstants.Flags = 0;
+
+        if (Settings.bToneMapping)
+        {
+            PushConstants.Flags |= PP_ToneMapping;
+        }
+
+        if (Settings.bGammaCorrection)
+        {
+            PushConstants.Flags |= PP_GammaCorrect;
+        }
+
+        if (Settings.bDithering)
+        {
+            PushConstants.Flags |= PP_Dithering;
+        }
     }
     
     GraphicsPipelineKey Key;

@@ -11,6 +11,7 @@ module;
 #include <optional>
 #include <string>
 #include <utility>
+#include <iterator>
 
 module ImGuiSystem;
 
@@ -19,9 +20,12 @@ import KeyEvent;
 import MouseButtonEvent;
 import CursorCaptureRequestEvent;
 import PostProcessSettingsChangedEvent;
+import RenderDebugSettingsChangedEvent;
+
 import PerformanceStats;
 import Scene;
 import SceneEnvironment;
+import RenderDebugSettings;
 
 ImGuiSystem::ImGuiSystem(
 	WindowSystem& InWindowSystem, 
@@ -105,6 +109,11 @@ void ImGuiSystem::BuildPanels(const PerformanceStats& Stats, Scene& CurrentScene
 	if (bShowEnvironmentPanel)
 	{
 		BuildEnvironmentPanel(CurrentScene);
+	}
+
+	if (bShowRenderDebugPanel)
+	{
+		BuildRenderDebugPanel();
 	}
 }
 
@@ -214,8 +223,7 @@ void ImGuiSystem::BuildPostProcessPanel()
 
 	if (bSettingsChanged)
 	{
-		EventSystemRef.PublishEvent(
-			PostProcessSettingsChangedEvent(EditablePostProcessSettings));
+		EventSystemRef.PublishEvent(PostProcessSettingsChangedEvent(EditablePostProcessSettings));
 	}
 }
 
@@ -358,4 +366,54 @@ void ImGuiSystem::BuildEnvironmentPanel(Scene& CurrentScene)
 	}
 
 	ImGui::End();
+}
+
+void ImGuiSystem::BuildRenderDebugPanel()
+{
+	bool bSettingsChanged = false;
+
+	if (ImGui::Begin("Render Debug", &bShowRenderDebugPanel))
+	{
+		static constexpr const char* ViewNames[] =
+		{
+			"None",
+			"Motion Vectors"
+		};
+
+		int SelectedView = static_cast<int>(EditableRenderDebugSettings.View);
+
+		if (ImGui::Combo("View", &SelectedView, ViewNames, static_cast<int>(std::size(ViewNames))))
+		{
+			EditableRenderDebugSettings.View = static_cast<RenderDebugView>(SelectedView);
+
+			bSettingsChanged = true;
+		}
+
+		if (EditableRenderDebugSettings.View == RenderDebugView::MotionVectors)
+		{
+			bSettingsChanged |= ImGui::DragFloat(
+				"Motion Vector Scale",
+				&EditableRenderDebugSettings.MotionVectorScale,
+				1.0f,
+				1.0f,
+				500.0f,
+				"%.1f",
+				ImGuiSliderFlags_AlwaysClamp);
+
+			ImGui::Separator();
+
+			ImGui::TextUnformatted("Neutral grey means zero velocity.");
+
+			ImGui::TextUnformatted("Red channel represents horizontal motion.");
+
+			ImGui::TextUnformatted("Green channel represents vertical motion.");
+		}
+	}
+
+	ImGui::End();
+
+	if (bSettingsChanged)
+	{
+		EventSystemRef.PublishEvent(RenderDebugSettingsChangedEvent(EditableRenderDebugSettings));
+	}
 }

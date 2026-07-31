@@ -29,6 +29,7 @@ import PostProcessSettings;
 import PerformanceStats;
 import FrameData;
 import TemporalAAState;
+import RenderDebugSettings;
 
 import MeshData;
 import TextureData;
@@ -124,6 +125,7 @@ private:
 	std::vector<vk::raii::CommandBuffer>  CommandBuffers;
 
 	PostProcessSettings CurrentPostProcessSettings;
+	RenderDebugSettings CurrentRenderDebugSettings;
 
 	std::unique_ptr<GPUProfiler>				ProfilerInstance;
 	std::unique_ptr<Rendergraph>				RendergraphInstance;

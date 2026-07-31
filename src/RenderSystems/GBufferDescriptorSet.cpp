@@ -12,12 +12,14 @@ GBufferDescriptorSet::GBufferDescriptorSet(
     const std::string& InNormalName,
     const std::string& InMetalRoughName,
     const std::string& InEmissiveName,
+	const std::string& InVelocityName,
     const std::string& InDepthName):
     Device(InDevice),
     AlbedoName(InAlbedoName),
     NormalName(InNormalName),
     MetalRoughName(InMetalRoughName),
     EmissiveName(InEmissiveName),
+	VelocityName(InVelocityName),
     DepthName(InDepthName)
 {
 }
@@ -34,18 +36,19 @@ void GBufferDescriptorSet::Initialize(Rendergraph& Graph)
     Sampler = Device.createSampler(SamplerInfo);
 
     // Layout
-    std::array<vk::DescriptorSetLayoutBinding, 5> Bindings = { {
+    std::array<vk::DescriptorSetLayoutBinding, 6> Bindings = { {
         { 0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
         { 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
         { 2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
         { 3, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
         { 4, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
+        { 5, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
     } };
     vk::DescriptorSetLayoutCreateInfo LayoutInfo({}, Bindings);
     Layout = Device.createDescriptorSetLayout(LayoutInfo);
 
     // Pool
-    vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eCombinedImageSampler, 5);
+    vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eCombinedImageSampler, 6);
     vk::DescriptorPoolCreateInfo PoolInfo(
         vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 1, PoolSize);
 
@@ -56,20 +59,25 @@ void GBufferDescriptorSet::Initialize(Rendergraph& Graph)
     DescriptorSet = std::move(Device.allocateDescriptorSets(AllocInfo).front());
 
     // Write
-    std::array<vk::DescriptorImageInfo, 5> ImageInfos = { {
+    std::array<vk::DescriptorImageInfo, 6> ImageInfos = { {
         { *Sampler, Graph.GetResourceView(AlbedoName), vk::ImageLayout::eShaderReadOnlyOptimal },
         { *Sampler, Graph.GetResourceView(NormalName), vk::ImageLayout::eShaderReadOnlyOptimal },
         { *Sampler, Graph.GetResourceView(MetalRoughName), vk::ImageLayout::eShaderReadOnlyOptimal },
         { *Sampler, Graph.GetResourceView(EmissiveName), vk::ImageLayout::eShaderReadOnlyOptimal },
+        { *Sampler, Graph.GetResourceView(VelocityName), vk::ImageLayout::eShaderReadOnlyOptimal },
         { *Sampler, Graph.GetResourceView(DepthName), vk::ImageLayout::eShaderReadOnlyOptimal },
     } };
 
-    std::array<vk::WriteDescriptorSet, 5> Writes;
-    for (int i = 0; i < 5; ++i)
-        Writes[i].setDstSet(*DescriptorSet).setDstBinding(i)
+    std::array<vk::WriteDescriptorSet, 6> Writes;
+    for (int i = 0; i < 6; i++)
+    {
+        Writes[i].setDstSet(*DescriptorSet)
+        .setDstBinding(i)
         .setDescriptorCount(1)
         .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
         .setPImageInfo(&ImageInfos[i]);
+    }
+
     Device.updateDescriptorSets(Writes, {});
 }
 
