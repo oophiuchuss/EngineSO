@@ -264,7 +264,25 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 			if (CamTrans)
 			{
-				const glm::mat4 CurrentViewProjection = CamComp->GetProjectionMatrix() * CamComp->GetViewMatrix();
+				const glm::mat4 BaseProjection = CamComp->GetProjectionMatrix();
+
+				const glm::mat4 View = CamComp->GetViewMatrix();
+
+				glm::vec2 JitterPixels = glm::vec2(0.0f);
+
+				if (CurrentRenderDebugSettings.bPreviewProjectionJitter)
+				{
+					JitterPixels = TemporalState.GetCurrentJitterPixels();
+				}
+
+				const glm::vec2 JitterNDC =
+				{
+					2.0f * JitterPixels.x / static_cast<float>(SwapchainExtent.width),
+					2.0f * JitterPixels.y / static_cast<float>(SwapchainExtent.height)
+				};
+
+				const glm::mat4 JitteredProjection = ApplyProjectionJitter(BaseProjection, JitterNDC);
+				const glm::mat4 CurrentViewProjection = JitteredProjection * View;
 
 				CurrentUniformData.Camera.ViewProj = CurrentViewProjection;
 				CurrentUniformData.Camera.InverseViewProj = glm::inverse(CurrentViewProjection);
@@ -1397,6 +1415,20 @@ bool Renderer::IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usa
 	}
 }
 
+glm::mat4 Renderer::ApplyProjectionJitter(const glm::mat4& Projection, const glm::vec2& JitterNDC)
+{
+	glm::mat4 JitteredProjection = Projection;
+
+	// GLM indexes matrices as [column][row].
+	//
+	// In this perspective matrix, clip.w = -view.z. Subtraction here
+	// produces a positive JitterNDC displacement after perspective divide.
+	JitteredProjection[2][0] -= JitterNDC.x;
+	JitteredProjection[2][1] -= JitterNDC.y;
+
+	return JitteredProjection;
+}
+
 bool Renderer::CanAcquireSwapchainImage() const
 {
 	auto Caps = PhysicalDevice.getSurfaceCapabilitiesKHR(*Surface);
@@ -1535,7 +1567,18 @@ EventReply Renderer::OnEvent(const EventBase& Event)
 
 	Dispatcher.Dispatch<RenderDebugSettingsChangedEvent>([this](const RenderDebugSettingsChangedEvent& E)
 	{
-		CurrentRenderDebugSettings = E.GetSettings();
+		const RenderDebugSettings& NewSettings = E.GetSettings();
+
+		const bool bJitterModeChanged = CurrentRenderDebugSettings.bPreviewProjectionJitter != NewSettings.bPreviewProjectionJitter;
+
+		CurrentRenderDebugSettings = NewSettings;
+
+		if (bJitterModeChanged)
+		{
+			// The previous projection was created under a different
+			// sampling mode, so it cannot be used as temporal history.
+			TemporalState.Invalidate();
+		}
 	});
 
 	return EventReply::Unhandled;

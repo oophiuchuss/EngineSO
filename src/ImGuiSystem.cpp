@@ -389,6 +389,15 @@ void ImGuiSystem::BuildRenderDebugPanel()
 			bSettingsChanged = true;
 		}
 
+		bSettingsChanged |= ImGui::Checkbox(
+			"Preview Projection Jitter",
+			&EditableRenderDebugSettings.bPreviewProjectionJitter);
+
+		if (EditableRenderDebugSettings.bPreviewProjectionJitter)
+		{
+			ImGui::TextDisabled("Raw image movement is expected until temporal resolve is implemented.");
+		}
+
 		if (EditableRenderDebugSettings.View == RenderDebugView::MotionVectors)
 		{
 			bSettingsChanged |= ImGui::DragFloat(

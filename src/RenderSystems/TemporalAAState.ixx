@@ -26,6 +26,10 @@ public:
     // invalid first-frame motion.
     glm::mat4 ResolvePreviousModel(const Entity* EntityPtr, const glm::mat4& CurrentModel);
 
+    // Returns the current subpixel jitter in pixel units.
+    // Each component is approximately within [-0.5, 0.5].
+    glm::vec2 GetCurrentJitterPixels() const;
+
     // Called only after the frame has been successfully submitted.
     void CommitFrame(const glm::mat4& SubmittedViewProjection);
 
@@ -37,6 +41,10 @@ public:
     uint64_t GetTemporalFrameIndex() const { return TemporalFrameIndex; }
 
 private:
+    static float ComputeHalton(uint64_t Index, uint32_t Base);
+
+    static constexpr uint32_t JitterSampleCount = 8;
+
     bool bHasPreviousFrame = false;
     uint64_t TemporalFrameIndex = 0;
 

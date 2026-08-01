@@ -2,6 +2,8 @@ module;
 
 #include <vulkan/vulkan_raii.hpp>
 #include <imgui.h>
+#include <glm/glm.hpp>
+
 #include <vector>
 #include <unordered_set>
 
@@ -73,6 +75,8 @@ private:
 	int ScorePhysicalDevice(const vk::raii::PhysicalDevice& Dev, const vk::raii::SurfaceKHR& Surface);
 
 	bool IsFormatUsageSupported(vk::Format Format, vk::ImageUsageFlags Usage);
+
+	static glm::mat4 ApplyProjectionJitter(const glm::mat4& Projection, const glm::vec2& JitterNDC);
 
 	bool CanAcquireSwapchainImage() const;
 	

@@ -14,6 +14,9 @@ export struct RenderDebugSettings
 {
     RenderDebugView View = RenderDebugView::None;
 
-    // Affects visualization only. It never modifies stored motion vectors.
+    // Affects visualization only
     float MotionVectorScale = 20.0f;
+
+    // Shows raw projection jitter
+    bool bPreviewProjectionJitter = false;
 };
