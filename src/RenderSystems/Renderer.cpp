@@ -38,6 +38,7 @@ import SceneEnvironment;
 import GeometryRenderPass;
 import LightingPass;
 import ForwardTranslucencyPass;
+import TemporalAAPass;
 import PostProcessPass;
 import ImGuiRenderPass;
 
@@ -153,11 +154,26 @@ Renderer::Renderer(
 
 	CommandBuffers = std::move(Device.allocateCommandBuffers(CmdAllocInfo));
 
+	TemporalHistory = std::make_unique<TemporalAAHistory>(
+		Device,
+		PhysicalDevice,
+		SwapchainExtent);
+
+	TemporalAADesc = std::make_unique<TemporalAADescriptorSet>(
+		Device,
+		MAX_FRAMES_IN_FLIGHT);
+
+	PostProcessDesc = std::make_unique<SingleTextureDescriptorSet>(
+		Device,
+		MAX_FRAMES_IN_FLIGHT);
+
+
 	// Set up render passes and framebuffers in the rendergraph
 	SetupRenderPasses();
 	RendergraphInstance->Compile();
 	GBufferDescSet->Initialize(*RendergraphInstance);
-	PostProcessDesc->Initialize(*RendergraphInstance);
+	TemporalAADesc->Initialize();
+	PostProcessDesc->Initialize();
 
 	InitializeImGuiVulkanBackend();
 }
@@ -254,6 +270,42 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 		TemporalState.BeginFrame();
 
+		const uint64_t TemporalFrameIndex = TemporalState.GetTemporalFrameIndex();
+
+		const bool bTemporalHistoryValid = TemporalState.HasPreviousFrame() && !TemporalHistory->NeedsInitialization();
+
+		RendergraphInstance->SetFrameExternalImage(
+			"TAA_HistoryColorRead",
+			TemporalHistory->GetReadColorImage(TemporalFrameIndex),
+			TemporalHistory->GetReadColorView(TemporalFrameIndex));
+
+		RendergraphInstance->SetFrameExternalImage(
+			"TAA_HistoryColorWrite",
+			TemporalHistory->GetWriteColorImage(TemporalFrameIndex),
+			TemporalHistory->GetWriteColorView(TemporalFrameIndex));
+
+		RendergraphInstance->SetFrameExternalImage(
+			"TAA_HistoryDepthRead",
+			TemporalHistory->GetReadDepthImage(TemporalFrameIndex),
+			TemporalHistory->GetReadDepthView(TemporalFrameIndex));
+
+		RendergraphInstance->SetFrameExternalImage(
+			"TAA_HistoryDepthWrite",
+			TemporalHistory->GetWriteDepthImage(TemporalFrameIndex),
+			TemporalHistory->GetWriteDepthView(TemporalFrameIndex));
+
+		TemporalAADesc->Update(
+			static_cast<uint32_t>(CurrentFrame),
+			RendergraphInstance->GetResourceView("Main_Color"),
+			RendergraphInstance->GetResourceView("Main_Depth"),
+			RendergraphInstance->GetResourceView("GBuffer_Velocity"),
+			TemporalHistory->GetReadColorView(TemporalFrameIndex),
+			TemporalHistory->GetReadDepthView(TemporalFrameIndex));
+
+		PostProcessDesc->Update(static_cast<uint32_t>(CurrentFrame), TemporalHistory->GetWriteColorView(TemporalFrameIndex));
+
+		TemporalHistory->RecordInitialization(Cmd);
+
 		FrameUniformData CurrentUniformData = FrameUniforms->GetLastData();
 
 		if (CamComp)
@@ -317,6 +369,8 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		CurrentFrameData.Environment = CurrentUniformData.Environment;
 		CurrentFrameData.DebugSettings = CurrentRenderDebugSettings;
 		CurrentFrameData.ImGuiDrawData = InImGuiDrawData;
+		CurrentFrameData.bTemporalHistoryValid = bTemporalHistoryValid;
+		CurrentFrameData.TemporalFrameIndex = TemporalFrameIndex;
 
 		std::vector<ObjectData> FrameObjects;
 		std::vector<MaterialData> FrameMaterials;
@@ -538,6 +592,8 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 	GraphicsQueue.submit(SubmitInfo, *InFlightFences[CurrentFrame]);   // Submit to GPU queue
 
+	TemporalHistory->CommitInitialization();
+
 	// The command buffer now contains a complete submitted frame, so its camera
 	// and object transforms become the reference for the next temporal frame.
 	TemporalState.CommitFrame(SubmittedViewProjection);
@@ -622,16 +678,14 @@ void Renderer::RecreateSwapchain()
 	// Create new swapchain with updated dimensions
 	CreateSwapchain();
 
+	TemporalHistory->Recreate(SwapchainExtent);
+
 	// Recreate framebuffers and render passes that depend on swapchain images 
 	
 	// Reset descriptor sets that depend on swapchain images and rendregraph resources
 	if (GBufferDescSet)
 	{
 		GBufferDescSet->ResetDescriptorSet();
-	}
-	if (PostProcessDesc)
-	{
-		PostProcessDesc->ResetDescriptorSet();
 	}
 	
 	RendergraphInstance->Reset(); // Clear existing rendergraph resources and passes
@@ -642,10 +696,7 @@ void Renderer::RecreateSwapchain()
 	{
 		GBufferDescSet->Initialize(*RendergraphInstance);
 	}
-	if (PostProcessDesc)
-	{
-		PostProcessDesc->Initialize(*RendergraphInstance);
-	}
+
 	CreateSyncObjects(); // Recreate synchronization objects if they depend on swapchain (e.g. semaphores for each swapchain image)
 }
 
@@ -1087,6 +1138,47 @@ void Renderer::SetupRenderPasses()
 		vk::ImageLayout::eDepthStencilAttachmentOptimal
 	);
 
+	const vk::ImageUsageFlags TemporalHistoryUsage =
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled |
+		vk::ImageUsageFlagBits::eTransferDst;
+
+	RendergraphInstance->ImportExternalImage(
+		"TAA_HistoryColorRead",
+		TemporalAAHistory::ColorFormat,
+		SwapchainExtent,
+		TemporalHistoryUsage,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	RendergraphInstance->ImportExternalImage(
+		"TAA_HistoryColorWrite",
+		TemporalAAHistory::ColorFormat,
+		SwapchainExtent,
+		TemporalHistoryUsage,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	RendergraphInstance->ImportExternalImage(
+		"TAA_HistoryDepthRead",
+		TemporalAAHistory::DepthFormat,
+		SwapchainExtent,
+		TemporalHistoryUsage,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	RendergraphInstance->ImportExternalImage(
+		"TAA_HistoryDepthWrite",
+		TemporalAAHistory::DepthFormat,
+		SwapchainExtent,
+		TemporalHistoryUsage,
+		vk::ImageAspectFlagBits::eColor,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::ImageLayout::eShaderReadOnlyOptimal);
+
 	// GBuffer descriptor set
 	if (!GBufferDescSet)
 	{
@@ -1148,16 +1240,26 @@ void Renderer::SetupRenderPasses()
 		GPUSceneInstance.get(),
 		LightBufferInstance.get());
 
-	Shader* PostProcessShader = LoadShader("post_process");
+	Shader* TemporalShader = LoadShader("temporal_aa");
 
-	if (!PostProcessDesc)
-	{
-		PostProcessDesc = std::make_unique<SingleTextureDescriptorSet>(Device, "Main_Color");
-	}
+	RendergraphInstance->AddRenderPass<TemporalAAPass>(
+		"TemporalAAPass",
+		"Main_Color",
+		"Main_Depth",
+		"GBuffer_Velocity",
+		"TAA_HistoryColorRead",
+		"TAA_HistoryDepthRead",
+		"TAA_HistoryColorWrite",
+		"TAA_HistoryDepthWrite",
+		TemporalShader,
+		PipelineCacheInstance.get(),
+		TemporalAADesc.get());
+
+	Shader* PostProcessShader = LoadShader("post_process");
 
 	RendergraphInstance->AddRenderPass<PostProcessPass>(
 		"PostProcess",
-		"Main_Color",
+		"TAA_HistoryColorWrite",
 		"Swapchain",
 		PostProcessShader,
 		PipelineCacheInstance.get(),

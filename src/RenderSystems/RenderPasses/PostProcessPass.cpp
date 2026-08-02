@@ -27,8 +27,7 @@ PostProcessPass::PostProcessPass(
     AddOutput(OutputResourceName, vk::ImageLayout::eColorAttachmentOptimal);
 }
 
-void PostProcessPass::BeginPass(
-    vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
+void PostProcessPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
 {
     Resource* Res = Graph.GetResource(OutputResourceName);
     vk::RenderingAttachmentInfoKHR Attach;
@@ -46,8 +45,7 @@ void PostProcessPass::BeginPass(
     Cmd.beginRendering(Info);
 }
 
-void PostProcessPass::ExecuteMainLogic(
-    vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
+void PostProcessPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
 {
     Resource* Res = Graph.GetResource(OutputResourceName);
 
@@ -99,16 +97,18 @@ void PostProcessPass::ExecuteMainLogic(
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
     Cmd.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics, PipelineLayout, 0,
-        { *InputDescSetPtr->GetDescriptorSet() }, {});
-    Cmd.pushConstants<PostProcessPushConstants>(
-        PipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, PushConstants);
+        vk::PipelineBindPoint::eGraphics,
+        PipelineLayout,
+        0,
+        { *InputDescSetPtr->GetDescriptorSet(Frame.FrameIndex) },
+        {});
+
+    Cmd.pushConstants<PostProcessPushConstants>(PipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, PushConstants);
 
     Cmd.draw(3, 1, 0, 0);
 }
 
-void PostProcessPass::EndPass(
-    vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
+void PostProcessPass::EndPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
 {
     Cmd.endRendering();
 }

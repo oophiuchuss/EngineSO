@@ -4,22 +4,26 @@ module;
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
-export module SingleTextureDescriptorSet;
+export module TemporalAADescriptorSet;
 
-// Potentialy make a parent for descriptor sets, like GBufferDescriptorSet and SingleTextureDescriptorSet
-export class SingleTextureDescriptorSet
+export class TemporalAADescriptorSet
 {
 public:
-    SingleTextureDescriptorSet(const vk::raii::Device& InDevice, uint32_t InFramesInFlight);
+    TemporalAADescriptorSet(const vk::raii::Device& InDevice, uint32_t InFramesInFlight);
 
     void Initialize();
 
-    void Update(uint32_t FrameIndex, vk::ImageView ImageView);
+    void Update(
+        uint32_t FrameIndex,
+        vk::ImageView CurrentColor,
+        vk::ImageView CurrentDepth,
+        vk::ImageView Velocity,
+        vk::ImageView HistoryColor,
+        vk::ImageView HistoryDepth);
 
     void ResetDescriptorSet();
 
-    const vk::raii::DescriptorSet& GetDescriptorSet(
-        uint32_t FrameIndex) const
+    const vk::raii::DescriptorSet& GetDescriptorSet(uint32_t FrameIndex) const
     {
         return DescriptorSets.at(FrameIndex);
     }
@@ -33,7 +37,8 @@ private:
     const vk::raii::Device& Device;
     uint32_t FramesInFlight = 0;
 
-    vk::raii::Sampler Sampler = nullptr;
+    vk::raii::Sampler LinearSampler = nullptr;
+    vk::raii::Sampler NearestSampler = nullptr;
     vk::raii::DescriptorSetLayout DescriptorLayout = nullptr;
     vk::raii::DescriptorPool DescriptorPool = nullptr;
     std::vector<vk::raii::DescriptorSet> DescriptorSets;

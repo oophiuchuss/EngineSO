@@ -23,6 +23,9 @@ export struct FrameData
 {
     uint32_t FrameIndex = 0;
 
+    bool bTemporalHistoryValid = false;
+    uint64_t TemporalFrameIndex = 0;
+
     std::vector<RenderableMesh> Renderables;
     std::vector<RenderableMesh> TranslucentRenderables;
 

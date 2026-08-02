@@ -26,6 +26,9 @@ import GPUSceneBuffer;
 import GBufferDescriptorSet;
 import SingleTextureDescriptorSet;
 import LightBuffer;
+import TemporalAAHistory;
+import TemporalAADescriptorSet;
+
 import Shader;
 import PostProcessSettings;
 import PerformanceStats;
@@ -141,6 +144,8 @@ private:
 	std::unique_ptr<GBufferDescriptorSet>		GBufferDescSet;
 	std::unique_ptr<SingleTextureDescriptorSet> PostProcessDesc;
 	std::unique_ptr<LightBuffer>				LightBufferInstance;
+	std::unique_ptr<TemporalAAHistory>			TemporalHistory;
+	std::unique_ptr<TemporalAADescriptorSet>	TemporalAADesc;
 	std::unique_ptr<RenderResourceCache>		RenderCacheInstance;
 	std::unique_ptr<PipelineCache>				PipelineCacheInstance;
 };

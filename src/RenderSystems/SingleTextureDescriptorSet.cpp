@@ -1,61 +1,83 @@
 module;
 
+#include <stdexcept>
+#include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
 module SingleTextureDescriptorSet;
 
 SingleTextureDescriptorSet::SingleTextureDescriptorSet(
     const vk::raii::Device& InDevice,
-    const std::string& InResourceName)
-    : Device(InDevice)
-    , ResourceName(InResourceName)
+    uint32_t InFramesInFlight) :
+    Device(InDevice),
+    FramesInFlight(InFramesInFlight)
 {
 }
 
-void SingleTextureDescriptorSet::Initialize(Rendergraph& Graph)
+void SingleTextureDescriptorSet::Initialize()
 {
-    // Sampler – linear, clamp to edge (safe for full‑screen passes)
     vk::SamplerCreateInfo SamplerInfo;
     SamplerInfo.setMagFilter(vk::Filter::eLinear)
         .setMinFilter(vk::Filter::eLinear)
+        .setMipmapMode(vk::SamplerMipmapMode::eLinear)
         .setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
-        .setAddressModeV(vk::SamplerAddressMode::eClampToEdge);
+        .setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
+        .setAddressModeW(vk::SamplerAddressMode::eClampToEdge);
+
     Sampler = Device.createSampler(SamplerInfo);
 
-    // Descriptor set layout – single combined image sampler at binding 0
-    vk::DescriptorSetLayoutBinding Binding(
-        0,                                          // binding
+    const vk::DescriptorSetLayoutBinding Binding(
+        0,
         vk::DescriptorType::eCombinedImageSampler,
         1,
         vk::ShaderStageFlagBits::eFragment);
-    vk::DescriptorSetLayoutCreateInfo LayoutInfo({}, 1, &Binding);
+
+    vk::DescriptorSetLayoutCreateInfo LayoutInfo;
+    LayoutInfo.setBindings(Binding);
+
     DescriptorLayout = Device.createDescriptorSetLayout(LayoutInfo);
 
-    vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eCombinedImageSampler, 1);
-    vk::DescriptorPoolCreateInfo PoolInfo(
-        vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        1, PoolSize);
+    const vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eCombinedImageSampler, FramesInFlight);
+
+    vk::DescriptorPoolCreateInfo PoolInfo;
+    PoolInfo.setMaxSets(FramesInFlight)
+        .setPoolSizes(PoolSize);
+
     DescriptorPool = Device.createDescriptorPool(PoolInfo);
 
-    // Allocate descriptor set
-    vk::DescriptorSetAllocateInfo AllocInfo(*DescriptorPool, 1, &*DescriptorLayout);
-    DescriptorSet = std::move(Device.allocateDescriptorSets(AllocInfo).front());
+    const std::vector<vk::DescriptorSetLayout> Layouts(FramesInFlight, *DescriptorLayout);
 
-    // Write the descriptor with the resource's current image view
-    vk::ImageView View = Graph.GetResourceView(ResourceName);
-    vk::DescriptorImageInfo ImageInfo(*Sampler, View, vk::ImageLayout::eShaderReadOnlyOptimal);
+    vk::DescriptorSetAllocateInfo AllocateInfo;
+    AllocateInfo.setDescriptorPool(*DescriptorPool)
+        .setSetLayouts(Layouts);
 
-    vk::WriteDescriptorSet Write(
-        *DescriptorSet,
+    DescriptorSets = Device.allocateDescriptorSets(AllocateInfo);
+}
+
+void SingleTextureDescriptorSet::Update(uint32_t FrameIndex, vk::ImageView ImageView)
+{
+    if (FrameIndex >= DescriptorSets.size())
+    {
+        throw std::out_of_range("SingleTextureDescriptorSet frame index is out of range");
+    }
+
+    const vk::DescriptorImageInfo ImageInfo(
+        *Sampler,
+        ImageView,
+        vk::ImageLayout::eShaderReadOnlyOptimal);
+
+    const vk::WriteDescriptorSet Write(
+        *DescriptorSets[FrameIndex],
         0, 0, 1,
         vk::DescriptorType::eCombinedImageSampler,
         &ImageInfo);
+
     Device.updateDescriptorSets(Write, {});
 }
 
 void SingleTextureDescriptorSet::ResetDescriptorSet()
 {
-    DescriptorSet = nullptr;
+    DescriptorSets.clear();
     DescriptorPool = nullptr;
     DescriptorLayout = nullptr;
     Sampler = nullptr;
