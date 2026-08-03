@@ -40,7 +40,8 @@ void SingleTextureDescriptorSet::Initialize()
     const vk::DescriptorPoolSize PoolSize(vk::DescriptorType::eCombinedImageSampler, FramesInFlight);
 
     vk::DescriptorPoolCreateInfo PoolInfo;
-    PoolInfo.setMaxSets(FramesInFlight)
+    PoolInfo.setFlags(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet)
+        .setMaxSets(FramesInFlight)
         .setPoolSizes(PoolSize);
 
     DescriptorPool = Device.createDescriptorPool(PoolInfo);

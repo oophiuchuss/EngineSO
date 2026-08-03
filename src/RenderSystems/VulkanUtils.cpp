@@ -238,6 +238,15 @@ void VulkanUtils::TransitionImageLayout(
         DstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests |
             vk::PipelineStageFlagBits::eLateFragmentTests;              // Before depth writes
     }
+    else if (OldLayout == vk::ImageLayout::eDepthStencilReadOnlyOptimal && NewLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+    {
+        SrcAccess = vk::AccessFlagBits::eDepthStencilAttachmentRead;    // Wait for depth reads to finish
+        DstAccess = vk::AccessFlagBits::eShaderRead;                    // Enable shader read access
+
+        SrcStage = vk::PipelineStageFlagBits::eEarlyFragmentTests |     // After depth testing
+            vk::PipelineStageFlagBits::eLateFragmentTests;
+        DstStage = vk::PipelineStageFlagBits::eFragmentShader;          // Fragment shaders can access
+    }
     // TODO: Add more transitions as needed:
     // - Shader Read -> Transfer Src (for reading back textures to CPU)
     else

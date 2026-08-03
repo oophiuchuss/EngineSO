@@ -58,7 +58,8 @@ void TemporalAADescriptorSet::Initialize()
         FramesInFlight * static_cast<uint32_t>(Bindings.size()));
 
     vk::DescriptorPoolCreateInfo PoolInfo;
-    PoolInfo.setMaxSets(FramesInFlight)
+    PoolInfo.setFlags(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet)
+        .setMaxSets(FramesInFlight)
         .setPoolSizes(PoolSize);
 
     DescriptorPool = Device.createDescriptorPool(PoolInfo);
