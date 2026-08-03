@@ -19,7 +19,7 @@ struct PSOutput
     float4 Normal       : SV_Target1;   // RGBA16F — world‑space normal.xyz
     float4 MetalRough   : SV_Target2;   // RGBA8  — metallic, roughness
     float4 Emissive     : SV_Target3;   // RGBA16F — emissive.rgb
-    float2 Velocity     : SV_Target4;   // RG16F  — screen-space velocity.xy
+    float4 Velocity     : SV_Target4;   // RGBA16F  — screen-space velocity data
 };
 
 // Set 1, Binding 0 — Texture heap
@@ -112,29 +112,30 @@ PSOutput main(PSInput input)
     float3 FinalNormal = ApplyNormalMap(GeometricNormal, input.inTangent, SampledNormalTS, material.NormalScale);
 
 
-    float2 Velocity;
+    float4 MotionData = float4(0.0, 0.0, 1.0, 0.0);
 
-    // A previous point behind the camera cannot provide a meaningful previous screen coordinate
-    if (input.inCurrentClipPosition.w > 0.00001 && input.inPreviousClipPosition.w > 0.00001)
+    const float MinimumClipW = 0.00001;
+
+    if (input.inCurrentClipPosition.w > MinimumClipW && input.inPreviousClipPosition.w > MinimumClipW)
     {
         float2 CurrentUV = ClipPositionToUV(input.inCurrentClipPosition);
 
         float2 PreviousUV = ClipPositionToUV(input.inPreviousClipPosition);
 
-        Velocity = CurrentUV - PreviousUV;
-    }
-    else
-    {
-        Velocity = float2(2.0, 2.0);
-    }
+        float PreviousDepth = input.inPreviousClipPosition.z / input.inPreviousClipPosition.w;
 
+        MotionData.x = CurrentUV.x - PreviousUV.x;
+        MotionData.y = CurrentUV.y - PreviousUV.y;
+        MotionData.z = PreviousDepth;
+        MotionData.w = 1.0;
+    }
 
     // Write G‑buffer attachments
     output.Albedo       = float4(Albedo.rgb, Occlusion);                        // pack occlusion into alpha
     output.Normal       = float4(FinalNormal, EffectiveFilteredNormalLength);   // world-space normal
     output.MetalRough   = float4(Metallic, Roughness, 0.0, 0.0);                // metallic, roughness
     output.Emissive     = float4(Emissive, 0.0);                                // HDR emissive
-    output.Velocity     = Velocity;                                             // screen-space velocity
+    output.Velocity     = MotionData;                                           // screen-space velocity
 
     return output;
 }

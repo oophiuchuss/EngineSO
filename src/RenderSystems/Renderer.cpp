@@ -51,6 +51,8 @@ import PostProcessSettingsChangedEvent;
 import SceneEnvironmentChangedEvent;
 import RenderDebugSettingsChangedEvent;
 
+import TemporalAASettingsChangedEvent;
+
 import MeshComponent;
 import TransformComponent;
 import LightComponentBase;
@@ -322,7 +324,9 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 				glm::vec2 JitterPixels = glm::vec2(0.0f);
 
-				if (CurrentRenderDebugSettings.bPreviewProjectionJitter)
+				const bool bShouldApplyProjectionJitter = CurrentTemporalAASettings.bEnabled || CurrentRenderDebugSettings.bPreviewProjectionJitter;
+
+				if (bShouldApplyProjectionJitter)
 				{
 					JitterPixels = TemporalState.GetCurrentJitterPixels();
 				}
@@ -368,6 +372,7 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		CurrentFrameData.Camera = CurrentUniformData.Camera;
 		CurrentFrameData.Environment = CurrentUniformData.Environment;
 		CurrentFrameData.DebugSettings = CurrentRenderDebugSettings;
+		CurrentFrameData.TemporalSettings = CurrentTemporalAASettings;
 		CurrentFrameData.ImGuiDrawData = InImGuiDrawData;
 		CurrentFrameData.bTemporalHistoryValid = bTemporalHistoryValid;
 		CurrentFrameData.TemporalFrameIndex = TemporalFrameIndex;
@@ -1104,7 +1109,7 @@ void Renderer::SetupRenderPasses()
 
 	RendergraphInstance->AddResource(
 		"GBuffer_Velocity",
-		vk::Format::eR16G16Sfloat,
+		vk::Format::eR16G16B16A16Sfloat,
 		SwapchainExtent,
 		vk::ImageUsageFlagBits::eColorAttachment |
 		vk::ImageUsageFlagBits::eSampled,
@@ -1673,12 +1678,30 @@ EventReply Renderer::OnEvent(const EventBase& Event)
 
 		const bool bJitterModeChanged = CurrentRenderDebugSettings.bPreviewProjectionJitter != NewSettings.bPreviewProjectionJitter;
 
+		const bool bDebugViewChanged = CurrentRenderDebugSettings.View != NewSettings.View;
+
 		CurrentRenderDebugSettings = NewSettings;
 
-		if (bJitterModeChanged)
+		if (bJitterModeChanged || bDebugViewChanged)
 		{
-			// The previous projection was created under a different
-			// sampling mode, so it cannot be used as temporal history.
+			// Enabling cannot reuse history produced while accumulation was disabled
+			// Disabling also changes the projection mode
+			TemporalState.Invalidate();
+		}
+	});
+
+	Dispatcher.Dispatch<TemporalAASettingsChangedEvent>([this](const TemporalAASettingsChangedEvent& E)
+	{
+		const TemporalAASettings& NewSettings = E.GetSettings();
+
+		const bool bEnabledChanged = CurrentTemporalAASettings.bEnabled != NewSettings.bEnabled;
+
+		CurrentTemporalAASettings = NewSettings;
+
+		if (bEnabledChanged)
+		{
+			// Enabling cannot reuse history produced while accumulation was disabled
+			// Disabling also changes the projection mode
 			TemporalState.Invalidate();
 		}
 	});

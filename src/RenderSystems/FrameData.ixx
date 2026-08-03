@@ -11,6 +11,7 @@ import Geometry;
 import Mesh;
 import FrameUniform;
 import RenderDebugSettings;
+import TemporalAASettings;
 
 export struct RenderableMesh
 {
@@ -31,6 +32,8 @@ export struct FrameData
 
     CameraUniformData Camera;
     EnvironmentUniformData Environment;
+
+    TemporalAASettings TemporalSettings;
     RenderDebugSettings DebugSettings;
 
     ImDrawData* ImGuiDrawData = nullptr;

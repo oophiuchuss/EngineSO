@@ -10,9 +10,11 @@ import EventSystem;
 import WindowSystem;
 import Scene;
 
-import PostProcessSettings;
 import PerformanceStats;
+
+import PostProcessSettings;
 import RenderDebugSettings;
+import TemporalAASettings;
 
 export class ImGuiSystem final : public EventListener
 {
@@ -42,6 +44,8 @@ private:
 
     void BuildRenderDebugPanel();
 
+    void BuildTemporalAAPanel();
+
     bool bShowPerformancePanel = true;
 
     PostProcessSettings EditablePostProcessSettings;
@@ -51,6 +55,9 @@ private:
 
     RenderDebugSettings EditableRenderDebugSettings;
     bool bShowRenderDebugPanel = true;
+
+    TemporalAASettings EditableTemporalAASettings;
+    bool bShowTemporalAAPanel = true;
 
     EventSystem& EventSystemRef;
     ImGuiContext* Context = nullptr;

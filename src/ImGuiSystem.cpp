@@ -21,6 +21,7 @@ import MouseButtonEvent;
 import CursorCaptureRequestEvent;
 import PostProcessSettingsChangedEvent;
 import RenderDebugSettingsChangedEvent;
+import TemporalAASettingsChangedEvent;
 
 import PerformanceStats;
 import Scene;
@@ -114,6 +115,11 @@ void ImGuiSystem::BuildPanels(const PerformanceStats& Stats, Scene& CurrentScene
 	if (bShowRenderDebugPanel)
 	{
 		BuildRenderDebugPanel();
+	}
+
+	if (bShowTemporalAAPanel)
+	{
+		BuildTemporalAAPanel();
 	}
 }
 
@@ -395,7 +401,7 @@ void ImGuiSystem::BuildRenderDebugPanel()
 
 		if (EditableRenderDebugSettings.bPreviewProjectionJitter)
 		{
-			ImGui::TextDisabled("Raw image movement is expected until temporal resolve is implemented.");
+			ImGui::TextDisabled("Temporal accumulation is bypassed so raw jitter remains visible.");
 		}
 
 		if (EditableRenderDebugSettings.View == RenderDebugView::MotionVectors)
@@ -424,5 +430,65 @@ void ImGuiSystem::BuildRenderDebugPanel()
 	if (bSettingsChanged)
 	{
 		EventSystemRef.PublishEvent(RenderDebugSettingsChangedEvent(EditableRenderDebugSettings));
+	}
+}
+
+void ImGuiSystem::BuildTemporalAAPanel()
+{
+	bool bSettingsChanged = false;
+
+	if (ImGui::Begin("Temporal Anti-Aliasing", &bShowTemporalAAPanel))
+	{
+		bSettingsChanged |= ImGui::Checkbox(
+			"Enabled",
+			&EditableTemporalAASettings.bEnabled);
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"History Weight",
+			&EditableTemporalAASettings.HistoryWeight,
+			0.01f,
+			0.0f,
+			0.99f,
+			"%.2f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"Responsive History Weight",
+			&EditableTemporalAASettings.ResponsiveHistoryWeight,
+			0.01f,
+			0.0f,
+			0.99f,
+			"%.2f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		if (EditableTemporalAASettings.ResponsiveHistoryWeight > EditableTemporalAASettings.HistoryWeight)
+		{
+			EditableTemporalAASettings.ResponsiveHistoryWeight = EditableTemporalAASettings.HistoryWeight;
+
+			bSettingsChanged = true;
+		}
+
+		ImGui::TextDisabled("History Weight is used for stable pixels.");
+
+		ImGui::TextDisabled("Responsive Weight is used when current and history disagree.");
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"Depth Tolerance",
+			&EditableTemporalAASettings.DepthTolerance,
+			0.0001f,
+			0.0f,
+			0.02f,
+			"%.4f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		ImGui::TextDisabled(
+			"Depth tolerance is measured in device-depth space.");
+	}
+
+	ImGui::End();
+
+	if (bSettingsChanged)
+	{
+		EventSystemRef.PublishEvent(TemporalAASettingsChangedEvent(EditableTemporalAASettings));
 	}
 }

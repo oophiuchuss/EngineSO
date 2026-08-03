@@ -34,7 +34,9 @@ import PostProcessSettings;
 import PerformanceStats;
 import FrameData;
 import TemporalAAState;
+
 import RenderDebugSettings;
+import TemporalAASettings;
 
 import MeshData;
 import TextureData;
@@ -133,6 +135,7 @@ private:
 
 	PostProcessSettings CurrentPostProcessSettings;
 	RenderDebugSettings CurrentRenderDebugSettings;
+	TemporalAASettings CurrentTemporalAASettings;
 
 	std::unique_ptr<GPUProfiler>				ProfilerInstance;
 	std::unique_ptr<Rendergraph>				RendergraphInstance;

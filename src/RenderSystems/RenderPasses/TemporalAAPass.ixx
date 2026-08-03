@@ -1,6 +1,8 @@
 module;
 
 #include <string>
+#include <cstdint>
+
 #include <vulkan/vulkan_raii.hpp>
 
 export module TemporalAAPass;
@@ -10,6 +12,25 @@ import FrameData;
 import Shader;
 import PipelineCache;
 import TemporalAADescriptorSet;
+
+export enum TemporalAAFlags : uint32_t
+{
+    TAA_HistoryValid = 1u << 0,
+    TAA_AccumulationEnabled = 1u << 1
+};
+
+export struct TemporalAAPushConstants
+{
+    float HistoryWeight = 0.9f;
+    float ResponsiveHistoryWeight = 0.2f;
+
+    float DepthTolerance = 0.001f;
+
+    float InverseWidth = 0.0f;
+    float InverseHeight = 0.0f;
+
+    uint32_t Flags = 0;
+};
 
 export class TemporalAAPass : public RenderPassBase
 {

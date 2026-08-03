@@ -8,6 +8,7 @@ module;
 module TemporalAAPass;
 
 import Rendergraph;
+import RenderDebugSettings;
 
 TemporalAAPass::TemporalAAPass(
     std::string InName,
@@ -99,6 +100,11 @@ void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph&
     Key.bUseVertexInput = false;
     Key.bDepthWriteEnable = false;
 
+    Key.PushConstantRange = vk::PushConstantRange(
+        vk::ShaderStageFlagBits::eFragment,
+        0,
+        sizeof(TemporalAAPushConstants));
+
     auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
@@ -109,6 +115,42 @@ void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph&
         0,
         { *DescriptorSetPtr->GetDescriptorSet(Frame.FrameIndex) },
         {});
+
+    TemporalAAPushConstants PushConstants;
+    PushConstants.HistoryWeight = Frame.TemporalSettings.HistoryWeight;
+    PushConstants.ResponsiveHistoryWeight = Frame.TemporalSettings.ResponsiveHistoryWeight;
+	PushConstants.DepthTolerance = Frame.TemporalSettings.DepthTolerance;
+
+    if (ColorOutput->Extent.width == 0 || ColorOutput->Extent.height == 0)
+    {
+        throw std::runtime_error("TemporalAAPass output has a zero-sized extent");
+    }
+
+    PushConstants.InverseWidth = 1.0f / static_cast<float>(ColorOutput->Extent.width);
+    PushConstants.InverseHeight = 1.0f / static_cast<float>(ColorOutput->Extent.height);
+
+    const bool bDebugViewActive = Frame.DebugSettings.View != RenderDebugView::None;
+
+    // Preview mode deliberately shows the unresolved jitter.
+    const bool bAllowAccumulation = Frame.TemporalSettings.bEnabled &&
+                                    !Frame.DebugSettings.bPreviewProjectionJitter &&
+                                    !bDebugViewActive;
+
+    if (Frame.bTemporalHistoryValid)
+    {
+        PushConstants.Flags |= TAA_HistoryValid;
+    }
+
+    if (bAllowAccumulation)
+    {
+        PushConstants.Flags |= TAA_AccumulationEnabled;
+    }
+
+    Cmd.pushConstants<TemporalAAPushConstants>(
+        PipelineLayout,
+        vk::ShaderStageFlagBits::eFragment,
+        0,
+        PushConstants);
 
     Cmd.draw(3, 1, 0, 0);
 }

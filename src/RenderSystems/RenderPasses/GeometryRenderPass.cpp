@@ -73,7 +73,7 @@ void GeometryRenderPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Gr
 		MakeColorAttachment(GBufferNormalResourceName,     { 0.0f, 0.0f, 0.0f, 0.0f }),
 		MakeColorAttachment(GBufferMetalRoughResourceName, { 0.0f, 0.0f, 0.0f, 0.0f }),
 		MakeColorAttachment(GBufferEmissiveResourceName,   { 0.0f, 0.0f, 0.0f, 0.0f }),
-		MakeColorAttachment(GBufferVelocityResourceName,   { 0.0f, 0.0f, 0.0f, 0.0f }),
+		MakeColorAttachment(GBufferVelocityResourceName,   { 0.0f, 0.0f, 1.0f, 0.0f }),		// Velocity clear to (0,0) with 1 in Z to indicate no velocity
 	};
 
 
