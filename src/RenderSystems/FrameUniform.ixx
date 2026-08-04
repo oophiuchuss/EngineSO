@@ -13,8 +13,7 @@ import TextureSlots;
 // Data layout – matches the shader’s uniform block
 export struct CameraUniformData
 {
-    // Current rendering matrix. This is unjittered for now and will become
-    // the current jittered matrix when projection jitter is added.
+    // Current jittered view-projection used for rasterization.
     glm::mat4 ViewProj = glm::mat4(1.0f);
 
     glm::mat4 InverseViewProj = glm::mat4(1.0f);
@@ -23,6 +22,12 @@ export struct CameraUniformData
     glm::mat4 PreviousViewProj = glm::mat4(1.0f);
 
 	glm::vec4 CameraPos = glm::vec4(0.0f);	// xyz = position, w = unused
+
+    glm::vec4 PreviousCameraPos = glm::vec4(0.0f);
+
+    // xy = current jitter in normalized texture UV units
+    // zw = previous submitted jitter in normalized texture UV units
+    glm::vec4 TemporalJitterUV = glm::vec4(0.0f);
 };
 
 export struct alignas(16) EnvironmentUniformData

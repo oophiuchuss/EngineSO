@@ -12,6 +12,7 @@ import FrameData;
 import Shader;
 import PipelineCache;
 import TemporalAADescriptorSet;
+import FrameUniform;
 
 export enum TemporalAAFlags : uint32_t
 {
@@ -21,8 +22,8 @@ export enum TemporalAAFlags : uint32_t
 
 export struct TemporalAAPushConstants
 {
-    float HistoryWeight = 0.9f;
-    float ResponsiveHistoryWeight = 0.2f;
+    float HistoryWeight = 0.98f;
+    float ResponsiveHistoryWeight = 0.9f;
 
     float DepthTolerance = 0.001f;
 
@@ -44,6 +45,7 @@ public:
         std::string InHistoryDepthReadResourceName,
         std::string InHistoryColorWriteResourceName,
         std::string InHistoryDepthWriteResourceName,
+        FrameUniformBuffer* InFrameUniforms,
         Shader* InShader,
         PipelineCache* InPipelineCache,
         TemporalAADescriptorSet* InDescriptorSet);
@@ -65,6 +67,7 @@ private:
     std::string HistoryColorWriteResourceName;
     std::string HistoryDepthWriteResourceName;
 
+    FrameUniformBuffer* FrameUniformsPtr = nullptr;
     Shader* ShaderPtr = nullptr;
     PipelineCache* PipelineCachePtr = nullptr;
     TemporalAADescriptorSet* DescriptorSetPtr = nullptr;

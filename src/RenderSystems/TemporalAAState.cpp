@@ -21,6 +21,27 @@ glm::mat4 TemporalAAState::ResolvePreviousViewProjection(const glm::mat4& Curren
     return PreviousViewProjection;
 }
 
+glm::vec2 TemporalAAState::ResolvePreviousJitterUV(const glm::vec2& CurrentJitterUV) const
+{
+    if (!bHasPreviousFrame)
+    {
+        // Produces zero jitter delta on the first temporal frame.
+        return CurrentJitterUV;
+    }
+
+    return PreviousJitterUV;
+}
+
+glm::vec3 TemporalAAState::ResolvePreviousCameraPosition(const glm::vec3& CurrentCameraPosition) const
+{
+    if (!bHasPreviousFrame)
+    {
+        return CurrentCameraPosition;
+    }
+
+    return PreviousCameraPosition;
+}
+
 glm::mat4 TemporalAAState::ResolvePreviousModel(const Entity* EntityPtr, const glm::mat4& CurrentModel)
 {
     if (!EntityPtr)
@@ -55,9 +76,11 @@ glm::vec2 TemporalAAState::GetCurrentJitterPixels() const
     return glm::vec2(ComputeHalton(HaltonIndex, 2), ComputeHalton(HaltonIndex, 3)) - glm::vec2(0.5f);
 }
 
-void TemporalAAState::CommitFrame(const glm::mat4& SubmittedViewProjection)
+void TemporalAAState::CommitFrame(const glm::mat4& SubmittedViewProjection, const glm::vec2& SubmittedJitterUV, const glm::vec3& SubmittedCameraPosition)
 {
     PreviousViewProjection = SubmittedViewProjection;
+    PreviousJitterUV = SubmittedJitterUV;
+    PreviousCameraPosition = SubmittedCameraPosition;
 
     PreviousTransforms = std::move(CurrentTransforms);
     CurrentTransforms.clear();
@@ -71,6 +94,8 @@ void TemporalAAState::Invalidate()
     bHasPreviousFrame = false;
     TemporalFrameIndex = 0;
     PreviousViewProjection = glm::mat4(1.0f);
+	PreviousJitterUV = glm::vec2(0.0f);
+	PreviousCameraPosition = glm::vec3(0.0f);
 
     PreviousTransforms.clear();
     CurrentTransforms.clear();

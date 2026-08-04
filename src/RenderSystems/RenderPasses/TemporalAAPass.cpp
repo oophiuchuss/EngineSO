@@ -19,6 +19,7 @@ TemporalAAPass::TemporalAAPass(
     std::string InHistoryDepthReadResourceName,
     std::string InHistoryColorWriteResourceName,
     std::string InHistoryDepthWriteResourceName,
+    FrameUniformBuffer* InFrameUniforms,
     Shader* InShader,
     PipelineCache* InPipelineCache,
     TemporalAADescriptorSet* InDescriptorSet):
@@ -30,6 +31,7 @@ TemporalAAPass::TemporalAAPass(
     HistoryDepthReadResourceName(std::move(InHistoryDepthReadResourceName)),
     HistoryColorWriteResourceName(std::move(InHistoryColorWriteResourceName)),
     HistoryDepthWriteResourceName(std::move(InHistoryDepthWriteResourceName)),
+    FrameUniformsPtr(InFrameUniforms),
     ShaderPtr(InShader),
     PipelineCachePtr(InPipelineCache),
     DescriptorSetPtr(InDescriptorSet)
@@ -76,7 +78,7 @@ void TemporalAAPass::BeginPass(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph,
 
 void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& Graph, FrameData& Frame)
 {
-    if (!ShaderPtr || !PipelineCachePtr || !DescriptorSetPtr)
+    if (!FrameUniformsPtr || !ShaderPtr || !PipelineCachePtr || !DescriptorSetPtr)
     {
         throw std::runtime_error("TemporalAAPass dependencies are not initialized");
     }
@@ -95,6 +97,7 @@ void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph&
     Key.DepthFormat = vk::Format::eUndefined;
     Key.DescriptorSetLayouts =
     {
+        *FrameUniformsPtr->GetDescriptorSetLayout(),
         *DescriptorSetPtr->GetDescriptorSetLayout()
     };
     Key.bUseVertexInput = false;
@@ -109,11 +112,17 @@ void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph&
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 
+    const std::array<vk::DescriptorSet, 2> DescriptorSets =
+    {
+        *FrameUniformsPtr->GetDescriptorSet(Frame.FrameIndex),
+        *DescriptorSetPtr->GetDescriptorSet(Frame.FrameIndex)
+    };
+
     Cmd.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         PipelineLayout,
         0,
-        { *DescriptorSetPtr->GetDescriptorSet(Frame.FrameIndex) },
+        DescriptorSets,
         {});
 
     TemporalAAPushConstants PushConstants;

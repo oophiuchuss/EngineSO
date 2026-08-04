@@ -7,11 +7,11 @@ export struct TemporalAASettings
     // Portion of the previous frame retained during accumulation.
     // 0.0 = current frame only
     // 0.9 = 10% current + 90% history
-    float HistoryWeight = 0.9f;
+    float HistoryWeight = 0.98f;
 
     // History contribution used when current and historical colors disagree.
     // Lower values respond faster but preserve less temporal stability.
-    float ResponsiveHistoryWeight = 0.2f;
+    float ResponsiveHistoryWeight = 0.9f;
 
     // Compared in Vulkan device-depth space, not world-space distance.
     float DepthTolerance = 0.001f;

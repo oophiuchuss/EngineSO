@@ -254,7 +254,9 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 	ProfilerInstance->BeginFrame(Cmd, CurrentFrame);
 	
 	glm::mat4 SubmittedViewProjection = glm::mat4(1.0f);
-
+	glm::vec2 SubmittedJitterUV = glm::vec2(0.0f);
+	glm::vec3 SubmittedCameraPosition = glm::vec3(0.0f);
+	
 	{
 		auto FrameScope = ProfilerInstance->BeginScope(Cmd, CurrentFrame, "TotalFrame");
 
@@ -316,45 +318,68 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 			CamTrans = CamComp->GetOwner()->GetComponent<TransformComponent>();
 
-			if (CamTrans)
+			if (CamComp && !CamTrans)
 			{
-				const glm::mat4 BaseProjection = CamComp->GetProjectionMatrix();
-
-				const glm::mat4 View = CamComp->GetViewMatrix();
-
-				glm::vec2 JitterPixels = glm::vec2(0.0f);
-
-				const bool bShouldApplyProjectionJitter = CurrentTemporalAASettings.bEnabled || CurrentRenderDebugSettings.bPreviewProjectionJitter;
-
-				if (bShouldApplyProjectionJitter)
-				{
-					JitterPixels = TemporalState.GetCurrentJitterPixels();
-				}
-
-				const glm::vec2 JitterNDC =
-				{
-					2.0f * JitterPixels.x / static_cast<float>(SwapchainExtent.width),
-					2.0f * JitterPixels.y / static_cast<float>(SwapchainExtent.height)
-				};
-
-				const glm::mat4 JitteredProjection = ApplyProjectionJitter(BaseProjection, JitterNDC);
-				const glm::mat4 CurrentViewProjection = JitteredProjection * View;
-
-				CurrentUniformData.Camera.ViewProj = CurrentViewProjection;
-				CurrentUniformData.Camera.InverseViewProj = glm::inverse(CurrentViewProjection);
-				CurrentUniformData.Camera.PreviousViewProj = TemporalState.ResolvePreviousViewProjection(CurrentViewProjection);
-				CurrentUniformData.Camera.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
-
-				SubmittedViewProjection = CurrentViewProjection;
+				throw std::runtime_error("Active camera requires a TransformComponent");
 			}
+
+			const glm::mat4 BaseProjection = CamComp->GetProjectionMatrix();
+
+			const glm::mat4 View = CamComp->GetViewMatrix();
+
+			const glm::vec3 CurrentCameraPosition = CamTrans->GetWorldPosition();
+
+			const glm::vec3 PreviousCameraPosition = TemporalState.ResolvePreviousCameraPosition(CurrentCameraPosition);
+
+			glm::vec2 JitterPixels = glm::vec2(0.0f);
+
+			const bool bShouldApplyProjectionJitter = CurrentTemporalAASettings.bEnabled || CurrentRenderDebugSettings.bPreviewProjectionJitter;
+
+			if (bShouldApplyProjectionJitter)
+			{
+				JitterPixels = TemporalState.GetCurrentJitterPixels();
+			}
+
+			const glm::vec2 CurrentJitterUV =
+			{
+				JitterPixels.x / static_cast<float>(SwapchainExtent.width),
+				JitterPixels.y / static_cast<float>(SwapchainExtent.height)
+			};
+
+			const glm::vec2 PreviousJitterUV = TemporalState.ResolvePreviousJitterUV(CurrentJitterUV);
+			const glm::vec2 JitterNDC = CurrentJitterUV * 2.0f;
+			const glm::mat4 JitteredProjection = ApplyProjectionJitter(BaseProjection, JitterNDC);
+			const glm::mat4 CurrentViewProjection = JitteredProjection * View;
+
+			CurrentUniformData.Camera.ViewProj = CurrentViewProjection;
+			CurrentUniformData.Camera.InverseViewProj = glm::inverse(CurrentViewProjection);
+			CurrentUniformData.Camera.PreviousViewProj = TemporalState.ResolvePreviousViewProjection(CurrentViewProjection);
+			CurrentUniformData.Camera.CameraPos = glm::vec4(CamTrans->GetWorldPosition(), 1.0f);
+			CurrentUniformData.Camera.PreviousCameraPos = glm::vec4(PreviousCameraPosition, 1.0f);
+			CurrentUniformData.Camera.TemporalJitterUV = glm::vec4(CurrentJitterUV, PreviousJitterUV);
+
+			SubmittedViewProjection = CurrentViewProjection;
+			SubmittedJitterUV = CurrentJitterUV;
+			SubmittedCameraPosition = CurrentCameraPosition;
 		}
 		else
 		{
-			// Keep all temporal matrices internally consistent even if no active
-			// camera is available.
+			// Keep all temporal matrices internally consistent even if no active camera is available.
+			const glm::vec2 CurrentJitterUV = glm::vec2(0.0f);
+			const glm::vec2 PreviousJitterUV = TemporalState.ResolvePreviousJitterUV(CurrentJitterUV);
+
 			CurrentUniformData.Camera.PreviousViewProj = TemporalState.ResolvePreviousViewProjection(CurrentUniformData.Camera.ViewProj);
+			CurrentUniformData.Camera.TemporalJitterUV = glm::vec4(CurrentJitterUV, PreviousJitterUV);
+			
+			const glm::vec3 CurrentCameraPosition = glm::vec3(CurrentUniformData.Camera.CameraPos);
+			const glm::vec3 PreviousCameraPosition = TemporalState.ResolvePreviousCameraPosition(CurrentCameraPosition);
+
+			CurrentUniformData.Camera.PreviousCameraPos = glm::vec4(PreviousCameraPosition, 1.0f);
 
 			SubmittedViewProjection = CurrentUniformData.Camera.ViewProj;
+			SubmittedJitterUV = CurrentJitterUV;
+			SubmittedCameraPosition = CurrentCameraPosition;
+
 		}
 
 		CurrentUniformData.Environment = ResolveSceneEnvironment(*SceneToRender);
@@ -601,7 +626,7 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 
 	// The command buffer now contains a complete submitted frame, so its camera
 	// and object transforms become the reference for the next temporal frame.
-	TemporalState.CommitFrame(SubmittedViewProjection);
+	TemporalState.CommitFrame(SubmittedViewProjection, SubmittedJitterUV, SubmittedCameraPosition);
 
 	// Present result
 	vk::PresentInfoKHR PresentInfo;
@@ -1256,6 +1281,7 @@ void Renderer::SetupRenderPasses()
 		"TAA_HistoryDepthRead",
 		"TAA_HistoryColorWrite",
 		"TAA_HistoryDepthWrite",
+		FrameUniforms.get(),
 		TemporalShader,
 		PipelineCacheInstance.get(),
 		TemporalAADesc.get());

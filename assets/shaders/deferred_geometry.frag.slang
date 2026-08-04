@@ -1,5 +1,6 @@
 import GPUSceneData;
 import NormalFiltering;
+import CameraUBO;
 
 struct PSInput
 {
@@ -21,6 +22,10 @@ struct PSOutput
     float4 Emissive     : SV_Target3;   // RGBA16F — emissive.rgb
     float4 Velocity     : SV_Target4;   // RGBA16F  — screen-space velocity data
 };
+
+// Set 0, Binding 0 — Camera UBO
+[[vk::binding(0, 0)]]
+ConstantBuffer<CameraUBO> uCamera;
 
 // Set 1, Binding 0 — Texture heap
 [[vk::binding(0, 1)]]
@@ -124,8 +129,17 @@ PSOutput main(PSInput input)
 
         float PreviousDepth = input.inPreviousClipPosition.z / input.inPreviousClipPosition.w;
 
-        MotionData.x = CurrentUV.x - PreviousUV.x;
-        MotionData.y = CurrentUV.y - PreviousUV.y;
+        float2 RawVelocity = CurrentUV - PreviousUV;
+
+        float2 CurrentJitterUV = uCamera.TemporalJitterUV.xy;
+
+        float2 PreviousJitterUV = uCamera.TemporalJitterUV.zw;
+
+        float2 JitterVelocity = CurrentJitterUV - PreviousJitterUV;
+
+        float2 CompensatedVelocity = RawVelocity - JitterVelocity;
+
+        MotionData.xy = CompensatedVelocity;
         MotionData.z = PreviousDepth;
         MotionData.w = 1.0;
     }

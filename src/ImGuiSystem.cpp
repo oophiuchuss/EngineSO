@@ -470,7 +470,7 @@ void ImGuiSystem::BuildTemporalAAPanel()
 
 		ImGui::TextDisabled("History Weight is used for stable pixels.");
 
-		ImGui::TextDisabled("Responsive Weight is used when current and history disagree.");
+		ImGui::TextDisabled("Responsive Weight is used for moving pixels whose history disagrees.");
 
 		bSettingsChanged |= ImGui::DragFloat(
 			"Depth Tolerance",
