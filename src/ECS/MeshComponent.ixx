@@ -19,12 +19,25 @@ public:
 	{
 	}
 
+	void SetCastsShadows(bool bInCastsShadows)
+	{
+		bCastsShadows = bInCastsShadows;
+	}
+
+	bool CastsShadows() const
+	{
+		return bCastsShadows;
+	}
+
 	const MeshData* GetMeshData() const { return MeshHandle.Get(); }
 
 	const Material* GetMaterial() const { return MaterialHandle.Get(); }
 
 	void SetMaterial(ResourceHandle<Material> InMaterialHandle) { MaterialHandle = InMaterialHandle; }
+
 private:
+	bool bCastsShadows = true;
+
 	ResourceHandle<MeshData> MeshHandle;
 	ResourceHandle<Material> MaterialHandle;
 };
