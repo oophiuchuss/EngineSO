@@ -150,7 +150,7 @@ void GeometryRenderPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergr
 		0,
 		sizeof(PushConstantData));
 
-	Key.bUseVertexInput = true;   // real vertex buffers, real meshes
+	Key.VertexInput = VertexInputMode::Full;   // real vertex buffers, real meshes
 
 
 	// Optain pipeline and layout from cache based on shader

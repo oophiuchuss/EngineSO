@@ -100,7 +100,7 @@ void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph&
         *FrameUniformsPtr->GetDescriptorSetLayout(),
         *DescriptorSetPtr->GetDescriptorSetLayout()
     };
-    Key.bUseVertexInput = false;
+    Key.VertexInput = VertexInputMode::None;
     Key.bDepthWriteEnable = false;
 
     Key.PushConstantRange = vk::PushConstantRange(

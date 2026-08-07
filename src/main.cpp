@@ -104,6 +104,17 @@ int main() {
                     }
                 }
 
+                Entity* SunEntity = Engine.GetMainScene()->GetEntityByName("SUN");
+
+                if (SunEntity)
+                {
+					DirectionalLightComponent* SunLight = SunEntity->GetComponent<DirectionalLightComponent>();
+
+					if (SunLight)
+					{
+						SunLight->SetCastsShadows(true);
+					}
+                }
 
                 auto EnvironmentTexture = Engine.GetResourceManager()->Load<TextureData>("skyboxes/citrus_orchard_road_puresky_hdr.ktx2", TextureColorSpace::Linear, TextureMipMode::Provided, PresetSamplerDesc::SamplerLinearClamp);
 

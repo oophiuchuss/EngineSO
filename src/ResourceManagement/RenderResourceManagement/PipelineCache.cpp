@@ -166,22 +166,38 @@ PipelineCacheEntry* PipelineCache::CreateCacheGraphicsEntry(const GraphicsPipeli
 
 	auto Stages = Key.ShaderPtr->GetShaderStageInfos();
 
-	// Vertex input — empty for fullscreen passes with no vertex buffer
-	vk::VertexInputBindingDescription BindingDesc(0, sizeof(Vertex), vk::VertexInputRate::eVertex);
+	const vk::VertexInputBindingDescription BindingDesc(0, sizeof(Vertex), vk::VertexInputRate::eVertex);
 
-	std::array<vk::VertexInputAttributeDescription, 4> AttribDescs = { {
-		{ 0, 0, vk::Format::eR32G32B32Sfloat,		offsetof(Vertex, Position) },
-		{ 1, 0, vk::Format::eR32G32Sfloat,			offsetof(Vertex, UV) },
-		{ 2, 0, vk::Format::eR32G32B32Sfloat,		offsetof(Vertex, Normal) },
-		{ 3, 0, vk::Format::eR32G32B32A32Sfloat,	offsetof(Vertex, Tangent) },
-	} };
+	std::vector<vk::VertexInputAttributeDescription> AttributeDescriptions;
+
+	switch (Key.VertexInput)
+	{
+	case VertexInputMode::None:
+		break;
+
+	case VertexInputMode::PositionOnly:
+		AttributeDescriptions = {
+			{ 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, Position) }
+		};
+		break;
+
+	case VertexInputMode::Full:
+		AttributeDescriptions = { {
+			{ 0, 0, vk::Format::eR32G32B32Sfloat,		offsetof(Vertex, Position) },
+			{ 1, 0, vk::Format::eR32G32Sfloat,			offsetof(Vertex, UV) },
+			{ 2, 0, vk::Format::eR32G32B32Sfloat,		offsetof(Vertex, Normal) },
+			{ 3, 0, vk::Format::eR32G32B32A32Sfloat,	offsetof(Vertex, Tangent) },
+		} };
+		break;
+	}
 
 	vk::PipelineVertexInputStateCreateInfo VertexInputInfo;
-	if (Key.bUseVertexInput)
+
+	if (Key.VertexInput != VertexInputMode::None)
 	{
-		VertexInputInfo = vk::PipelineVertexInputStateCreateInfo({}, BindingDesc, AttribDescs);
+		VertexInputInfo.setVertexBindingDescriptions(BindingDesc)
+			.setVertexAttributeDescriptions(AttributeDescriptions);
 	}
-	// else: leave default-constructed — zero bindings, zero attributes
 
 	vk::PipelineInputAssemblyStateCreateInfo InputAssemblyInfo({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
 
@@ -191,9 +207,9 @@ PipelineCacheEntry* PipelineCache::CreateCacheGraphicsEntry(const GraphicsPipeli
 	// Lighting pass is a fullscreen triangle — no backface culling concerns, cull none is safest
 	vk::PipelineRasterizationStateCreateInfo RasterizerInfo(
 		{}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill,
-		Key.bUseVertexInput ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone,
+		Key.VertexInput != VertexInputMode::None ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone,
 		vk::FrontFace::eCounterClockwise,
-		VK_FALSE, 0.0f, 0.0f, 0.0f, 1.0f);
+		Key.bEnableDepthBias, 0.0f, 0.0f, 0.0f, 1.0f);
 
 	vk::PipelineMultisampleStateCreateInfo MultisampleInfo(
 		{}, vk::SampleCountFlagBits::e1, VK_FALSE);
@@ -228,7 +244,17 @@ PipelineCacheEntry* PipelineCache::CreateCacheGraphicsEntry(const GraphicsPipeli
 	vk::PipelineColorBlendStateCreateInfo ColorBlendInfo(
 		{}, VK_FALSE, vk::LogicOp::eCopy, ColorBlendAttachments);
 
-	vk::DynamicState DynamicStates[] = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
+	std::vector<vk::DynamicState> DynamicStates =
+	{
+		vk::DynamicState::eViewport,
+		vk::DynamicState::eScissor
+	};
+
+	if (Key.bEnableDepthBias)
+	{
+		DynamicStates.push_back(vk::DynamicState::eDepthBias);
+	}
+
 	vk::PipelineDynamicStateCreateInfo DynamicStateInfo({}, DynamicStates);
 
 	vk::PipelineRenderingCreateInfo DynamicRenderingInfo(

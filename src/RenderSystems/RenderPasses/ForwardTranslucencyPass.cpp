@@ -77,7 +77,9 @@ void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Ren
     }
 
     Cmd.setViewport(0, vk::Viewport(0.0f, 0.0f,
-        static_cast<float>(RenderArea.width), static_cast<float>(RenderArea.height), 0.0f, 1.0f));
+        static_cast<float>(RenderArea.width),
+        static_cast<float>(RenderArea.height), 0.0f, 1.0f));
+
     Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderArea));
 
     Resource* ColorRes = Graph.GetResource(ColorResourceName);
@@ -93,9 +95,13 @@ void ForwardTranslucencyPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Ren
         *GPUScenePtr->GetDescriptorSetLayout() ,
         *LightBufferPtr->GetDescriptorSetLayout() 
     };
+    
     Key.PushConstantRange = vk::PushConstantRange(
-        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, sizeof(PushConstantData));
-    Key.bUseVertexInput = true;
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+        0,
+        sizeof(PushConstantData));
+
+    Key.VertexInput = VertexInputMode::Full;
     Key.bEnableBlending = true;
     Key.bDepthWriteEnable = false;
 

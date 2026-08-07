@@ -91,7 +91,7 @@ void PostProcessPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph
         vk::ShaderStageFlagBits::eFragment,
         0,
         sizeof(PostProcessPushConstants));
-    Key.bUseVertexInput = false;
+    Key.VertexInput = VertexInputMode::None;
 
     auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 

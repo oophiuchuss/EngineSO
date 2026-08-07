@@ -416,8 +416,7 @@ void VulkanUploader::InitializeNormalMipGeneration(Shader& InShader, PipelineCac
 	Key.PushConstantRange = vk::PushConstantRange(
 		vk::ShaderStageFlagBits::eCompute,
 		0,
-		sizeof(NormalMipPushConstants)
-	);
+		sizeof(NormalMipPushConstants));
 
 	PipelineHandles Handles = InPipelineCache.GetOrCreateCompute(Key);
 

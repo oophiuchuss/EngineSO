@@ -5,6 +5,7 @@ module;
 #include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
+
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -36,6 +37,7 @@ import FrameData;
 import SceneEnvironment;
 
 import GeometryRenderPass;
+import DirectionalShadowPass;
 import LightingPass;
 import ForwardTranslucencyPass;
 import TemporalAAPass;
@@ -69,6 +71,7 @@ import TextureSlots;
 import Material;
 import MaterialProperties;
 import Geometry;
+import DirectionalShadowMath;
 
 Renderer::Renderer(
 	vk::raii::Instance& Instance, 
@@ -169,6 +172,18 @@ Renderer::Renderer(
 		Device,
 		MAX_FRAMES_IN_FLIGHT);
 
+	DirectionalShadowMapInstance = std::make_unique<DirectionalShadowMap>(
+		Device,
+		PhysicalDevice,
+		MAX_FRAMES_IN_FLIGHT,
+		CurrentDirectionalShadowSettings.Resolution);
+
+	DirectionalShadowDesc = std::make_unique<DirectionalShadowDescriptorSet>(
+		Device,
+		PhysicalDevice,
+		MAX_FRAMES_IN_FLIGHT);
+
+	DirectionalShadowDesc->Initialize(*DirectionalShadowMapInstance);
 
 	// Set up render passes and framebuffers in the rendergraph
 	SetupRenderPasses();
@@ -240,6 +255,11 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		"Swapchain",
 		SwapchainImages[ImageIndex],           // vk::Image (non‑owning)
 		*SwapchainImageViews[ImageIndex]);     // vk::ImageView
+
+	RendergraphInstance->SetFrameExternalImage(
+		"DirectionalShadowMap",
+		DirectionalShadowMapInstance->GetImage(static_cast<uint32_t>(CurrentFrame)),		// vk::Image (non‑owning)
+		DirectionalShadowMapInstance->GetImageView(static_cast<uint32_t>(CurrentFrame)));	// vk::ImageView
 
 	// Reset the fence for the current frame only after successfully acquiring an image, to avoid waiting on a fence that won't be signaled if acquisition fails
 	Device.resetFences({ *InFlightFences[CurrentFrame] }); 
@@ -387,9 +407,13 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		FrameUniforms->Update(static_cast<uint32_t>(CurrentFrame), CurrentUniformData);
 
 		// Cull scene and update per-frame data.
-		CullingSystemInstance->CullScene(SceneToRender->GetRenderableEntities());
+		const std::vector<Entity*> RenderableEntities = SceneToRender->GetRenderableEntities();
+
+		CullingSystemInstance->CullScene(RenderableEntities);
 
 		const auto& VisibleEntities = CullingSystemInstance->GetAllVisibleEntities();
+
+		const std::unordered_set<Entity*> VisibleEntitySet(VisibleEntities.begin(), VisibleEntities.end());
 
 		FrameData CurrentFrameData;
 
@@ -405,9 +429,9 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		std::vector<ObjectData> FrameObjects;
 		std::vector<MaterialData> FrameMaterials;
 		std::unordered_map<const Material*, uint32_t> FrameMaterialIndices;
-		FrameObjects.reserve(VisibleEntities.size());
-		FrameMaterials.reserve(VisibleEntities.size());
-		FrameMaterialIndices.reserve(VisibleEntities.size());
+		FrameObjects.reserve(RenderableEntities.size());
+		FrameMaterials.reserve(RenderableEntities.size());
+		FrameMaterialIndices.reserve(RenderableEntities.size());
 
 		auto GetOrCreateMaterialIndex = [&](const Material* Mat) -> uint32_t
 			{
@@ -463,48 +487,83 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 				return NewIndex;
 			};
 
-
-		for (Entity* E : VisibleEntities)
+		for (Entity* E : RenderableEntities)
 		{
 			MeshComponent* MC = E->GetComponent<MeshComponent>();
+
 			TransformComponent* TC = E->GetComponent<TransformComponent>();
-			if (!MC || !TC) continue;
 
-			// Resolve CPU data
-			const MeshData* MD = MC->GetMeshData();
-			if (!MD) continue;
+			if (!MC || !TC)
+			{
+				continue;
+			}
 
-			// Get GPU objects from cache (upload if necessary)
-			Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
-			if (!GPUMesh) continue;
+			const bool bCameraVisible = VisibleEntitySet.contains(E);
 
 			const Material* CurrentMaterial = MC->GetMaterial();
 
-			uint32_t MaterialIndex = GetOrCreateMaterialIndex(CurrentMaterial);
+			const AlphaMode CurrentAlphaMode = CurrentMaterial ? CurrentMaterial->GetMaterialProperties().AlphaMode : AlphaMode::Opaque;
 
-			// Build ObjectData for this renderable 
-			glm::mat4 WorldTransform = TC->GetWorldTransformMatrix();
+			// For now, only fully opaque materials participate in the shadow pass.
+			// Masked materials require texture sampling and alpha testing there.
+			const bool bShadowCaster = MC->CastsShadows() && CurrentAlphaMode == AlphaMode::Opaque;
+
+			// An off-screen object still needs GPU object data when it can cast a
+			// shadow into the visible area. Other off-screen objects can be skipped.
+			if (!bCameraVisible && !bShadowCaster)
+			{
+				continue;
+			}
+
+			const MeshData* MD = MC->GetMeshData();
+
+			if (!MD)
+			{
+				continue;
+			}
+
+			// Get GPU objects from cache (upload if necessary)
+			Mesh* GPUMesh = RenderCacheInstance->GetOrUploadMesh(MD->GetResourceID(), *MD);
+
+			if (!GPUMesh)
+			{
+				continue;
+			}
+
+			const uint32_t MaterialIndex = GetOrCreateMaterialIndex(CurrentMaterial);
+
+			const glm::mat4 WorldTransform = TC->GetWorldTransformMatrix();
 
 			// Normal matrix computed once on CPU — inverse transpose of upper-left 3x3
 			// Stored as mat4 to avoid GLM/GPU std430 mat3 alignment mismatch
-			glm::mat3 NormalMat3 = glm::transpose(glm::inverse(glm::mat3(WorldTransform)));
+			const glm::mat3 NormalMat3 = glm::transpose(glm::inverse(glm::mat3(WorldTransform)));
 
-			ObjectData Obj;
+			ObjectData Obj{};
+
 			Obj.ModelMatrix = WorldTransform;
 			Obj.PreviousModelMatrix = TemporalState.ResolvePreviousModel(E, WorldTransform);
-			Obj.NormalMatrix = glm::mat4(NormalMat3); // upper-left 3x3 used by shader, rest is identity padding
+			Obj.NormalMatrix = glm::mat4(NormalMat3);
 			Obj.MaterialIndex = MaterialIndex;
 
-			uint32_t ObjectIndex = static_cast<uint32_t>(FrameObjects.size());
+			const uint32_t ObjectIndex = static_cast<uint32_t>(FrameObjects.size());
 			FrameObjects.push_back(Obj);
 
 			// World-space bounds for culling
 			BoundingBox WorldBounds = MD->GetBoundingBox();
+
 			WorldBounds.Transform(WorldTransform);
 
-			RenderableMesh NewRenderable = RenderableMesh(GPUMesh, WorldBounds, ObjectIndex);
+			const RenderableMesh NewRenderable(GPUMesh, WorldBounds, ObjectIndex);
 
-			AlphaMode CurrentAlphaMode = CurrentMaterial? CurrentMaterial->GetMaterialProperties().AlphaMode : AlphaMode::Opaque;
+			if (bShadowCaster)
+			{
+				CurrentFrameData.ShadowCasters.push_back(NewRenderable);
+			}
+
+			if (!bCameraVisible)
+			{
+				continue;
+			}
 
 			if (CurrentAlphaMode == AlphaMode::Blend)
 			{
@@ -549,56 +608,110 @@ void Renderer::RenderFrame(Scene* SceneToRender, ImDrawData* InImGuiDrawData)
 		// Collect light data from scene
 		// TODO: make better gathering, maybe throuhg registration
 		std::vector<GPULightData> Lights;
+
+		std::optional<uint32_t> ShadowCastingLightIndex;
+
+		glm::vec3 ShadowLightDirection(0.0f);
+
 		for (Entity* E : SceneToRender->GetAllEntities())
 		{
-			auto* TC = E->GetComponent<TransformComponent>();
+			TransformComponent* TC = E->GetComponent<TransformComponent>();
+
 			if (!TC)
 			{
 				continue;
 			}
 
-			auto LightComponents = E->GetComponentsOfBaseType<LightComponentBase>();
-			for (auto* Base : LightComponents)
+			const auto LightComponents = E->GetComponentsOfBaseType<LightComponentBase>();
+
+			for (LightComponentBase* Base : LightComponents)
 			{
-				GPULightData LightData;
+				GPULightData LightData{};
+
 				LightData.Color_Intensity = glm::vec4(Base->GetColor(), Base->GetIntensity());
 
-				glm::quat Rot = TC->GetWorldRotation();
-				glm::vec3 Forward = Rot * glm::vec3(0.0f, 0.0f, -1.0f);
+				const glm::quat Rotation = TC->GetWorldRotation();
+				const glm::vec3 Forward = Rotation * glm::vec3(0.0f, 0.0f, -1.0f);
 
 				switch (Base->GetType())
 				{
 				case LightType::Directional:
+				{
 					LightData.Direction = glm::vec4(Forward, 0.0f);
-					LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, float(LightType::Directional));
+
+					LightData.Params = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(LightType::Directional));
+
+					DirectionalLightComponent* Directional = static_cast<DirectionalLightComponent*>(Base);
+
+					if (CurrentDirectionalShadowSettings.bEnabled && Directional->CastsShadows())
+					{
+						if (ShadowCastingLightIndex.has_value())
+						{
+							throw std::runtime_error("Only one directional light may cast shadows");
+						}
+
+						ShadowCastingLightIndex = static_cast<uint32_t>(Lights.size());
+
+						ShadowLightDirection = Forward;
+					}
+
 					break;
+				}
 
 				case LightType::Point:
+				{
+					PointLightComponent* Point = static_cast<PointLightComponent*>(Base);
+
 					LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
-					LightData.Params = glm::vec4(static_cast<PointLightComponent*>(Base)->GetRange(),
-						0.0f, 0.0f, float(LightType::Point));
+					LightData.Params = glm::vec4(Point->GetRange(), 0.0f, 0.0f, static_cast<float>(LightType::Point));
 					break;
+				}
 
 				case LightType::Spot:
+				{
+					SpotLightComponent* Spot = static_cast<SpotLightComponent*>(Base);
+
 					LightData.Position = glm::vec4(TC->GetWorldPosition(), 1.0f);
 					LightData.Direction = glm::vec4(Forward, 0.0f);
-					{
-						auto* Spot = static_cast<SpotLightComponent*>(Base);
-						LightData.Params = glm::vec4(Spot->GetRange(),
-							glm::cos(Spot->GetInnerConeAngle()),
-							glm::cos(Spot->GetOuterConeAngle()),
-							float(LightType::Spot));
-					}
+					LightData.Params = glm::vec4(Spot->GetRange(),
+						glm::cos(Spot->GetInnerConeAngle()),
+						glm::cos(Spot->GetOuterConeAngle()),
+						static_cast<float>(LightType::Spot));
+
 					break;
+				}
 				}
 
 				Lights.push_back(LightData);
 			}
 		}
 
+		CurrentFrameData.ShadowSettings = CurrentDirectionalShadowSettings;
+
+		DirectionalShadowUniformData ShadowUniform{};
+
+		const bool bHasShadowLight = ShadowCastingLightIndex.has_value();
+
+		if (CurrentDirectionalShadowSettings.bEnabled && bHasShadowLight && CamComp && CamTrans)
+		{
+			const glm::vec3 CameraForward = CamTrans->GetWorldRotation() * glm::vec3(0.0f, 0.0f, -1.0f);
+
+			ShadowUniform = BuildDirectionalShadowUniformData(
+				CamTrans->GetWorldPosition(),
+				CameraForward,
+				CamComp->GetFieldOfView(),
+				CamComp->GetAspectRatio(),
+				CamComp->GetNearPlane(),
+				ShadowLightDirection,
+				*ShadowCastingLightIndex,
+				CurrentDirectionalShadowSettings);
+		}
+
+		CurrentFrameData.DirectionalShadow = ShadowUniform;
+
+		DirectionalShadowDesc->UpdateUniform(CurrentFrameData.FrameIndex, ShadowUniform);
 
 		LightBufferInstance->Update(CurrentFrameData.FrameIndex, Lights);
-
 
 		// Record rendering commands into command buffer using rendergraph
 		RendergraphInstance->Execute(Cmd, GraphicsQueue, CurrentFrameData, ProfilerInstance.get(), CurrentFrame);
@@ -1209,6 +1322,21 @@ void Renderer::SetupRenderPasses()
 		vk::ImageLayout::eShaderReadOnlyOptimal,
 		vk::ImageLayout::eShaderReadOnlyOptimal);
 
+	const vk::ImageUsageFlags DirectionalShadowUsage =
+		vk::ImageUsageFlagBits::eDepthStencilAttachment |
+		vk::ImageUsageFlagBits::eSampled;
+
+	RendergraphInstance->ImportExternalImage(
+		"DirectionalShadowMap",
+		DirectionalShadowMap::Format,
+		vk::Extent2D(
+			CurrentDirectionalShadowSettings.Resolution,
+			CurrentDirectionalShadowSettings.Resolution),
+		DirectionalShadowUsage,
+		vk::ImageAspectFlagBits::eDepth,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eShaderReadOnlyOptimal);
+
 	// GBuffer descriptor set
 	if (!GBufferDescSet)
 	{
@@ -1237,6 +1365,16 @@ void Renderer::SetupRenderPasses()
 		PipelineCacheInstance.get(),
 		FrameUniforms.get(),
 		DescriptorHeapInstance.get(),
+		GPUSceneInstance.get());
+
+	Shader* DirectionalShadowShader = LoadShader("directional_shadow");
+
+	RendergraphInstance->AddRenderPass<DirectionalShadowPass>(
+		"DirectionalShadowPass",
+		"DirectionalShadowMap",
+		DirectionalShadowShader,
+		PipelineCacheInstance.get(),
+		DirectionalShadowDesc.get(),
 		GPUSceneInstance.get());
 
 	Shader* LightingShader = LoadShader("deferred_lighting");

@@ -3,11 +3,20 @@ module;
 #include <memory>
 #include <unordered_map>
 #include <string>
+#include <cstdint>
+
 #include <vulkan/vulkan_raii.hpp>
 
 export module PipelineCache;
 
 import Shader;
+
+export enum class VertexInputMode : uint32_t
+{
+    None = 0,
+    PositionOnly = 1,
+    Full = 2
+};
 
 export struct GraphicsPipelineKey
 {
@@ -19,11 +28,11 @@ export struct GraphicsPipelineKey
     // Size = 0 means no push constants
     vk::PushConstantRange PushConstantRange;
 
-    // False for fullscreen passes with no vertex buffer (e.g. LightingPass)
-    bool bUseVertexInput = true;
+    VertexInputMode VertexInput = VertexInputMode::Full;
 
     bool bEnableBlending = false;
     bool bDepthWriteEnable = true;
+    bool bEnableDepthBias = false;
 
     bool operator==(const GraphicsPipelineKey& Other) const
     {
@@ -34,9 +43,10 @@ export struct GraphicsPipelineKey
             && PushConstantRange.stageFlags == Other.PushConstantRange.stageFlags
             && PushConstantRange.size == Other.PushConstantRange.size
             && PushConstantRange.offset == Other.PushConstantRange.offset
-            && bUseVertexInput == Other.bUseVertexInput
+            && VertexInput == Other.VertexInput
             && bEnableBlending == Other.bEnableBlending
-            && bDepthWriteEnable == Other.bDepthWriteEnable;
+            && bDepthWriteEnable == Other.bDepthWriteEnable
+            && bEnableDepthBias == Other.bEnableDepthBias;
     }
 };
 
@@ -73,13 +83,16 @@ export struct GraphicsPipelineKeyHash
         Seed ^= std::hash<uint32_t>{}(Key.PushConstantRange.offset)
             + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
 
-        Seed ^= std::hash<bool>{}(Key.bUseVertexInput)
+        Seed ^= std::hash<uint32_t>{}(static_cast<uint32_t>(Key.VertexInput))
             + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
 
         Seed ^= std::hash<bool>{}(Key.bEnableBlending)
             + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
 
         Seed ^= std::hash<bool>{}(Key.bDepthWriteEnable)
+            + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+
+        Seed ^= std::hash<bool>{}(Key.bEnableDepthBias)
             + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
 
         return Seed;

@@ -28,6 +28,8 @@ import SingleTextureDescriptorSet;
 import LightBuffer;
 import TemporalAAHistory;
 import TemporalAADescriptorSet;
+import DirectionalShadowMap;
+import DirectionalShadowDescriptorSet;
 
 import Shader;
 import PostProcessSettings;
@@ -37,6 +39,7 @@ import TemporalAAState;
 
 import RenderDebugSettings;
 import TemporalAASettings;
+import DirectionalShadowSettings;
 
 import MeshData;
 import TextureData;
@@ -136,19 +139,22 @@ private:
 	PostProcessSettings CurrentPostProcessSettings;
 	RenderDebugSettings CurrentRenderDebugSettings;
 	TemporalAASettings CurrentTemporalAASettings;
+	DirectionalShadowSettings CurrentDirectionalShadowSettings;
 
-	std::unique_ptr<GPUProfiler>				ProfilerInstance;
-	std::unique_ptr<Rendergraph>				RendergraphInstance;
-	std::unique_ptr<CullingSystem>				CullingSystemInstance;
-	std::unique_ptr<FrameUniformBuffer>			FrameUniforms;
-	std::unique_ptr<VulkanUploader>				UploaderInstance;
-	std::unique_ptr<DescriptorHeap>				DescriptorHeapInstance;
-	std::unique_ptr<GPUSceneBuffer>				GPUSceneInstance;
-	std::unique_ptr<GBufferDescriptorSet>		GBufferDescSet;
-	std::unique_ptr<SingleTextureDescriptorSet> PostProcessDesc;
-	std::unique_ptr<LightBuffer>				LightBufferInstance;
-	std::unique_ptr<TemporalAAHistory>			TemporalHistory;
-	std::unique_ptr<TemporalAADescriptorSet>	TemporalAADesc;
-	std::unique_ptr<RenderResourceCache>		RenderCacheInstance;
-	std::unique_ptr<PipelineCache>				PipelineCacheInstance;
+	std::unique_ptr<GPUProfiler>					ProfilerInstance;
+	std::unique_ptr<Rendergraph>					RendergraphInstance;
+	std::unique_ptr<CullingSystem>					CullingSystemInstance;
+	std::unique_ptr<FrameUniformBuffer>				FrameUniforms;
+	std::unique_ptr<VulkanUploader>					UploaderInstance;
+	std::unique_ptr<DescriptorHeap>					DescriptorHeapInstance;
+	std::unique_ptr<GPUSceneBuffer>					GPUSceneInstance;
+	std::unique_ptr<GBufferDescriptorSet>			GBufferDescSet;
+	std::unique_ptr<SingleTextureDescriptorSet>		PostProcessDesc;
+	std::unique_ptr<LightBuffer>					LightBufferInstance;
+	std::unique_ptr<TemporalAAHistory>				TemporalHistory;
+	std::unique_ptr<TemporalAADescriptorSet>		TemporalAADesc;
+	std::unique_ptr<DirectionalShadowMap>			DirectionalShadowMapInstance;
+	std::unique_ptr<DirectionalShadowDescriptorSet>	DirectionalShadowDesc;
+	std::unique_ptr<RenderResourceCache>			RenderCacheInstance;
+	std::unique_ptr<PipelineCache>					PipelineCacheInstance;
 };

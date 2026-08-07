@@ -10,8 +10,10 @@ export module FrameData;
 import Geometry;
 import Mesh;
 import FrameUniform;
+
 import RenderDebugSettings;
 import TemporalAASettings;
+import DirectionalShadowSettings;
 
 export struct RenderableMesh
 {
@@ -29,12 +31,15 @@ export struct FrameData
 
     std::vector<RenderableMesh> Renderables;
     std::vector<RenderableMesh> TranslucentRenderables;
+    std::vector<RenderableMesh> ShadowCasters;
 
     CameraUniformData Camera;
     EnvironmentUniformData Environment;
+    DirectionalShadowUniformData DirectionalShadow;
 
     TemporalAASettings TemporalSettings;
     RenderDebugSettings DebugSettings;
+    DirectionalShadowSettings ShadowSettings;
 
     ImDrawData* ImGuiDrawData = nullptr;
 };

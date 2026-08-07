@@ -128,11 +128,11 @@ void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& G
     };
 
     Key.PushConstantRange = vk::PushConstantRange(
-            vk::ShaderStageFlagBits::eFragment,
-            0,
-            sizeof(LightingPushConstants));
+        vk::ShaderStageFlagBits::eFragment,
+        0,
+        sizeof(LightingPushConstants));
 
-    Key.bUseVertexInput = false;
+    Key.VertexInput = VertexInputMode::None;
 
     auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
