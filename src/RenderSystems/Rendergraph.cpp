@@ -6,6 +6,8 @@ module;
 #include <unordered_set>
 #include <functional>
 #include <memory>
+#include <stdexcept>
+
 #include <vulkan/vulkan_raii.hpp>
 
 module Rendergraph;
@@ -222,6 +224,38 @@ void Rendergraph::ImportExternalImage(
 
     // Track the initial layout
     CurrentLayouts[Name] = InitialLayout;
+}
+
+void Rendergraph::UpdateExternalImageExtent(const std::string& Name, vk::Extent2D NewExtent)
+{
+    if (NewExtent.width == 0 || NewExtent.height == 0)
+    {
+        throw std::invalid_argument("Rendergraph external image cannot have a zero-sized extent");
+    }
+
+    auto ResourceIt = Resources.find(Name);
+
+    if (ResourceIt == Resources.end())
+    {
+        throw std::runtime_error("Rendergraph external resource not found: " + Name);
+    }
+
+    Resource& ExistingResource = ResourceIt->second;
+
+    // Graph-owned resources contain an owned image after compilation.
+    // Imported resources deliberately keep this field empty.
+    if (ExistingResource.Image != nullptr)
+    {
+        throw std::runtime_error("Rendergraph resource is not external: " + Name);
+    }
+
+    ExistingResource.Extent = NewExtent;
+
+    // Drop any per-frame handles that could refer to the old image.
+    ExternalImages[Name] = VK_NULL_HANDLE;
+    FrameExternalViews.erase(Name);
+
+    CurrentLayouts[Name] = ExistingResource.InitialLayout;
 }
 
 void Rendergraph::SetFrameExternalImage(const std::string& Name, vk::Image Image, vk::ImageView View)

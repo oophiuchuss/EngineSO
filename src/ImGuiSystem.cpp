@@ -22,11 +22,13 @@ import CursorCaptureRequestEvent;
 import PostProcessSettingsChangedEvent;
 import RenderDebugSettingsChangedEvent;
 import TemporalAASettingsChangedEvent;
+import DirectionalShadowSettingsChangedEvent;
 
 import PerformanceStats;
 import Scene;
 import SceneEnvironment;
 import RenderDebugSettings;
+import DirectionalShadowSettings;
 
 ImGuiSystem::ImGuiSystem(
 	WindowSystem& InWindowSystem, 
@@ -120,6 +122,11 @@ void ImGuiSystem::BuildPanels(const PerformanceStats& Stats, Scene& CurrentScene
 	if (bShowTemporalAAPanel)
 	{
 		BuildTemporalAAPanel();
+	}
+
+	if (bShowDirectionalShadowPanel)
+	{
+		BuildDirectionalShadowPanel();
 	}
 }
 
@@ -490,5 +497,137 @@ void ImGuiSystem::BuildTemporalAAPanel()
 	if (bSettingsChanged)
 	{
 		EventSystemRef.PublishEvent(TemporalAASettingsChangedEvent(EditableTemporalAASettings));
+	}
+}
+
+void ImGuiSystem::BuildDirectionalShadowPanel()
+{
+	bool bSettingsChanged = false;
+
+	if (ImGui::Begin("Directional Shadows", &bShowDirectionalShadowPanel))
+	{
+		bSettingsChanged |= ImGui::Checkbox(
+			"Enabled",
+			&EditableDirectionalShadowSettings.bEnabled);
+
+		static constexpr uint32_t ResolutionValues[] =
+		{
+			1024,
+			2048,
+			4096
+		};
+
+		static constexpr const char* ResolutionNames[] =
+		{
+			"1024",
+			"2048",
+			"4096"
+		};
+
+		int SelectedResolution = 0;
+
+		for (int Index = 0; Index < static_cast<int>(std::size(ResolutionValues)); Index++)
+		{
+			if (EditableDirectionalShadowSettings.Resolution == ResolutionValues[Index])
+			{
+				SelectedResolution = Index;
+				break;
+			}
+		}
+
+		if (ImGui::Combo("Resolution", &SelectedResolution, ResolutionNames, static_cast<int>(std::size(ResolutionNames))))
+		{
+			EditableDirectionalShadowSettings.Resolution = ResolutionValues[SelectedResolution];
+
+			bSettingsChanged = true;
+		}
+
+		ImGui::TextDisabled("Changing resolution recreates shadow-map resources.");
+
+		ImGui::Separator();
+
+		ImGui::BeginDisabled(!EditableDirectionalShadowSettings.bEnabled);
+
+		bSettingsChanged |= ImGui::Checkbox("3x3 PCF", &EditableDirectionalShadowSettings.bPCFEnabled);
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"Shadow Distance",
+			&EditableDirectionalShadowSettings.ShadowDistance,
+			1.0f,
+			1.0f,
+			500.0f,
+			"%.1f",
+				ImGuiSliderFlags_AlwaysClamp);
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"Depth Padding",
+			&EditableDirectionalShadowSettings.DepthPadding,
+			1.0f,
+			0.0f,
+			200.0f,
+			"%.1f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		ImGui::SeparatorText("Bias");
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"Raster Constant Bias",
+			&EditableDirectionalShadowSettings.RasterConstantBias,
+			0.05f,
+			0.0f,
+			10.0f,
+			"%.2f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"Raster Slo pe Bias",
+			&EditableDirectionalShadowSettings.RasterSlopeBias,
+			0.05f,
+			0.0f,
+			10.0f,
+			"%.2f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		bSettingsChanged |= ImGui::DragFloat(
+			"Receiver Bias",
+			&EditableDirectionalShadowSettings.ReceiverBias,
+			0.00005f,
+			0.0f,
+			0.01f,
+			"%.6f",
+			ImGuiSliderFlags_AlwaysClamp);
+
+		ImGui::SeparatorText("Debug");
+
+		static constexpr const char* DebugViewNames[] =
+		{
+			"None",
+			"Shadow Depth",
+			"Visibility"
+		};
+
+		int SelectedDebugView = static_cast<int>(EditableDirectionalShadowSettings.DebugView);
+
+		if (ImGui::Combo("Debug View", &SelectedDebugView, DebugViewNames, static_cast<int>(std::size(DebugViewNames))))
+		{
+			EditableDirectionalShadowSettings.DebugView = static_cast<DirectionalShadowDebugView>(SelectedDebugView);
+
+			bSettingsChanged = true;
+		}
+
+		ImGui::EndDisabled();
+
+		ImGui::Separator();
+
+		ImGui::TextDisabled("Constant and slope bias affect shadow-map rasterization.");
+
+		ImGui::TextDisabled("Receiver bias affects the lighting comparison.");
+	}
+
+	ImGui::End();
+
+	if (bSettingsChanged)
+	{
+		EventSystemRef.PublishEvent(DirectionalShadowSettingsChangedEvent(EditableDirectionalShadowSettings));
 	}
 }

@@ -112,6 +112,15 @@ void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph&
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
 
+    const vk::Extent2D RenderExtent = ColorOutput->Extent;
+
+    Cmd.setViewport(0, vk::Viewport(0.0f, 0.0f,
+            static_cast<float>(RenderExtent.width),
+            static_cast<float>(RenderExtent.height),
+            0.0f,1.0f));
+
+    Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderExtent));
+
     const std::array<vk::DescriptorSet, 2> DescriptorSets =
     {
         *FrameUniformsPtr->GetDescriptorSet(Frame.FrameIndex),
@@ -138,7 +147,7 @@ void TemporalAAPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph&
     PushConstants.InverseWidth = 1.0f / static_cast<float>(ColorOutput->Extent.width);
     PushConstants.InverseHeight = 1.0f / static_cast<float>(ColorOutput->Extent.height);
 
-    const bool bDebugViewActive = Frame.DebugSettings.View != RenderDebugView::None;
+    const bool bDebugViewActive = Frame.HasActiveDebugView();
 
     // Preview mode deliberately shows the unresolved jitter.
     const bool bAllowAccumulation = Frame.TemporalSettings.bEnabled &&

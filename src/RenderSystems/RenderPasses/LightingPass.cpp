@@ -26,10 +26,12 @@ LightingPass::LightingPass(
     std::string InGBufferEmissiveResourceName,
     std::string InGBufferVelocityResourceName,
     std::string InGBufferDepthResourceName,
+    std::string InDirectionalShadowResourceName,
     FrameUniformBuffer* InFrameUniforms,
     LightBuffer* InLightBuffer,
     GBufferDescriptorSet* InGBufferDescSet,
     DescriptorHeap* InDescriptorHeap,
+    DirectionalShadowDescriptorSet* InDirectionalShadowDescriptor,
     Shader* InLightingShader,
     PipelineCache* InPipelineCache) :
     RenderPassBase(InName),
@@ -40,10 +42,12 @@ LightingPass::LightingPass(
     GBufferEmissiveResourceName(std::move(InGBufferEmissiveResourceName)),
     GBufferVelocityResourceName(std::move(InGBufferVelocityResourceName)),
     GBufferDepthResourceName(std::move(InGBufferDepthResourceName)),
+    DirectionalShadowResourceName(std::move(InDirectionalShadowResourceName)),
     FrameUniformsPtr(InFrameUniforms),
     LightBufferPtr(InLightBuffer),
     GBufferDescSetPtr(InGBufferDescSet),
     DescriptorHeapPtr(InDescriptorHeap),
+    DirectionalShadowDescriptorPtr(InDirectionalShadowDescriptor),
     LightingShaderPtr(InLightingShader),
     PipelineCachePtr(InPipelineCache)
 {
@@ -54,6 +58,7 @@ LightingPass::LightingPass(
     AddInput(GBufferEmissiveResourceName);
 	AddInput(GBufferVelocityResourceName);
     AddInput(GBufferDepthResourceName);
+    AddInput(DirectionalShadowResourceName);
 
     // Declare output (lit result)
     AddOutput(OutputColorResourceName, vk::ImageLayout::eColorAttachmentOptimal);
@@ -111,6 +116,11 @@ void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& G
     {
         throw std::runtime_error("LightingPass: descriptor heap not set");
     }
+    
+    if (!DirectionalShadowDescriptorPtr)
+    {
+        throw std::runtime_error("LightingPass: directional shadow descriptor not set");
+    }
 
     Resource* OutputColor = Graph.GetResource(OutputColorResourceName);
 
@@ -124,7 +134,8 @@ void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& G
         *FrameUniformsPtr->GetDescriptorSetLayout(),
         *GBufferDescSetPtr->GetDescriptorSetLayout(),
         *LightBufferPtr->GetDescriptorSetLayout(),
-        *DescriptorHeapPtr->GetDescriptorSetLayout()
+        *DescriptorHeapPtr->GetDescriptorSetLayout(),
+        *DirectionalShadowDescriptorPtr->GetDescriptorSetLayout()
     };
 
     Key.PushConstantRange = vk::PushConstantRange(
@@ -138,11 +149,21 @@ void LightingPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph& G
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics,Pipeline);
 
-    std::array<vk::DescriptorSet, 4> DescriptorSets = {
+    const vk::Extent2D RenderExtent = OutputColor->Extent;
+
+    Cmd.setViewport(0, vk::Viewport(0.0f, 0.0f,
+            static_cast<float>(RenderExtent.width),
+            static_cast<float>(RenderExtent.height),
+            0.0f, 1.0f));
+
+    Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderExtent));
+
+    std::array<vk::DescriptorSet, 5> DescriptorSets = {
         *FrameUniformsPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
         *GBufferDescSetPtr->GetDescriptorSet(),
         *LightBufferPtr->GetDescriptorSet(CurrentFrameData.FrameIndex),
-        *DescriptorHeapPtr->GetDescriptorSet()
+        *DescriptorHeapPtr->GetDescriptorSet(),
+        *DirectionalShadowDescriptorPtr->GetDescriptorSet(CurrentFrameData.FrameIndex)
     };
 
     Cmd.bindDescriptorSets(

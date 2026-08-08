@@ -1,11 +1,9 @@
-// Reads the G-buffer, renders untouched depth as the environment,
-// and applies PBR lighting to visible geometry.
-
 import GPULightData;
 import CameraUBO;
 import EnvironmentUBO;
 import NormalFiltering;
 import DirectLighting;
+import DirectionalShadowUBO;
 
 struct PSInput
 {
@@ -39,6 +37,11 @@ struct PSOutput
 // Binding 0 contains Sampler2D[], but this shader does not use it.
 [[vk::binding(1, 3)]] SamplerCube CubemapHeap[];
 
+// Set 4: directional shadow state and depth map.
+[[vk::binding(0, 4)]] ConstantBuffer<DirectionalShadowUBO> uDirectionalShadow;
+
+[[vk::binding(1, 4)]] Sampler2D DirectionalShadowMapTexture;
+
 // Push constants
 struct LightingPushConstants
 {
@@ -52,6 +55,10 @@ LightingPushConstants Push;
 // Debug view modes
 static const uint RenderDebugView_None = 0;
 static const uint RenderDebugView_MotionVectors = 1;
+
+static const uint DirectionalShadowDebugView_None = 0;
+static const uint DirectionalShadowDebugView_Depth = 1;
+static const uint DirectionalShadowDebugView_Visibility = 2;
 
 // Helpers
 float3 ReconstructWorldPosition(float2 UV, float Depth)
@@ -87,6 +94,97 @@ float3 SampleEnvironment(float3 WorldDirection)
     return EnvironmentColor * uEnvironment.Intensity;
 }
 
+struct DirectionalShadowSample
+{
+    float Visibility;
+    float StoredDepth;
+};
+
+bool IsInsideDirectionalShadowVolume(float2 ShadowUV, float ReceiverDepth)
+{
+    const bool InsideUV = all(ShadowUV >= float2(0.0)) && all(ShadowUV <= float2(1.0));
+
+    const bool InsideDepth = ReceiverDepth >= 0.0 && ReceiverDepth <= 1.0;
+
+    return InsideUV && InsideDepth;
+}
+
+float CompareDirectionalShadowDepth(float ReceiverDepth, float StoredDepth)
+{
+    const float ReceiverBias = uDirectionalShadow.Parameters.y;
+
+    const float BiasedReceiverDepth = ReceiverDepth - ReceiverBias;
+
+    return BiasedReceiverDepth <= StoredDepth ? 1.0 : 0.0;
+}
+
+DirectionalShadowSample SampleDirectionalShadow(float3 WorldPosition)
+{
+    DirectionalShadowSample Result;
+
+    // Outside or disabled shadows are treated as fully illuminated.
+    Result.Visibility = 1.0;
+    Result.StoredDepth = 1.0;
+
+    if (uDirectionalShadow.Controls.x == 0)
+    {
+        return Result;
+    }
+
+    const float4 ShadowClipPosition = mul(uDirectionalShadow.LightViewProjection, float4(WorldPosition, 1.0));
+
+    const float MinimumClipW = 0.00001;
+
+    if (ShadowClipPosition.w <= MinimumClipW)
+    {
+        return Result;
+    }
+
+    const float3 ShadowNDC = ShadowClipPosition.xyz / ShadowClipPosition.w;
+
+    const float2 ShadowUV = ShadowNDC.xy * 0.5 + 0.5;
+
+    const float ReceiverDepth = ShadowNDC.z;
+
+    if (!IsInsideDirectionalShadowVolume(ShadowUV, ReceiverDepth))
+    {
+        return Result;
+    }
+
+    Result.StoredDepth = DirectionalShadowMapTexture.Sample(ShadowUV).r;
+
+    const bool PCFEnabled = uDirectionalShadow.Controls.y != 0;
+
+    if (!PCFEnabled)
+    {
+        Result.Visibility = CompareDirectionalShadowDepth(ReceiverDepth, Result.StoredDepth);
+
+        return Result;
+    }
+
+    const float InverseResolution = uDirectionalShadow.Parameters.x;
+
+    float VisibilitySum = 0.0;
+
+    [unroll]
+    for (int Y = -1; Y <= 1; Y++)
+    {
+        [unroll]
+        for (int X = -1; X <= 1; X++)
+        {
+            const float2 Offset = float2(float(X), float(Y)) * InverseResolution;
+
+            const float StoredDepth = DirectionalShadowMapTexture.Sample(ShadowUV + Offset).r;
+
+            VisibilitySum += CompareDirectionalShadowDepth(ReceiverDepth, StoredDepth);
+        }
+    }
+
+    Result.Visibility = VisibilitySum / 9.0;
+
+    return Result;
+}
+
 // Entry point
 
 [shader("fragment")]
@@ -103,13 +201,30 @@ PSOutput main(PSInput input)
         return output;
     }
 
+    if (uDirectionalShadow.Controls.w == DirectionalShadowDebugView_Depth)
+    {
+        const float ShadowDepth = DirectionalShadowMapTexture.Sample(input.uv).r;
+
+        output.outColor = float4(ShadowDepth, ShadowDepth, ShadowDepth, 1.0);
+
+        return output;
+    }
+
     // Depth is sampled first because it determines whether this pixel
     // represents geometry or untouched background.
     float Depth = Main_Depth.Sample(input.uv).r;
 
     if (Depth >= 1.0)
     {
+        if (uDirectionalShadow.Controls.w == DirectionalShadowDebugView_Visibility)
+        {
+            output.outColor = float4(1.0, 1.0, 1.0, 1.0);
+
+            return output;
+        }
+
         float3 WorldDirection = ReconstructWorldDirection(input.uv);
+
         float3 SkyColor = SampleEnvironment(WorldDirection);
 
         output.outColor = float4(SkyColor, 1.0);
@@ -133,6 +248,14 @@ PSOutput main(PSInput input)
     float3 WorldPosition = ReconstructWorldPosition(input.uv, Depth);
     float3 ViewDirection = normalize(uCamera.CameraPos.xyz - WorldPosition);
 
+    const DirectionalShadowSample ShadowSample = SampleDirectionalShadow(WorldPosition);
+
+    if (uDirectionalShadow.Controls.w == DirectionalShadowDebugView_Visibility)
+    {
+        output.outColor = float4(ShadowSample.Visibility, ShadowSample.Visibility, ShadowSample.Visibility, 1.0);
+        return output;
+    }
+
     float3 LitColor = float3(0.0);
     uint LightCount = LightCountRaw;
 
@@ -143,7 +266,16 @@ PSOutput main(PSInput input)
 
         if (Type == LightType_Directional)
         {
-            LitColor += ApplyDirectionalLight(Light, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDirection);
+            float Visibility = 1.0;
+
+            const bool IsShadowCastingLight = uDirectionalShadow.Controls.x != 0 && LightIndex == uDirectionalShadow.Controls.z;
+
+            if (IsShadowCastingLight)
+            {
+                Visibility = ShadowSample.Visibility;
+            }
+
+            LitColor += ApplyDirectionalLight(Light, Normal, Albedo.rgb, Metallic, FilteredRoughness, ViewDirection) * Visibility;
         }
         else if (Type == LightType_Point)
         {

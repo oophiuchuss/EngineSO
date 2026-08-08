@@ -12,6 +12,7 @@ module;
 #include <optional>
 #include <memory>
 #include <iostream>
+#include <stdexcept>
 
 module Renderer;
 
@@ -52,6 +53,7 @@ import ResourceReprocessedEvent;
 import PostProcessSettingsChangedEvent;
 import SceneEnvironmentChangedEvent;
 import RenderDebugSettingsChangedEvent;
+import DirectionalShadowSettingsChangedEvent;
 
 import TemporalAASettingsChangedEvent;
 
@@ -1388,10 +1390,12 @@ void Renderer::SetupRenderPasses()
 		"GBuffer_Emissive",
 		"GBuffer_Velocity",
 		"Main_Depth",
+		"DirectionalShadowMap",
 		FrameUniforms.get(),
 		LightBufferInstance.get(),
 		GBufferDescSet.get(),
 		DescriptorHeapInstance.get(),
+		DirectionalShadowDesc.get(),
 		LightingShader,
 		PipelineCacheInstance.get());
 
@@ -1782,6 +1786,33 @@ void Renderer::ShutdownImGuiVulkanBackend()
 	bImGuiVulkanBackendInitialized = false;
 }
 
+void Renderer::RecreateDirectionalShadowResources(uint32_t NewResolution)
+{
+	if (NewResolution == 0)
+	{
+		throw std::invalid_argument("Directional shadow resolution must be greater than zero");
+	}
+
+	if (!DirectionalShadowMapInstance || !DirectionalShadowDesc || !RendergraphInstance)
+	{
+		throw std::runtime_error("Directional shadow resources are not initialized");
+	}
+
+	// Every per-frame shadow image may still be referenced by submitted
+	// GPU work. Resolution changes are rare, so a full wait is acceptable
+	// until deferred resource retirement exists.
+	Device.waitIdle();
+
+	DirectionalShadowMapInstance->Recreate(NewResolution);
+
+	for (uint32_t FrameIndex = 0; FrameIndex < MAX_FRAMES_IN_FLIGHT; FrameIndex++)
+	{
+		DirectionalShadowDesc->UpdateImage(FrameIndex, DirectionalShadowMapInstance->GetImageView(FrameIndex));
+	}
+
+	RendergraphInstance->UpdateExternalImageExtent("DirectionalShadowMap", vk::Extent2D(NewResolution, NewResolution));
+}
+
 void Renderer::CheckImGuiVulkanResult(VkResult Result)
 {
 	if (Result < VK_SUCCESS)
@@ -1866,6 +1897,29 @@ EventReply Renderer::OnEvent(const EventBase& Event)
 		{
 			// Enabling cannot reuse history produced while accumulation was disabled
 			// Disabling also changes the projection mode
+			TemporalState.Invalidate();
+		}
+	});
+
+	Dispatcher.Dispatch<DirectionalShadowSettingsChangedEvent>([this](const DirectionalShadowSettingsChangedEvent& E)
+	{
+		const DirectionalShadowSettings& NewSettings = E.GetSettings();
+
+		const bool bResolutionChanged = CurrentDirectionalShadowSettings.Resolution != NewSettings.Resolution;
+
+		const bool bEnabledChanged = CurrentDirectionalShadowSettings.bEnabled != NewSettings.bEnabled;
+
+		const bool bDebugViewChanged = CurrentDirectionalShadowSettings.DebugView != NewSettings.DebugView;
+
+		if (bResolutionChanged)
+		{
+			RecreateDirectionalShadowResources(NewSettings.Resolution);
+		}
+
+		CurrentDirectionalShadowSettings = NewSettings;
+
+		if (bResolutionChanged || bEnabledChanged || bDebugViewChanged)
+		{
 			TemporalState.Invalidate();
 		}
 	});

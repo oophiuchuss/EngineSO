@@ -15,6 +15,7 @@ import PerformanceStats;
 import PostProcessSettings;
 import RenderDebugSettings;
 import TemporalAASettings;
+import DirectionalShadowSettings;
 
 export class ImGuiSystem final : public EventListener
 {
@@ -46,6 +47,8 @@ private:
 
     void BuildTemporalAAPanel();
 
+    void BuildDirectionalShadowPanel();
+
     bool bShowPerformancePanel = true;
 
     PostProcessSettings EditablePostProcessSettings;
@@ -58,6 +61,9 @@ private:
 
     TemporalAASettings EditableTemporalAASettings;
     bool bShowTemporalAAPanel = true;
+
+    DirectionalShadowSettings EditableDirectionalShadowSettings;
+    bool bShowDirectionalShadowPanel = true;
 
     EventSystem& EventSystemRef;
     ImGuiContext* Context = nullptr;

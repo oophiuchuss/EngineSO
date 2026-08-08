@@ -91,6 +91,8 @@ private:
 	void InitializeImGuiVulkanBackend();
 	void ShutdownImGuiVulkanBackend();
 
+	void RecreateDirectionalShadowResources(uint32_t NewResolution);
+
 	static void CheckImGuiVulkanResult(VkResult Result);
 
 	EventReply OnEvent(const EventBase& Event) override;

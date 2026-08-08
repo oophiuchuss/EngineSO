@@ -13,6 +13,7 @@ import GBufferDescriptorSet;
 import Shader;
 import PipelineCache;
 import DescriptorHeap;
+import DirectionalShadowDescriptorSet;
 
 export struct LightingPushConstants
 {
@@ -32,10 +33,12 @@ public:
         std::string InGBufferEmissiveResourceName,
         std::string InGBufferVelocityResourceName,
         std::string InGBufferDepthResourceName,
+        std::string InDirectionalShadowResourceName,
         FrameUniformBuffer* InFrameUniforms,
         LightBuffer* InLightBuffer,
         GBufferDescriptorSet* InGBufferDescSet,
         DescriptorHeap* InDescriptorHeap,
+        DirectionalShadowDescriptorSet* InDirectionalShadowDescriptor,
         Shader* InLightingShader,       
         PipelineCache* InPipelineCache);
 
@@ -52,11 +55,13 @@ private:
     std::string GBufferEmissiveResourceName;
     std::string GBufferVelocityResourceName;
     std::string GBufferDepthResourceName;
+    std::string DirectionalShadowResourceName;
 
     FrameUniformBuffer* FrameUniformsPtr = nullptr;
     LightBuffer* LightBufferPtr = nullptr;
     GBufferDescriptorSet* GBufferDescSetPtr = nullptr;
     DescriptorHeap* DescriptorHeapPtr = nullptr;
+    DirectionalShadowDescriptorSet* DirectionalShadowDescriptorPtr = nullptr;
     Shader* LightingShaderPtr = nullptr;
     PipelineCache* PipelineCachePtr = nullptr;
 };

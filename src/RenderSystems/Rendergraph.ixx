@@ -101,6 +101,8 @@ public:
 		vk::ImageLayout InitialLayout,
 		vk::ImageLayout FinalLayout);
 
+	void UpdateExternalImageExtent(const std::string& Name, vk::Extent2D NewExtent);
+
 	// Set the per‑frame VkImage and VkImageView for an imported resource.
 	// Must be called before Execute(). Cleared automatically after Execute().
 	void SetFrameExternalImage(const std::string& Name, vk::Image Image, vk::ImageView View);

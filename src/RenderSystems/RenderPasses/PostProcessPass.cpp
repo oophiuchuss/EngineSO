@@ -51,7 +51,7 @@ void PostProcessPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph
 
     PostProcessPushConstants PushConstants{};
 
-    const bool bDebugViewActive = Frame.DebugSettings.View != RenderDebugView::None;
+    const bool bDebugViewActive = Frame.HasActiveDebugView();
 
     if (bDebugViewActive)
     {
@@ -96,6 +96,17 @@ void PostProcessPass::ExecuteMainLogic(vk::raii::CommandBuffer& Cmd, Rendergraph
     auto [Pipeline, PipelineLayout] = PipelineCachePtr->GetOrCreateGraphics(Key);
 
     Cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, Pipeline);
+
+
+    const vk::Extent2D RenderExtent = Res->Extent;
+
+    Cmd.setViewport(0, vk::Viewport(0.0f, 0.0f,
+        static_cast<float>(RenderExtent.width),
+        static_cast<float>(RenderExtent.height),
+        0.0f, 1.0f));
+
+    Cmd.setScissor(0, vk::Rect2D({ 0, 0 }, RenderExtent));
+
     Cmd.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         PipelineLayout,

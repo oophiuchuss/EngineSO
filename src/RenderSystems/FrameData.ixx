@@ -42,4 +42,9 @@ export struct FrameData
     DirectionalShadowSettings ShadowSettings;
 
     ImDrawData* ImGuiDrawData = nullptr;
+
+    bool HasActiveDebugView() const
+    {
+        return DebugSettings.View != RenderDebugView::None || ShadowSettings.DebugView != DirectionalShadowDebugView::None;
+    }
 };
